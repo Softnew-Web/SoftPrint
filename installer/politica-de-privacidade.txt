@@ -1,0 +1,36 @@
+﻿POLÍTICA DE PRIVACIDADE DO SOFTPRINT
+Última atualização: 18 de setembro de 2026
+
+Esta política descreve como o SoftPrint trata dados neste computador. Leia com atenção antes de instalar.
+
+1. Processamento local
+O SoftPrint funciona neste computador. A API e o painel padrão escutam só em 127.0.0.1. Não há conta na nuvem nem cadastro obrigatório.
+
+2. Dados que o SoftPrint guarda
+No perfil do usuário (por exemplo %LocalAppData%\SoftPrint no Windows) o aplicativo pode guardar:
+- configurações de impressora, papel, pasta de entrada e opções do computador;
+- chave de API gerada localmente;
+- histórico de pedidos de impressão (referência, texto ou caminho do arquivo, status e erros);
+- logs de eventos e fila de retry de webhook, se você os ativar.
+
+Esses arquivos ficam no seu disco. O instalador não envia esses dados para a internet.
+
+3. O que o SoftPrint não faz
+O SoftPrint não cria perfil online, não vende dados e não precisa da internet para imprimir. Ele não lê outros aplicativos, senhas do Windows nem o conteúdo da sua rede, além da busca opcional de impressoras na rede local que você dispara no painel.
+
+4. Webhook e pasta de entrada
+Se você configurar uma URL de webhook, o SoftPrint enviará eventos de pedidos concluídos para esse endereço, com assinatura HMAC se houver segredo. Se você indicar uma pasta de entrada, o SoftPrint lerá os arquivos que forem gravados nela para imprimir. Esses envios só acontecem porque você configurou.
+
+5. Inicialização automática e bandeja
+Se você ligar “Iniciar com o Windows”, o SoftPrint registra um atalho no Registro do usuário e pode permanecer em segundo plano na bandeja, recebendo pedidos mesmo com o painel fechado.
+
+6. Edições e registros
+A instalação pode migrar dados e atalhos antigos do AutoPrint. A edição Legacy deixa claro que o sistema operacional não tem mais suporte de segurança.
+
+7. Seus controles
+Você pode apagar o histórico no próprio aplicativo (retenção), desligar logs, webhook e inicialização automática, e excluir a pasta de dados do usuário. Desinstalar o programa não apaga automaticamente esses arquivos.
+
+8. Contato
+Dúvidas sobre estes dados devem ser tratadas com quem instalou o SoftPrint neste computador, pois o processamento é local.
+
+Se não concordar com esta política, não instale o SoftPrint.

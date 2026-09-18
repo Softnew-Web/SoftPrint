@@ -1,13 +1,17 @@
 import { createApi } from "./api.js";
 import { state, feedback } from "./state.js";
-import { renderStats, setConnection } from "./components/stats.js";
+import { renderStats, setConnection, setApiHint } from "./components/stats.js";
 import { bindPrinterTab } from "./components/printer-tab.js";
 import { bindMonitorTab } from "./components/monitor-tab.js";
 import { bindConnectTab } from "./components/connect-tab.js";
 import { bindSystemSettingsTab } from "./components/system-settings-tab.js";
+import { applyUpdateInfo } from "./components/update-banner.js";
 
 const KEY = window.SOFTPRINT_KEY || "";
 const { api } = createApi(KEY);
+
+setApiHint(location.origin);
+setConnection(false);
 
 const tabs = [
   { id: "config", title: "Configure a impressora", subtitle: "Impressora, simulação e Windows" },
@@ -108,7 +112,15 @@ async function refreshAll() {
       api("/api/jobs"),
       api("/api/metrics"),
     ]);
-    setConnection(true);
+    const appName = status.application || "SoftPrint";
+    setConnection(true, appName);
+    setApiHint(status.baseUrl || location.origin);
+    applyUpdateInfo(status.update || { currentVersion: status.version });
+    const endpoint = document.getElementById("endpoint");
+    if (endpoint) {
+      const origin = (status.baseUrl || location.origin).replace(/\/$/, "");
+      endpoint.value = `${origin}/api/jobs`;
+    }
     state.applied = status.settings;
     state.jobs = jobList || [];
     applyCapabilities(status.capabilities);
@@ -177,6 +189,15 @@ function applyCapabilities(capabilities) {
 
 setTab(localStorage.getItem("softprint-tab") || "config");
 
+async function refreshUpdate() {
+  try {
+    const update = await api("/api/update");
+    applyUpdateInfo(update);
+  } catch (err) {
+    console.warn("Falha ao verificar atualização", err);
+  }
+}
+
 Promise.resolve()
   .then(() => printer.loadPrinters(api))
   .catch((e) => {
@@ -187,6 +208,8 @@ Promise.resolve()
   .finally(() => {
     refreshAll();
     setInterval(refreshAll, 2000);
+    setTimeout(refreshUpdate, 4000);
+    setInterval(refreshUpdate, 30 * 60 * 1000);
   });
 systemSettings.load().catch(showBootError);
 

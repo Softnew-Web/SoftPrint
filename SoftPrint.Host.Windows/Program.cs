@@ -21,19 +21,20 @@ if (!OperatingSystem.IsWindowsVersionAtLeast(10))
     return;
 }
 
-using var instance = SingleInstanceGuard.TryAcquire(out var firstInstance);
-if (!firstInstance)
+using var instance = SingleInstanceGuard.TryAcquire();
+if (instance is null)
 {
     if (!args.Contains("--headless"))
-        MessageBox.Show("O SoftPrint desta pasta já está aberto. Use o painel existente na barra de tarefas.", "SoftPrint");
+        MessageBox.Show("O SoftPrint desta pasta já está em segundo plano. Use o ícone na bandeja do sistema para abrir o painel.", "SoftPrint");
     return;
 }
 
 var builder = ApplicationComposer.CreateBuilder(args);
 var app = ApplicationComposer.BuildApplication(builder);
-var headless = builder.Configuration.GetValue<bool>("headless");
+var headless = builder.Configuration.GetValue<bool>("headless") || args.Contains("--headless");
+var startInTray = args.Contains("--tray") || builder.Configuration.GetValue("SoftPrint:StartInTray", false);
 
-ApplicationComposer.StartDashboardIfNeeded(app, headless);
+ApplicationComposer.StartDashboardIfNeeded(app, headless, startInTray, instance.ShowRequested);
 app.MapWebDashboard();
 app.MapJobEndpoints();
 app.MapSettingsEndpoints();

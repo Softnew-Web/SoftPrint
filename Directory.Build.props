@@ -1,0 +1,9 @@
+<Project>
+  <PropertyGroup>
+    <SoftPrintVersion Condition="'$(SoftPrintVersion)' == ''">$([System.IO.File]::ReadAllText('$(MSBuildThisFileDirectory)VERSION').Trim())</SoftPrintVersion>
+    <Version>$(SoftPrintVersion)</Version>
+    <AssemblyVersion>$(SoftPrintVersion).0</AssemblyVersion>
+    <FileVersion>$(SoftPrintVersion).0</FileVersion>
+    <InformationalVersion>$(SoftPrintVersion)</InformationalVersion>
+  </PropertyGroup>
+</Project>

@@ -1,0 +1,27 @@
+﻿TERMOS DE USO DO SOFTPRINT
+Última atualização: 18 de setembro de 2026
+
+Ao instalar ou usar o SoftPrint, você concorda com estes termos.
+
+1. O que o SoftPrint faz
+O SoftPrint é um aplicativo local de impressão. Ele recebe pedidos neste computador, organiza uma fila e envia o conteúdo para impressoras instaladas no Windows ou, na edição Linux, via CUPS. O painel e a API padrão escutam apenas em 127.0.0.1.
+
+2. Licença de uso
+Você pode instalar e usar o SoftPrint neste computador para fins próprios ou da sua organização. Não é permitido revender o instalador como se fosse um produto de terceiros, remover avisos de autoria ou usar o nome SoftPrint de forma enganosa.
+
+3. Responsabilidade
+O SoftPrint entrega o trabalho ao spooler do Windows ou ao CUPS. Isso não garante que o papel saiu da impressora. Conferir impressão física, papel, toner e o equipamento é sua responsabilidade. O software é oferecido “como está”, sem garantia de funcionamento ininterrupto ou de adequação a um fim específico.
+
+4. Edição Legacy (Windows 7)
+A edição SoftPrint Legacy existe só para compatibilidade. Windows 7 e o runtime .NET 6 usado nela não recebem mais atualizações de segurança da Microsoft. Ao escolher essa edição, você assume esse risco.
+
+5. Conteúdo enviado para impressão
+Você é responsável pelo conteúdo dos pedidos (textos, PDFs, imagens e ESC/POS) e por ter autorização para imprimi-los. Não use o SoftPrint para atividade ilegal.
+
+6. Atualizações e suporte
+O SoftPrint pode mudar entre versões. Recursos de impressão dependem do driver, da impressora e do sistema operacional. A edição Legacy e o Linux exigem teste no equipamento real.
+
+7. Encerramento
+Você pode desinstalar o SoftPrint a qualquer momento. Dados salvos no perfil do usuário (configurações, chave da API e histórico) não são apagados automaticamente na desinstalação, salvo se você os excluir.
+
+Se não concordar com estes termos, não instale nem use o SoftPrint.

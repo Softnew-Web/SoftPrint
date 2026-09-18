@@ -59,7 +59,8 @@ public static class ApplicationComposer
         return app;
     }
 
-    public static void StartDashboardIfNeeded(WebApplication app, bool headless)
+    public static void StartDashboardIfNeeded(
+        WebApplication app, bool headless, bool startInTray, EventWaitHandle? showSignal)
     {
         if (headless) return;
 
@@ -78,12 +79,26 @@ public static class ApplicationComposer
                 using var notify = new NotifyIcon
                 {
                     Visible = true,
-                    Text = "SoftPrint",
+                    Text = "SoftPrint — em segundo plano",
                     Icon = SystemIcons.Application,
                     BalloonTipTitle = "SoftPrint"
                 };
                 tray.Attach(notify);
                 using var panel = new Dashboard(address, apiKey, features, notify);
+                using var menu = new ContextMenuStrip();
+                menu.Items.Add("Abrir painel", null, (_, _) => panel.ShowFromTray());
+                menu.Items.Add("Sair", null, (_, _) =>
+                {
+                    panel.RequestExit();
+                    app.Lifetime.StopApplication();
+                });
+                notify.ContextMenuStrip = menu;
+                notify.DoubleClick += (_, _) => panel.ShowFromTray();
+                notify.MouseClick += (_, e) =>
+                {
+                    if (e.Button == MouseButtons.Left)
+                        panel.ShowFromTray();
+                };
                 panel.FormClosed += (_, _) =>
                 {
                     notify.Visible = false;
@@ -91,11 +106,40 @@ public static class ApplicationComposer
                 };
                 using var registration = app.Lifetime.ApplicationStopping.Register(() =>
                 {
-                    if (panel.IsHandleCreated && !panel.IsDisposed)
-                        try { panel.BeginInvoke(() => panel.Close()); }
-                        catch (InvalidOperationException) { }
+                    panel.RequestExit();
                 });
-                System.Windows.Forms.Application.Run(panel);
+                RegisteredWaitHandle? wait = null;
+                if (showSignal is not null)
+                {
+                    wait = ThreadPool.RegisterWaitForSingleObject(
+                        showSignal,
+                        (_, _) =>
+                        {
+                            try { panel.BeginInvoke(new Action(panel.ShowFromTray)); }
+                            catch (InvalidOperationException) { }
+                        },
+                        null,
+                        -1,
+                        false);
+                }
+                if (startInTray)
+                {
+                    panel.Opacity = 0;
+                    panel.ShowInTaskbar = false;
+                    panel.Shown += (_, _) =>
+                    {
+                        panel.HideToTray(balloon: true);
+                        panel.Opacity = 1;
+                    };
+                }
+                try
+                {
+                    System.Windows.Forms.Application.Run(panel);
+                }
+                finally
+                {
+                    wait?.Unregister(null);
+                }
             });
             thread.SetApartmentState(ApartmentState.STA);
             thread.IsBackground = true;
@@ -104,30 +148,47 @@ public static class ApplicationComposer
     }
 }
 
+public sealed class SoftPrintInstance : IDisposable
+{
+    private readonly Mutex _current;
+    private readonly Mutex _legacy;
+
+    public EventWaitHandle ShowRequested { get; }
+
+    internal SoftPrintInstance(Mutex current, Mutex legacy, EventWaitHandle showRequested)
+    {
+        _current = current;
+        _legacy = legacy;
+        ShowRequested = showRequested;
+    }
+
+    public void Dispose()
+    {
+        _current.Dispose();
+        _legacy.Dispose();
+        ShowRequested.Dispose();
+    }
+}
+
 public static class SingleInstanceGuard
 {
-    public static IDisposable? TryAcquire(out bool acquired)
+    public static SoftPrintInstance? TryAcquire()
     {
         var suffix = Convert.ToHexString(SHA256.HashData(
             Encoding.UTF8.GetBytes(AppContext.BaseDirectory.ToUpperInvariant())))[..24];
         var current = new Mutex(true, "Local\\SoftPrint-" + suffix, out var currentAcquired);
         var legacy = new Mutex(true, "Local\\AutoPrint-" + suffix, out var legacyAcquired);
-        acquired = currentAcquired && legacyAcquired;
-        if (!acquired)
-        {
-            current.Dispose();
-            legacy.Dispose();
-            return null;
-        }
-        return new MutexPair(current, legacy);
-    }
+        var show = new EventWaitHandle(false, EventResetMode.AutoReset, "Local\\SoftPrint-Show-" + suffix);
+        if (currentAcquired && legacyAcquired)
+            return new SoftPrintInstance(current, legacy, show);
 
-    private sealed class MutexPair(Mutex current, Mutex legacy) : IDisposable
-    {
-        public void Dispose()
+        try { show.Set(); }
+        finally
         {
             current.Dispose();
             legacy.Dispose();
+            show.Dispose();
         }
+        return null;
     }
 }

@@ -6,6 +6,7 @@
 .tools/
 release/
 dist/
+installer/Output/
 .env.local
 **/.env
 !**/.env.example

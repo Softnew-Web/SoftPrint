@@ -67,14 +67,25 @@
     document.getElementById("statBad").textContent = bad;
     document.getElementById("healthLine").textContent = healthLine;
   }
-  function setConnection(ok) {
+  function setConnection(ok, application = "SoftPrint") {
     const el = document.getElementById("connDot");
+    if (!el) return;
     if (ok) {
-      el.innerHTML = `<span class="w-2.5 h-2.5 rounded-full bg-sea-glow animate-pulse"></span> SoftPrint conectado`;
+      el.innerHTML = `<span class="w-2.5 h-2.5 rounded-full bg-sea-glow animate-pulse"></span> ${application} conectado`;
       el.className = "inline-flex items-center gap-2 text-sm text-sea-glow";
     } else {
       el.innerHTML = `<span class="w-2.5 h-2.5 rounded-full bg-bad"></span> Sem conex\xE3o`;
       el.className = "inline-flex items-center gap-2 text-sm text-bad";
+    }
+  }
+  function setApiHint(baseUrl) {
+    const hint = document.getElementById("apiHint");
+    if (!hint) return;
+    try {
+      const host = baseUrl ? new URL(baseUrl).host : location.host;
+      hint.textContent = host || "\u2014";
+    } catch {
+      hint.textContent = location.host || "\u2014";
     }
   }
 
@@ -32453,8 +32464,9 @@ fn fs_main(in : VertexOutput) -> @location(0) vec4<f32> {
         inboxStatus.className = "text-sm text-warn min-h-[1.25rem]";
       }
     };
-    document.getElementById("endpoint").value = location.origin + "/api/jobs";
-    document.getElementById("apiHint").textContent = location.host;
+    const endpoint = document.getElementById("endpoint");
+    if (endpoint) endpoint.value = location.origin + "/api/jobs";
+    setApiHint(location.origin);
     document.getElementById("btnCopyEndpoint").addEventListener("click", () => {
       navigator.clipboard.writeText(document.getElementById("endpoint").value);
       feedback("Endere\xE7o copiado.");
@@ -32723,9 +32735,50 @@ fn fs_main(in : VertexOutput) -> @location(0) vec4<f32> {
     return { load };
   }
 
+  // SoftPrint.Host.Windows/wwwroot/js/components/update-banner.js
+  var DISMISS_KEY = "softprint-update-dismissed";
+  function applyUpdateInfo(update) {
+    const versionLabel = document.getElementById("appVersionLabel");
+    const banner = document.getElementById("updateBanner");
+    const text = document.getElementById("updateBannerText");
+    const link = document.getElementById("updateDownloadLink");
+    const dismiss = document.getElementById("updateDismissBtn");
+    if (!banner || !text || !link) return;
+    const current = update?.currentVersion || "\u2014";
+    if (versionLabel) versionLabel.textContent = `v${current}`;
+    if (!update?.updateAvailable) {
+      banner.classList.add("hidden");
+      return;
+    }
+    const latest = update.latestVersion || "?";
+    const dismissed = sessionStorage.getItem(DISMISS_KEY) === latest;
+    if (dismissed && !update.mandatory) {
+      banner.classList.add("hidden");
+      return;
+    }
+    banner.classList.remove("hidden");
+    banner.classList.toggle("bg-bad/20", !!update.mandatory);
+    banner.classList.toggle("border-bad/40", !!update.mandatory);
+    banner.classList.toggle("bg-warn/15", !update.mandatory);
+    banner.classList.toggle("border-warn/40", !update.mandatory);
+    text.textContent = update.mandatory ? `Atualiza\xE7\xE3o obrigat\xF3ria: ${current} \u2192 ${latest}. Instale a nova vers\xE3o para continuar com seguran\xE7a.` : `Nova vers\xE3o dispon\xEDvel: ${current} \u2192 ${latest}.`;
+    const href = update.downloadUrl || update.releaseUrl || "#";
+    link.href = href;
+    link.classList.toggle("pointer-events-none", href === "#");
+    if (dismiss) {
+      dismiss.classList.toggle("hidden", !!update.mandatory);
+      dismiss.onclick = () => {
+        sessionStorage.setItem(DISMISS_KEY, latest);
+        banner.classList.add("hidden");
+      };
+    }
+  }
+
   // SoftPrint.Host.Windows/wwwroot/js/app.js
   var KEY = window.SOFTPRINT_KEY || "";
   var { api } = createApi(KEY);
+  setApiHint(location.origin);
+  setConnection(false);
   var tabs = [
     { id: "config", title: "Configure a impressora", subtitle: "Impressora, simula\xE7\xE3o e Windows" },
     { id: "connect", title: "Conecte seu sistema", subtitle: "API, pasta de entrada, logs e rede" },
@@ -32822,7 +32875,15 @@ fn fs_main(in : VertexOutput) -> @location(0) vec4<f32> {
         api("/api/jobs"),
         api("/api/metrics")
       ]);
-      setConnection(true);
+      const appName = status.application || "SoftPrint";
+      setConnection(true, appName);
+      setApiHint(status.baseUrl || location.origin);
+      applyUpdateInfo(status.update || { currentVersion: status.version });
+      const endpoint = document.getElementById("endpoint");
+      if (endpoint) {
+        const origin = (status.baseUrl || location.origin).replace(/\/$/, "");
+        endpoint.value = `${origin}/api/jobs`;
+      }
       state.applied = status.settings;
       state.jobs = jobList || [];
       applyCapabilities(status.capabilities);
@@ -32874,6 +32935,14 @@ fn fs_main(in : VertexOutput) -> @location(0) vec4<f32> {
       line.textContent = "Modo Legacy \xB7 painel no navegador \xB7 compatibilidade sem suporte de seguran\xE7a";
   }
   setTab(localStorage.getItem("softprint-tab") || "config");
+  async function refreshUpdate() {
+    try {
+      const update = await api("/api/update");
+      applyUpdateInfo(update);
+    } catch (err) {
+      console.warn("Falha ao verificar atualiza\xE7\xE3o", err);
+    }
+  }
   Promise.resolve().then(() => printer.loadPrinters(api)).catch((e) => {
     console.error(e);
     const summary = document.getElementById("printerSummary");
@@ -32881,6 +32950,8 @@ fn fs_main(in : VertexOutput) -> @location(0) vec4<f32> {
   }).finally(() => {
     refreshAll();
     setInterval(refreshAll, 2e3);
+    setTimeout(refreshUpdate, 4e3);
+    setInterval(refreshUpdate, 30 * 60 * 1e3);
   });
   systemSettings.load().catch(showBootError);
   window.__softprinttBooted = true;

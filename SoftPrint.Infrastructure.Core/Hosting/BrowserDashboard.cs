@@ -8,7 +8,9 @@ public static class BrowserDashboard
     {
         app.Lifetime.ApplicationStarted.Register(() =>
         {
-            if (args.Contains("--headless", StringComparer.OrdinalIgnoreCase)) return;
+        if (args.Contains("--headless", StringComparer.OrdinalIgnoreCase) ||
+            args.Contains("--tray", StringComparer.OrdinalIgnoreCase))
+            return;
             var address = (app.Urls.FirstOrDefault() ?? "http://127.0.0.1:5178").TrimEnd('/');
             var url = address + "/dashboard";
             try

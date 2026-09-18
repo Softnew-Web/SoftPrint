@@ -23,7 +23,7 @@ Aplicativo com painel local, API e fila persistente para imprimir texto, PDF, im
 
 As configurações entram em vigor sem reiniciar. Um trabalho já iniciado mantém a configuração capturada no início do envio. A pausa mantém novos pedidos na fila, sem cancelar um envio em andamento. As configurações e o histórico são recuperados ao abrir novamente.
 
-Minimize a janela para continuar usando outros programas. **Fechar o painel da edição Windows moderna encerra também o SoftPrint.** Nas edições Legacy e Linux o painel abre no navegador. Uma segunda execução da mesma pasta é bloqueada para proteger os dados.
+Minimize ou feche o painel para continuar em segundo plano: a fila e a API seguem ativas no ícone da bandeja. Use **Sair** nesse ícone para encerrar. Com **Iniciar com o Windows**, o SoftPrint sobe direto na bandeja. Nas edições Legacy e Linux o processo também permanece em segundo plano depois de fechar o navegador.
 
 ## Conectar um sistema
 
@@ -45,7 +45,8 @@ Uma referência repetida retorna o trabalho existente, mesmo se o texto mudar. P
 
 | Rota | Uso |
 | --- | --- |
-| `GET /api/status` | Estado, saúde, fila, flags e capacidades da plataforma |
+| `GET /api/status` | Estado, saúde, fila, flags, versão e atualização |
+| `GET /api/update` | Checagem de versão no GitHub Releases |
 | `GET /api/diagnose` | Diagnóstico de SO, runtime, backend e recursos |
 | `GET /api/printers` | Impressoras instaladas |
 | `GET /api/templates` | Templates |
@@ -99,13 +100,39 @@ dotnet test .\SoftPrint.Tests\SoftPrint.Tests.csproj -f net10.0
 .\Test-SoftPrint.ps1
 ```
 
-Use `SoftPrint.exe --headless true` para iniciar somente a API, sem painel. O teste automatizado cria uma cópia isolada e verifica autenticação, fila simulada, deduplicação, configuração dinâmica, validação da impressora, conflitos, pausa, retomada e persistência após reiniciar. Não envia nada para impressão física.
+Use `SoftPrint.exe --headless true` para iniciar somente a API, sem painel nem bandeja. `SoftPrint.exe --tray` inicia em segundo plano, com o ícone na bandeja. O teste automatizado cria uma cópia isolada e verifica autenticação, fila simulada, deduplicação, configuração dinâmica, validação da impressora, conflitos, pausa, retomada e persistência após reiniciar. Não envia nada para impressão física.
 
 Pacote Linux, depois do publish:
 
 ```sh
 ./packaging/linux/install.sh
 ```
+
+## Versionamento e atualizações (GitHub Releases)
+
+A versão do produto fica em:
+
+1. `VERSION` (fonte da verdade do build / assembly)
+2. `SoftPrint.Domain/SoftPrintVersion.cs` (`Current` — deve bater com `VERSION`)
+3. `installer/SoftPrint.iss` (`#define AppVersion`)
+
+Fluxo para publicar uma atualização:
+
+1. Suba `VERSION`, `SoftPrintVersion.Current` e `AppVersion` do instalador (ex.: `1.0.1`).
+2. Faça publish + compile `SoftPrint-Setup.exe`.
+3. No GitHub (`Softnew-Web/SoftPrint`), crie um **Release** com tag `v1.0.1` e anexe o asset **`SoftPrint-Setup.exe`**.
+4. Os clientes instalados consultam `GET /repos/.../releases/latest` e o painel mostra o aviso **Nova versão disponível**.
+
+Atualização **obrigatória**: coloque `[mandatory]` (ou `softprint:mandatory`) no título ou na descrição do release, ou use `UPDATE_ALWAYS_MANDATORY=true` no `.env`.
+
+API:
+
+| Rota | Uso |
+| --- | --- |
+| `GET /api/update` | Versão atual, última do GitHub, URL de download e se é obrigatória |
+| `GET /api/status` | Inclui `version` e `update` (cache) |
+
+Releases privadas usam o token padrão embutido no app (pode ser sobrescrito com `UPDATE_GITHUB_TOKEN` / `SOFTPRINT_GITHUB_TOKEN`).
 
 ## Checklist de testes externos
 

@@ -1,6 +1,7 @@
 import { feedback, openDlg, state } from "../state.js";
 import { escapeHtml } from "../api.js";
 import { buildSettingsPayload } from "../settings-payload.js";
+import { setApiHint } from "./stats.js";
 
 export function bindConnectTab({ api, apiKey }) {
   const inboxFolder = document.getElementById("inboxFolder");
@@ -17,8 +18,9 @@ export function bindConnectTab({ api, apiKey }) {
     }
   };
 
-  document.getElementById("endpoint").value = location.origin + "/api/jobs";
-  document.getElementById("apiHint").textContent = location.host;
+  const endpoint = document.getElementById("endpoint");
+  if (endpoint) endpoint.value = location.origin + "/api/jobs";
+  setApiHint(location.origin);
 
   document.getElementById("btnCopyEndpoint").addEventListener("click", () => {
     navigator.clipboard.writeText(document.getElementById("endpoint").value);

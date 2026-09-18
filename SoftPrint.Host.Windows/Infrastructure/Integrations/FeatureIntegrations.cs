@@ -60,7 +60,7 @@ public sealed class WindowsStartupService(IHostEnvironment environment) : IWindo
         using var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(RunKey, true)
                         ?? Microsoft.Win32.Registry.CurrentUser.CreateSubKey(RunKey, true);
         if (enable)
-            key.SetValue(ValueName, $"\"{exe}\"");
+            key.SetValue(ValueName, $"\"{exe}\" --tray");
         else if (key.GetValue(ValueName) is not null)
             key.DeleteValue(ValueName, false);
         if (key.GetValue("AutoPrint") is not null)

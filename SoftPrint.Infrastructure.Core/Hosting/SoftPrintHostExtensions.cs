@@ -37,6 +37,10 @@ public static class SoftPrintHostExtensions
     public static IServiceCollection AddSoftPrintCore(this IServiceCollection services)
     {
         services.AddHttpClient("softprintthook");
+        services.AddHttpClient("softprint-update", client =>
+        {
+            client.Timeout = TimeSpan.FromSeconds(12);
+        });
         services.AddSingleton<IAppPaths, UserAppPaths>();
         services.AddSingleton<IApiKeyProvider, FileApiKeyProvider>();
         services.AddSingleton<IJobRepository, JsonJobRepository>();
@@ -57,6 +61,8 @@ public static class SoftPrintHostExtensions
         services.AddSingleton<JobQueueService>();
         services.AddSingleton<SettingsService>();
         services.AddSingleton<InboxService>();
+        services.AddSingleton<IUpdateChecker, SoftPrint.Infrastructure.Updates.GitHubReleaseUpdateChecker>();
+        services.AddHostedService<SoftPrint.Infrastructure.Updates.UpdateCheckHostedService>();
         services.AddHostedService<PrintWorker>();
         services.AddHostedService<InboxFolderWatcher>();
         services.AddHostedService<DataMaintenanceWorker>();

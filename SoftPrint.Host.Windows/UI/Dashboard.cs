@@ -9,6 +9,8 @@ public sealed class Dashboard : Form
     private readonly string _address;
     private readonly NotifyIcon? _tray;
     private readonly WebView2 _web = new() { Dock = DockStyle.Fill };
+    private bool _exitRequested;
+    private bool _hideBalloonShown;
 
     public Dashboard(string address, string apiKey, Application.SoftPrintFeatureOptions features, NotifyIcon? tray = null)
     {
@@ -43,6 +45,59 @@ public sealed class Dashboard : Form
         {
             return false;
         }
+    }
+
+    public void HideToTray(bool balloon = true)
+    {
+        ShowInTaskbar = false;
+        Hide();
+        if (!balloon || _tray is null || _hideBalloonShown) return;
+        _hideBalloonShown = true;
+        _tray.ShowBalloonTip(
+            4000,
+            "SoftPrint",
+            "Continua imprimindo em segundo plano. Clique duas vezes no ícone da bandeja para abrir o painel.",
+            ToolTipIcon.Info);
+    }
+
+    public void ShowFromTray()
+    {
+        if (IsDisposed) return;
+        ShowInTaskbar = true;
+        Show();
+        WindowState = FormWindowState.Normal;
+        Activate();
+        BringToFront();
+    }
+
+    public void RequestExit()
+    {
+        _exitRequested = true;
+        if (IsDisposed) return;
+        if (IsHandleCreated)
+        {
+            try { BeginInvoke(Close); }
+            catch (InvalidOperationException) { Close(); }
+        }
+        else Close();
+    }
+
+    protected override void OnFormClosing(FormClosingEventArgs e)
+    {
+        if (!_exitRequested && e.CloseReason == CloseReason.UserClosing)
+        {
+            e.Cancel = true;
+            HideToTray();
+            return;
+        }
+        base.OnFormClosing(e);
+    }
+
+    protected override void OnResize(EventArgs e)
+    {
+        base.OnResize(e);
+        if (WindowState == FormWindowState.Minimized)
+            HideToTray(balloon: false);
     }
 
     private async Task InitAsync()
@@ -111,7 +166,7 @@ public sealed class Dashboard : Form
             Font = new Font("Segoe UI", 12),
             Text = "Painel aberto no navegador.\nO SoftPrint continua em execução na bandeja.\n\n" + reason
         });
-        _tray?.ShowBalloonTip(6000, "SoftPrint", "Painel aberto no navegador.", ToolTipIcon.Info);
+        _tray?.ShowBalloonTip(6000, "SoftPrint", "Painel aberto no navegador. A impressão segue em segundo plano.", ToolTipIcon.Info);
     }
 
     private static void CopyDirectory(string source, string destination)

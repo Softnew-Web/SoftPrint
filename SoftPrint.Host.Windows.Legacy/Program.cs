@@ -9,6 +9,7 @@ using Microsoft.Extensions.Configuration;
 
 if (args.Contains("--diagnose"))
 {
+    LegacyBackgroundHost.EnsureConsole();
     Console.WriteLine(RuntimeDiagnostics.Report(
         "Windows Legacy", "windows-spooler",
         ("Windows 7+", OperatingSystem.IsWindowsVersionAtLeast(6, 1)),
@@ -18,6 +19,7 @@ if (args.Contains("--diagnose"))
 
 if (!OperatingSystem.IsWindowsVersionAtLeast(6, 1))
 {
+    LegacyBackgroundHost.EnsureConsole();
     Console.Error.WriteLine("SoftPrint Legacy requer Windows 7 SP1 ou mais recente.");
     return;
 }
@@ -51,5 +53,9 @@ app.UseMiddleware<ApiKeyMiddleware>();
 app.MapWebDashboard();
 app.MapJobEndpoints();
 app.MapSettingsEndpoints();
-BrowserDashboard.OpenWhenReady(app, args);
+
+var headless = builder.Configuration.GetValue<bool>("headless") || args.Contains("--headless");
+var startInTray = args.Contains("--tray") || builder.Configuration.GetValue("SoftPrint:StartInTray", false);
+if (!headless)
+    LegacyBackgroundHost.StartTray(app, startInTray);
 app.Run();

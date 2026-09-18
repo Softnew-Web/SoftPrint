@@ -35,7 +35,7 @@ public sealed class LegacyStartupService : IWindowsStartupService
         using var key = Registry.CurrentUser.OpenSubKey(RunKey, true)
             ?? Registry.CurrentUser.CreateSubKey(RunKey, true);
         if (enable)
-            key.SetValue("SoftPrint", $"\"{Environment.ProcessPath}\"");
+            key.SetValue("SoftPrint", $"\"{Environment.ProcessPath}\" --tray");
         else
             key.DeleteValue("SoftPrint", false);
         key.DeleteValue("AutoPrint", false);

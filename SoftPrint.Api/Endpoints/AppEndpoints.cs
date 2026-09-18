@@ -183,18 +183,25 @@ public static class SettingsEndpoints
                 : Results.Ok(new { cancelled = false, folder });
         });
         app.MapGet("/api/status", (
+            HttpRequest request,
             SettingsService settings,
             JobQueueService jobs,
             IWindowsStartupService startup,
             IMetricsService metrics,
             IPlatformCapabilities capabilities,
+            IUpdateChecker updates,
             IOptions<SoftPrintFeatureOptions> features) =>
         {
             var current = settings.Current;
             var all = jobs.List();
             var m = metrics.Compute();
+            var baseUrl = $"{request.Scheme}://{request.Host}".TrimEnd('/');
+            var application = capabilities.IsLegacy ? "SoftPrint Legacy" : "SoftPrint";
+            var update = ToUpdateDto(updates.TryGetCached());
             return new StatusResponse(
-                "SoftPrint",
+                application,
+                baseUrl,
+                SoftPrintVersion.Current,
                 current.Simulation,
                 current.PrinterName,
                 current.ToDto(),
@@ -223,7 +230,24 @@ public static class SettingsEndpoints
                     capabilities.HasDesktopShell,
                     capabilities.HasNativeFolderPicker,
                     capabilities.StartupRegistration,
-                    capabilities.IsLegacy));
+                    capabilities.IsLegacy),
+                update);
+        });
+        app.MapGet("/api/update", async (IUpdateChecker updates, CancellationToken ct) =>
+        {
+            var result = await updates.CheckAsync(ct).ConfigureAwait(false);
+            return Results.Ok(new
+            {
+                result.CurrentVersion,
+                result.LatestVersion,
+                result.UpdateAvailable,
+                result.Mandatory,
+                result.DownloadUrl,
+                result.ReleaseUrl,
+                result.ReleaseNotes,
+                result.Error,
+                checkedAt = result.CheckedAt
+            });
         });
         app.MapPost("/api/startup", (StartupRequest request, IWindowsStartupService startup) =>
         {
@@ -267,4 +291,16 @@ public static class SettingsEndpoints
 
         return app;
     }
+
+    private static UpdateInfoDto ToUpdateDto(UpdateCheckResult? result) =>
+        result is null
+            ? new UpdateInfoDto(SoftPrintVersion.Current, null, false, false, null, null, null)
+            : new UpdateInfoDto(
+                result.CurrentVersion,
+                result.LatestVersion,
+                result.UpdateAvailable,
+                result.Mandatory,
+                result.DownloadUrl,
+                result.ReleaseUrl,
+                result.Error);
 }

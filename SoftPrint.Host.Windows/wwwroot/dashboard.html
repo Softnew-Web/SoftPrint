@@ -36,6 +36,7 @@
       <div>
         <p class="font-display text-3xl font-extrabold tracking-tight text-white">SoftPrint</p>
         <p class="text-mist text-sm mt-1">Painel de impressão local</p>
+        <p id="appVersionLabel" class="text-mist/70 text-xs mt-1">v—</p>
       </div>
 
       <nav class="space-y-2" aria-label="Abas do painel">
@@ -58,8 +59,8 @@
       </nav>
 
       <div class="mt-auto text-xs text-mist/80 leading-relaxed">
-        <span id="closeHint">Fechar esta janela encerra o SoftPrint.<br /></span>
-        API em <span id="apiHint" class="text-paper/80">127.0.0.1:5178</span>
+        <span id="closeHint">Fechar o painel deixa o SoftPrint imprimindo na bandeja.<br /></span>
+        API em <span id="apiHint" class="text-paper/80">—</span>
       </div>
     </aside>
 
@@ -71,13 +72,25 @@
           <p id="healthLine" class="text-xs text-mist/80 mt-0.5 truncate">Conectando…</p>
         </div>
         <div class="flex items-center gap-3 shrink-0">
-          <span id="connDot" class="inline-flex items-center gap-2 text-sm text-sea-glow">
-            <span class="w-2.5 h-2.5 rounded-full bg-sea-glow animate-pulse"></span>
-            SoftPrint conectado
+          <span id="connDot" class="inline-flex items-center gap-2 text-sm text-mist">
+            <span class="w-2.5 h-2.5 rounded-full bg-mist animate-pulse"></span>
+            Conectando…
           </span>
           <button id="btnRefresh" type="button" class="px-3 py-1.5 rounded-lg bg-ink-line hover:bg-ink-line/80 text-sm">Atualizar</button>
         </div>
       </header>
+
+      <div id="updateBanner" class="hidden px-5 py-2.5 border-b border-warn/40 bg-warn/15 text-sm shrink-0">
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <p id="updateBannerText" class="text-paper/95"></p>
+          <div class="flex items-center gap-2 shrink-0">
+            <a id="updateDownloadLink" href="#" target="_blank" rel="noopener"
+               class="px-3 py-1.5 rounded-lg bg-sea text-white text-sm font-medium hover:bg-sea-deep">Baixar atualização</a>
+            <button id="updateDismissBtn" type="button"
+                    class="px-3 py-1.5 rounded-lg bg-ink-line hover:bg-ink-line/80 text-sm">Depois</button>
+          </div>
+        </div>
+      </div>
 
       <div id="statsRow" class="px-5 py-2 grid gap-2 grid-cols-4 shrink-0">
         <div class="rounded-lg bg-ink-soft border border-ink-line px-3 py-1.5">
@@ -573,7 +586,7 @@ Teste de impressão de texto.</textarea>
       }
     }, 4000);
   </script>
-  <script defer src="/js/app.bundle.js?v=20260918a"
+  <script defer src="/js/app.bundle.js?v=20260918d"
           onerror="document.getElementById('healthLine').textContent='Falha ao carregar o painel.'"></script>
 </body>
 </html>

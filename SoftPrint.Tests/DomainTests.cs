@@ -109,4 +109,34 @@ public sealed class DomainTests
         text.Append($"trailer\n<< /Size {objects.Length + 1} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF");
         return Encoding.ASCII.GetBytes(text.ToString());
     }
+
+    [Fact]
+    public void SoftPrintVersion_MatchesVersionFile()
+    {
+        var root = FindRepoRoot();
+        var fileVersion = File.ReadAllText(Path.Combine(root, "VERSION")).Trim();
+        Assert.Equal(SoftPrintVersion.Current, fileVersion);
+    }
+
+    [Theory]
+    [InlineData("v1.0.1", "1.0.0", true)]
+    [InlineData("1.0.0", "1.0.0", false)]
+    [InlineData("1.0.0", "1.0.1", false)]
+    [InlineData("2.0.0-beta", "1.9.9", true)]
+    public void SoftPrintVersionCompare_DetectsNewer(string latest, string current, bool expected) =>
+        Assert.Equal(expected, SoftPrintVersionCompare.IsNewer(latest, current));
+
+    private static string FindRepoRoot()
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null)
+        {
+            if (File.Exists(Path.Combine(dir.FullName, "VERSION")) &&
+                File.Exists(Path.Combine(dir.FullName, "Directory.Build.props")))
+                return dir.FullName;
+            dir = dir.Parent;
+        }
+
+        throw new InvalidOperationException("Raiz do repositório não encontrada.");
+    }
 }

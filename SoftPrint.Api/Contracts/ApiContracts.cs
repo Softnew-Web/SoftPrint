@@ -124,11 +124,23 @@ public record HealthInfo(
 
 public record StatusResponse(
     string Application,
+    string BaseUrl,
+    string Version,
     bool Simulation,
     string Printer,
     PrinterOptionsDto Settings,
     HealthInfo Health,
-    PlatformCapabilitiesDto Capabilities);
+    PlatformCapabilitiesDto Capabilities,
+    UpdateInfoDto? Update = null);
+
+public record UpdateInfoDto(
+    string CurrentVersion,
+    string? LatestVersion,
+    bool UpdateAvailable,
+    bool Mandatory,
+    string? DownloadUrl,
+    string? ReleaseUrl,
+    string? Error);
 
 public record PlatformCapabilitiesDto(
     string Platform,
