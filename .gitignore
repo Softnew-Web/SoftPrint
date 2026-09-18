@@ -1,6 +1,11 @@
 **/bin/
 **/obj/
 **/data/
+**/logs/
 .vs/
 .tools/
 release/
+.env.local
+**/.env
+!**/.env.example
+NUL

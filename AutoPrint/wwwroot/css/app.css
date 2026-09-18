@@ -1,0 +1,91 @@
+body {
+  font-family: "IBM Plex Sans", sans-serif;
+  margin: 0;
+}
+
+.font-display {
+  font-family: "Outfit", sans-serif;
+}
+
+.scroll-thin::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.scroll-thin::-webkit-scrollbar-thumb {
+  background: #3a4a5a;
+  border-radius: 8px;
+}
+
+.timeline-line {
+  border-left: 2px solid #2a3644;
+}
+
+.tab-btn {
+  transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.tab-btn.active {
+  background: rgba(20, 184, 166, 0.12);
+  border-color: #14b8a6;
+  color: #eef3f7;
+}
+
+.panel-hidden {
+  display: none !important;
+}
+
+#printPreview {
+  display: block;
+}
+
+.btn-primary {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.btn-primary:focus {
+  outline: 2px solid #14b8a6;
+  outline-offset: 2px;
+}
+
+/* Evita seleção azul estranha no WebView2 em cima do texto do botão */
+.btn-primary::selection {
+  background: transparent;
+  color: inherit;
+}
+
+input[type="range"] {
+  height: 1.25rem;
+}
+
+/* WebView2: selects/inputs escuros sem “fantasma” branco */
+select.field,
+select,
+input[type="text"],
+input[type="number"] {
+  color: #eef3f7;
+  background-color: #0f1720;
+  min-height: 2.25rem;
+}
+
+select option {
+  color: #0f1720;
+  background: #eef3f7;
+}
+
+#customPaperRow.hidden {
+  display: none !important;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}

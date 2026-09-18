@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AutoPrint</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@500;700;800&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/css/app.css" />
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            display: ["Outfit", "sans-serif"],
+            body: ["IBM Plex Sans", "sans-serif"],
+          },
+          colors: {
+            ink: { DEFAULT: "#0f1720", soft: "#1a2430", line: "#2a3644" },
+            mist: "#9aabbc",
+            paper: "#eef3f7",
+            sea: { DEFAULT: "#0d9488", deep: "#0f766e", glow: "#14b8a6" },
+            warn: "#c2410c",
+            bad: "#b91c1c",
+          },
+        },
+      },
+    };
+  </script>
+</head>
+<body class="bg-ink text-paper h-screen overflow-hidden">
+  <div class="h-screen grid lg:grid-cols-[260px_1fr]">
+    <aside class="bg-ink-soft border-r border-ink-line p-6 flex flex-col gap-8 overflow-y-auto scroll-thin relative z-20">
+      <div>
+        <p class="font-display text-3xl font-extrabold tracking-tight text-white">AutoPrint</p>
+        <p class="text-mist text-sm mt-1">Painel de impressão local</p>
+      </div>
+
+      <nav class="space-y-2" aria-label="Abas do painel">
+        <button id="tab-config" type="button" class="tab-btn active w-full text-left rounded-xl border border-transparent px-3 py-3">
+          <span class="block text-sea-glow text-xs font-semibold tracking-wide">01</span>
+          <span class="block text-sm font-medium">Configure a impressora</span>
+        </button>
+        <button id="tab-connect" type="button" class="tab-btn w-full text-left rounded-xl border border-transparent px-3 py-3">
+          <span class="block text-sea-glow text-xs font-semibold tracking-wide">02</span>
+          <span class="block text-sm font-medium">Conecte seu sistema</span>
+        </button>
+        <button id="tab-monitor" type="button" class="tab-btn w-full text-left rounded-xl border border-transparent px-3 py-3">
+          <span class="block text-sea-glow text-xs font-semibold tracking-wide">03</span>
+          <span class="block text-sm font-medium">Acompanhe o passo a passo</span>
+        </button>
+      </nav>
+
+      <div class="mt-auto text-xs text-mist/80 leading-relaxed">
+        Fechar esta janela encerra o AutoPrint.<br />
+        API em <span id="apiHint" class="text-paper/80">127.0.0.1:5178</span>
+      </div>
+    </aside>
+
+    <div class="flex flex-col min-h-0 min-w-0">
+      <header class="px-5 py-3 border-b border-ink-line flex flex-wrap items-center justify-between gap-2 shrink-0 bg-gradient-to-r from-ink-soft to-ink">
+        <div class="min-w-0">
+          <h1 id="pageTitle" class="font-display text-xl font-bold text-white">Configure a impressora</h1>
+          <p id="pageSubtitle" class="text-xs text-mist mt-0.5">01 · Impressora, simulação e Windows</p>
+          <p id="healthLine" class="text-xs text-mist/80 mt-0.5 truncate">Conectando…</p>
+        </div>
+        <div class="flex items-center gap-3 shrink-0">
+          <span id="connDot" class="inline-flex items-center gap-2 text-sm text-sea-glow">
+            <span class="w-2.5 h-2.5 rounded-full bg-sea-glow animate-pulse"></span>
+            AutoPrint conectado
+          </span>
+          <button id="btnRefresh" type="button" class="px-3 py-1.5 rounded-lg bg-ink-line hover:bg-ink-line/80 text-sm">Atualizar</button>
+        </div>
+      </header>
+
+      <div id="statsRow" class="px-5 py-2 grid gap-2 grid-cols-4 shrink-0">
+        <div class="rounded-lg bg-ink-soft border border-ink-line px-3 py-1.5">
+          <p class="text-[10px] uppercase tracking-wider text-mist">Modo</p>
+          <p id="statMode" class="font-display text-lg font-bold leading-tight">—</p>
+        </div>
+        <div class="rounded-lg bg-ink-soft border border-ink-line px-3 py-1.5">
+          <p class="text-[10px] uppercase tracking-wider text-mist">Fila</p>
+          <p id="statQueue" class="font-display text-lg font-bold leading-tight">0</p>
+        </div>
+        <div class="rounded-lg bg-ink-soft border border-ink-line px-3 py-1.5">
+          <p class="text-[10px] uppercase tracking-wider text-mist">Feitos</p>
+          <p id="statDone" class="font-display text-lg font-bold leading-tight">0</p>
+        </div>
+        <div class="rounded-lg bg-ink-soft border border-ink-line px-3 py-1.5">
+          <p class="text-[10px] uppercase tracking-wider text-mist">Conferir</p>
+          <p id="statBad" class="font-display text-lg font-bold leading-tight text-bad">0</p>
+        </div>
+      </div>
+
+      <main id="mainPanel" class="flex-1 min-h-0 overflow-hidden px-5 pb-3">
+        <!-- ABA 01 -->
+        <section id="panel-config" class="h-full min-h-0 grid grid-cols-1 lg:grid-cols-2 gap-3">
+          <div class="rounded-2xl bg-ink-soft border border-ink-line min-h-0 flex flex-col overflow-hidden">
+            <div class="flex-1 min-h-0 overflow-y-auto scroll-thin p-3 space-y-2.5">
+              <div class="flex items-baseline justify-between gap-2">
+                <div>
+                  <h2 class="font-display text-base font-bold">Sua impressora</h2>
+                  <p class="text-[11px] text-mist">USB, cabo e rede no Windows</p>
+                </div>
+                <p id="printerSummary" class="text-[11px] text-mist text-right max-w-[45%] leading-snug"></p>
+              </div>
+              <div class="flex gap-2">
+                <select id="printers" class="field flex-1 min-w-0 rounded-lg bg-ink border border-ink-line px-2.5 py-1.5 text-sm text-paper">
+                  <option value="">Selecionar impressora…</option>
+                </select>
+                <button id="btnLoadPrinters" type="button" class="shrink-0 rounded-lg bg-ink-line hover:bg-ink-line/70 px-2.5 py-1.5 text-sm">Atualizar</button>
+              </div>
+              <div class="flex flex-wrap gap-x-4 gap-y-1.5 text-sm">
+                <label class="inline-flex items-center gap-1.5"><input id="simulation" type="checkbox" class="accent-sea" checked /> Simular</label>
+                <label class="inline-flex items-center gap-1.5"><input id="paused" type="checkbox" class="accent-sea" /> Pausar fila</label>
+                <label class="inline-flex items-center gap-1.5"><input id="startup" type="checkbox" class="accent-sea" /> Com Windows</label>
+              </div>
+              <div class="rounded-xl border border-ink-line bg-ink/40 p-2.5 space-y-2">
+                <p class="text-[10px] uppercase tracking-wider text-mist">Papel e imagem</p>
+                <div class="grid grid-cols-[1fr_auto] gap-2 items-end">
+                  <label class="block text-sm min-w-0">
+                    <span class="text-mist text-[11px]">Tamanho do papel</span>
+                    <select id="paperSize" class="mt-0.5 w-full rounded-lg bg-ink border border-ink-line px-2 py-1.5 text-sm">
+                      <option value="a4">A4 (210×297)</option>
+                      <option value="a5">A5 (148×210)</option>
+                      <option value="letter">Letter</option>
+                      <option value="legal">Legal</option>
+                      <option value="photo4x6">Foto 10×15</option>
+                      <option value="custom">Personalizado</option>
+                    </select>
+                  </label>
+                  <label class="inline-flex items-center gap-1.5 text-sm pb-1.5 whitespace-nowrap">
+                    <input id="paperLandscape" type="checkbox" class="accent-sea" />
+                    Paisagem
+                  </label>
+                </div>
+                <div id="customPaperRow" class="grid grid-cols-2 gap-2 hidden">
+                  <label class="block text-sm">
+                    <span class="text-mist text-[11px]">Largura (mm)</span>
+                    <input id="paperWidthMm" type="number" min="20" max="1200" step="0.1" value="210" class="mt-0.5 w-full rounded-lg bg-ink border border-ink-line px-2 py-1.5 text-sm" />
+                  </label>
+                  <label class="block text-sm">
+                    <span class="text-mist text-[11px]">Altura (mm)</span>
+                    <input id="paperHeightMm" type="number" min="20" max="1200" step="0.1" value="297" class="mt-0.5 w-full rounded-lg bg-ink border border-ink-line px-2 py-1.5 text-sm" />
+                  </label>
+                </div>
+                <label class="block text-sm">
+                  <span class="text-mist text-[11px]">Encaixe da imagem</span>
+                  <select id="imageFit" class="mt-0.5 w-full rounded-lg bg-ink border border-ink-line px-2 py-1.5 text-sm">
+                    <option value="contain">Caber na página</option>
+                    <option value="cover">Preencher (recorta)</option>
+                    <option value="stretch">Esticar</option>
+                    <option value="center">Centralizar (tamanho real × %)</option>
+                  </select>
+                </label>
+                <label class="block text-sm">
+                  <span class="text-mist text-[11px] flex justify-between"><span>Escala</span><span id="imageScaleLabel">100%</span></span>
+                  <input id="imageScale" type="range" min="10" max="200" step="5" value="100" class="mt-1 w-full accent-sea" />
+                </label>
+              </div>
+            </div>
+            <div class="shrink-0 border-t border-ink-line p-3 space-y-1.5 bg-ink-soft">
+              <button id="btnSaveSettings" type="button" class="btn-primary w-full rounded-xl bg-sea hover:bg-sea-deep text-white font-semibold px-3 py-2.5">Salvar configurações</button>
+              <p id="settingsMsg" class="text-xs text-sea-glow leading-snug min-h-[1rem]"></p>
+            </div>
+          </div>
+
+          <div class="rounded-2xl bg-ink-soft border border-ink-line p-3 flex flex-col gap-2 min-h-0 overflow-hidden">
+            <div class="flex items-start justify-between gap-2 shrink-0">
+              <div>
+                <h2 class="font-display text-base font-bold">Preview da impressão</h2>
+                <p class="text-[11px] text-mist mt-0.5">Mesma regra do envio no papel escolhido.</p>
+              </div>
+              <div class="flex gap-2 shrink-0">
+                <button id="btnPickPreview" type="button" class="rounded-lg bg-ink-line hover:bg-ink-line/70 px-2.5 py-1.5 text-sm">Escolher arquivo</button>
+                <input id="previewFile" type="file" accept="image/*,application/pdf,.pdf" class="sr-only" tabindex="-1" />
+                <button id="btnClearPreview" type="button" class="rounded-lg bg-ink-line hover:bg-ink-line/70 px-2.5 py-1.5 text-sm">Limpar</button>
+              </div>
+            </div>
+            <div class="flex-1 min-h-[280px] rounded-xl border border-ink-line bg-ink overflow-hidden flex items-center justify-center p-2">
+              <canvas id="printPreview" width="520" height="680" class="block max-h-full max-w-full bg-[#121a22]"></canvas>
+              <embed id="pdfPreview" type="application/pdf" class="hidden h-full w-full bg-white" />
+            </div>
+            <p id="previewMeta" class="text-[11px] text-mist shrink-0 truncate">Sem imagem — o dimensionamento vale para jobs de imagem.</p>
+          </div>
+        </section>
+
+        <!-- ABA 02 -->
+        <section id="panel-connect" class="panel-hidden max-w-3xl space-y-4 h-full overflow-y-auto scroll-thin">
+          <div class="rounded-2xl bg-ink-soft border border-ink-line p-6 space-y-4">
+            <div>
+              <h2 class="font-display text-xl font-bold">Conectar seu sistema</h2>
+              <p class="text-sm text-mist mt-1 leading-relaxed">Use o endereço e a chave no sistema que enviará os pedidos. Sem webhook, os eventos vão para a pasta logs.</p>
+            </div>
+            <input id="endpoint" readonly class="w-full rounded-xl bg-ink border border-ink-line px-3 py-2.5 text-sm" />
+            <div class="flex flex-wrap gap-2">
+              <button id="btnCopyEndpoint" type="button" class="rounded-xl bg-ink-line px-4 py-2.5 text-sm">Copiar endereço</button>
+              <button id="btnCopyKey" type="button" class="rounded-xl bg-ink-line px-4 py-2.5 text-sm">Copiar chave</button>
+              <button id="btnOpenLogs" type="button" class="rounded-xl bg-ink-line px-4 py-2.5 text-sm">Abrir pasta logs</button>
+              <button id="btnEvents" type="button" class="rounded-xl bg-ink-line px-4 py-2.5 text-sm">Eventos do dia</button>
+              <button id="btnDiscover" type="button" class="rounded-xl bg-ink-line px-4 py-2.5 text-sm">Buscar rede</button>
+            </div>
+            <p class="text-xs text-mist leading-relaxed">Webhook vazio → <code class="text-paper/80">logs/events-yyyy-MM-dd.log</code>. Busca de rede varre portas 9100 / 515 / 631.</p>
+          </div>
+
+          <div class="rounded-2xl bg-ink-soft border border-ink-line p-6 space-y-4">
+            <div>
+              <h2 class="font-display text-xl font-bold">Pasta de entrada</h2>
+              <p class="text-sm text-mist mt-1 leading-relaxed">Onde o sistema web grava PDF/imagens. O AutoPrint vigia essa pasta e imprime o que aparecer.</p>
+            </div>
+            <label class="block text-sm">
+              <span class="text-mist text-xs">Caminho da pasta</span>
+              <div class="mt-1 flex gap-2">
+                <input id="inboxFolder" type="text" placeholder="C:\caminho\para\pasta" class="flex-1 min-w-0 rounded-xl bg-ink border border-ink-line px-3 py-2.5 text-sm" />
+                <button id="btnBrowseInbox" type="button" class="shrink-0 rounded-xl bg-ink-line hover:bg-ink-line/70 px-4 py-2.5 text-sm">Escolher…</button>
+                <button id="btnClearInbox" type="button" class="shrink-0 rounded-xl bg-ink-line hover:bg-ink-line/70 px-4 py-2.5 text-sm">Limpar</button>
+              </div>
+            </label>
+            <div class="flex flex-wrap gap-x-5 gap-y-2 text-sm">
+              <label class="inline-flex items-center gap-2"><input id="inboxEnabled" type="checkbox" class="accent-sea" /> Vigiar pasta e imprimir</label>
+              <label class="inline-flex items-center gap-2"><input id="deleteInboxAfterPrint" type="checkbox" class="accent-sea" /> Apagar da pasta só depois de imprimir</label>
+            </div>
+            <p class="text-xs text-mist leading-relaxed">Se a impressão falhar ou estiver em simulação, o arquivo <strong class="text-paper/80 font-medium">não</strong> é apagado.</p>
+            <div class="flex flex-wrap gap-2 items-center">
+              <button id="btnSaveInbox" type="button" class="rounded-xl bg-sea hover:bg-sea-deep text-white font-semibold px-5 py-2.5">Salvar pasta</button>
+              <button id="btnOpenInbox" type="button" class="rounded-xl bg-ink-line px-4 py-2.5 text-sm">Abrir pasta</button>
+              <p id="inboxStatus" class="text-sm text-mist min-h-[1.25rem]"></p>
+            </div>
+            <div id="inboxFiles" class="rounded-xl border border-ink-line bg-ink/40 p-3 text-sm text-mist max-h-40 overflow-auto scroll-thin">Nenhum arquivo na pasta.</div>
+          </div>
+        </section>
+
+        <!-- ABA 03 -->
+        <section id="panel-monitor" class="panel-hidden space-y-4 h-full overflow-y-auto scroll-thin">
+          <div class="rounded-2xl bg-ink-soft border border-ink-line p-5 space-y-4">
+            <div class="flex flex-wrap items-start justify-between gap-3">
+              <div class="min-w-0">
+                <h2 class="font-display text-xl font-bold">Fila, passo a passo e erros</h2>
+                <p id="pipeline" class="text-sm text-mist mt-1 leading-relaxed">Aguardando…</p>
+              </div>
+              <div class="flex flex-wrap gap-2">
+                <select id="statusFilter" class="rounded-lg bg-ink border border-ink-line px-2 py-2 text-sm">
+                  <option value="">Todos</option>
+                  <option value="pending">Na fila</option>
+                  <option value="processing">Enviando</option>
+                  <option value="simulated">Simulado</option>
+                  <option value="sent">Enviado</option>
+                  <option value="uncertain">Conferir</option>
+                </select>
+                <input id="refFilter" placeholder="Filtrar pedido…" class="rounded-lg bg-ink border border-ink-line px-3 py-2 text-sm w-44" />
+                <button id="btnExportJson" type="button" class="rounded-lg bg-ink-line px-3 py-2 text-sm">JSON</button>
+                <button id="btnExportCsv" type="button" class="rounded-lg bg-ink-line px-3 py-2 text-sm">CSV</button>
+              </div>
+            </div>
+
+            <div class="grid xl:grid-cols-2 gap-4">
+              <div class="rounded-xl border border-ink-line overflow-hidden min-h-[320px] max-h-[420px] flex flex-col">
+                <div class="overflow-auto scroll-thin flex-1">
+                  <table class="w-full text-sm">
+                    <thead class="sticky top-0 bg-ink text-mist text-xs uppercase tracking-wide">
+                      <tr>
+                        <th class="text-left px-3 py-2 font-medium">Pedido</th>
+                        <th class="text-left px-3 py-2 font-medium">Tipo</th>
+                        <th class="text-left px-3 py-2 font-medium">Situação</th>
+                        <th class="text-left px-3 py-2 font-medium">Quando</th>
+                      </tr>
+                    </thead>
+                    <tbody id="jobsBody"></tbody>
+                  </table>
+                </div>
+              </div>
+              <div class="rounded-xl border border-ink-line p-4 flex flex-col gap-3 min-h-[320px] max-h-[420px]">
+                <p class="text-xs uppercase tracking-wider text-mist shrink-0">Passos do pedido</p>
+                <div id="steps" class="flex-1 overflow-auto scroll-thin text-sm space-y-3 pr-1"></div>
+                <div id="errorBox" class="rounded-xl bg-ink border border-ink-line p-3 text-sm leading-relaxed text-mist shrink-0">Sem erro neste pedido.</div>
+              </div>
+            </div>
+
+            <div class="grid md:grid-cols-[1fr_140px_140px] gap-2">
+              <textarea id="sample" rows="3" class="rounded-xl bg-ink border border-ink-line px-3 py-2 text-sm resize-y min-h-[88px]">TESTE AUTOPRINT
+Conexão funcionando.
+Teste de impressão de texto.</textarea>
+              <input id="jobType" value="default" class="rounded-xl bg-ink border border-ink-line px-3 py-2 text-sm" placeholder="Tipo" />
+              <input id="template" class="rounded-xl bg-ink border border-ink-line px-3 py-2 text-sm" placeholder="Template" />
+            </div>
+            <div class="flex flex-wrap gap-2 items-center">
+              <button id="btnSendTest" type="button" class="rounded-xl bg-sea hover:bg-sea-deep text-white font-semibold px-5 py-3">Enviar teste</button>
+              <button id="btnReprint" type="button" class="rounded-xl bg-ink-line px-4 py-3 text-sm">Reimprimir</button>
+              <button id="btnExplain" type="button" class="rounded-xl bg-ink-line px-4 py-3 text-sm">Explicação completa</button>
+              <p id="feedback" class="text-sm text-sea-glow min-h-[1.25rem]"></p>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <dialog id="dlg" class="rounded-2xl bg-ink-soft text-paper border border-ink-line p-0 max-w-2xl w-[92vw] backdrop:bg-black/60">
+    <div class="p-5 border-b border-ink-line flex justify-between items-center gap-3">
+      <h3 id="dlgTitle" class="font-display font-bold text-lg">Detalhes</h3>
+      <button id="dlgClose" type="button" class="text-mist hover:text-white">Fechar</button>
+    </div>
+    <pre id="dlgBody" class="p-5 text-sm whitespace-pre-wrap overflow-auto max-h-[70vh] scroll-thin leading-relaxed"></pre>
+  </dialog>
+
+  <script>
+    window.AUTOPRINT_KEY = "{{API_KEY}}";
+    // Bootstrap sem módulo: abas, impressoras e preview (WebView2 costuma falhar com ES modules em cache).
+    (function () {
+      // Código legado mantido temporariamente como referência; o bundle abaixo é a fonte única.
+      return;
+      var previewImage = null;
+      var previewUrl = null;
+
+      function setTab(id) {
+        ["config", "connect", "monitor"].forEach(function (t) {
+          var panel = document.getElementById("panel-" + t);
+          var btn = document.getElementById("tab-" + t);
+          if (!panel || !btn) return;
+          var active = t === id;
+          panel.classList.toggle("panel-hidden", !active);
+          btn.classList.toggle("active", active);
+        });
+      }
+      ["config", "connect", "monitor"].forEach(function (t) {
+        var btn = document.getElementById("tab-" + t);
+        if (btn) btn.addEventListener("click", function () { setTab(t); });
+      });
+
+      function esc(s) {
+        return String(s == null ? "" : s)
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/"/g, "&quot;");
+      }
+
+      function paperMm() {
+        var kind = (document.getElementById("paperSize") || {}).value || "a4";
+        var landscape = !!(document.getElementById("paperLandscape") || {}).checked;
+        var presets = {
+          a4: [210, 297], a5: [148, 210], letter: [215.9, 279.4],
+          legal: [215.9, 355.6], photo4x6: [101.6, 152.4]
+        };
+        var w, h;
+        if (kind === "custom") {
+          w = Number((document.getElementById("paperWidthMm") || {}).value) || 210;
+          h = Number((document.getElementById("paperHeightMm") || {}).value) || 297;
+        } else {
+          var p = presets[kind] || presets.a4;
+          w = p[0]; h = p[1];
+        }
+        return landscape ? { w: h, h: w } : { w: w, h: h };
+      }
+
+      function destRect(px, py, pw, ph, iw, ih, fit, scalePercent) {
+        var scale = Math.min(200, Math.max(10, scalePercent)) / 100;
+        fit = (fit || "contain").toLowerCase();
+        if (fit === "stretch") return { x: px, y: py, w: pw, h: ph };
+        if (fit === "center") {
+          var cw = iw * scale, ch = ih * scale;
+          return { x: px + (pw - cw) / 2, y: py + (ph - ch) / 2, w: cw, h: ch };
+        }
+        var ratio = fit === "cover"
+          ? Math.max(pw / iw, ph / ih) * scale
+          : Math.min(pw / iw, ph / ih) * scale;
+        var dw = iw * ratio, dh = ih * ratio;
+        return { x: px + (pw - dw) / 2, y: py + (ph - dh) / 2, w: dw, h: dh };
+      }
+
+      function drawPreview() {
+        var canvas = document.getElementById("printPreview");
+        var meta = document.getElementById("previewMeta");
+        if (!canvas) return;
+        var ctx = canvas.getContext("2d");
+        if (!ctx) {
+          if (meta) meta.textContent = "Canvas sem contexto 2D.";
+          return;
+        }
+        var W = canvas.width, H = canvas.height;
+        ctx.clearRect(0, 0, W, H);
+        ctx.fillStyle = "#121a22";
+        ctx.fillRect(0, 0, W, H);
+
+        var paper = paperMm();
+        var ratio = paper.w / paper.h;
+        var paperH = H * 0.92, paperW = paperH * ratio;
+        if (paperW > W * 0.86) { paperW = W * 0.86; paperH = paperW / ratio; }
+        var paperX = (W - paperW) / 2, paperY = (H - paperH) / 2;
+        var margin = Math.min(paperW, paperH) * 0.06;
+        var area = { x: paperX + margin, y: paperY + margin, w: paperW - margin * 2, h: paperH - margin * 2 };
+
+        ctx.fillStyle = "#f4f7fa";
+        ctx.fillRect(paperX, paperY, paperW, paperH);
+        ctx.strokeStyle = "#2a3644";
+        ctx.strokeRect(paperX, paperY, paperW, paperH);
+        ctx.setLineDash([4, 4]);
+        ctx.strokeStyle = "#c5d0da";
+        ctx.strokeRect(area.x, area.y, area.w, area.h);
+        ctx.setLineDash([]);
+
+        ctx.fillStyle = "#6b7c8c";
+        ctx.font = "12px sans-serif";
+        ctx.textAlign = "center";
+        ctx.fillText(paper.w + "×" + paper.h + " mm", W / 2, Math.min(paperY + paperH + 16, H - 6));
+
+        var fit = (document.getElementById("imageFit") || {}).value || "contain";
+        var scale = Number((document.getElementById("imageScale") || {}).value) || 100;
+
+        if (!previewImage) {
+          ctx.fillText("Escolha uma imagem para pré-visualizar", W / 2, H / 2);
+          if (meta) meta.textContent = "Sem imagem — clique em Escolher imagem.";
+          return;
+        }
+
+        var d = destRect(area.x, area.y, area.w, area.h, previewImage.width, previewImage.height, fit, scale);
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(area.x, area.y, area.w, area.h);
+        ctx.clip();
+        ctx.drawImage(previewImage, d.x, d.y, d.w, d.h);
+        ctx.restore();
+        ctx.strokeStyle = "#0d9488";
+        ctx.strokeRect(Math.max(d.x, area.x), Math.max(d.y, area.y), Math.min(d.w, area.w), Math.min(d.h, area.h));
+        if (meta) {
+          meta.textContent = paper.w + "×" + paper.h + " mm · " +
+            previewImage.naturalWidth + "×" + previewImage.naturalHeight + "px · " + fit + " · " + scale + "%";
+        }
+      }
+
+      function clearPreview() {
+        if (previewUrl) URL.revokeObjectURL(previewUrl);
+        previewUrl = null;
+        previewImage = null;
+        var file = document.getElementById("previewFile");
+        if (file) file.value = "";
+        drawPreview();
+      }
+
+      function bindPreview() {
+        var pick = document.getElementById("btnPickPreview");
+        var file = document.getElementById("previewFile");
+        var clear = document.getElementById("btnClearPreview");
+        if (pick && file) {
+          pick.addEventListener("click", function () { file.click(); });
+        }
+        if (file) {
+          file.addEventListener("change", function () {
+            var f = file.files && file.files[0];
+            if (!f) return;
+            if (previewUrl) URL.revokeObjectURL(previewUrl);
+            previewUrl = URL.createObjectURL(f);
+            var img = new Image();
+            img.onload = function () {
+              previewImage = img;
+              drawPreview();
+            };
+            img.onerror = function () {
+              var meta = document.getElementById("previewMeta");
+              if (meta) meta.textContent = "Não foi possível carregar a imagem.";
+            };
+            img.src = previewUrl;
+          });
+        }
+        if (clear) clear.addEventListener("click", clearPreview);
+        ["imageFit", "imageScale", "paperSize", "paperLandscape", "paperWidthMm", "paperHeightMm"].forEach(function (id) {
+          var el = document.getElementById(id);
+          if (!el) return;
+          el.addEventListener("change", drawPreview);
+          el.addEventListener("input", drawPreview);
+        });
+        drawPreview();
+      }
+
+      async function loadPrinters() {
+        var sel = document.getElementById("printers");
+        var summary = document.getElementById("printerSummary");
+        if (!sel) return;
+        try {
+          var res = await fetch("/api/printers", {
+            headers: { "X-AutoPrint-Key": window.AUTOPRINT_KEY || "" }
+          });
+          if (!res.ok) throw new Error("HTTP " + res.status);
+          var list = await res.json();
+          var current = sel.value;
+          sel.innerHTML = '<option value="">Selecionar impressora…</option>' +
+            (list || []).map(function (p) {
+              return '<option value="' + esc(p.name) + '">' + esc(p.displayLabel || p.name) + "</option>";
+            }).join("");
+          if (current) sel.value = current;
+          if (summary) summary.textContent = (list || []).length + " impressoras encontradas";
+          var health = document.getElementById("healthLine");
+          if (health && /Conectando/i.test(health.textContent || "")) {
+            health.textContent = (list || []).length + " impressoras no Windows";
+          }
+        } catch (e) {
+          if (summary) summary.textContent = "Erro ao listar impressoras: " + (e.message || e);
+        }
+      }
+
+      var btn = document.getElementById("btnLoadPrinters");
+      if (btn) btn.addEventListener("click", function () { loadPrinters(); });
+      loadPrinters();
+      bindPreview();
+
+      window.__autoprinLoadPrinters = loadPrinters;
+      window.__autoprinDrawPreview = drawPreview;
+    })();
+  </script>
+  <script>
+    setTimeout(function () {
+      if (window.__autoprintBooted) return;
+      var health = document.getElementById("healthLine");
+      var dot = document.getElementById("connDot");
+      if (health) health.textContent = "Falha ao iniciar o painel. Reinicie o AutoPrint.";
+      if (dot) {
+        dot.textContent = "Painel não iniciado";
+        dot.className = "inline-flex items-center gap-2 text-sm text-bad";
+      }
+    }, 4000);
+  </script>
+  <script defer src="/js/app.bundle.js?v=20260917h"
+          onerror="document.getElementById('healthLine').textContent='Falha ao carregar o painel.'"></script>
+</body>
+</html>

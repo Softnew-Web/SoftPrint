@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="AutoPrint.Tests/AutoPrint.Tests.csproj" />
+  <Project Path="AutoPrint/AutoPrint.csproj" />
+</Solution>

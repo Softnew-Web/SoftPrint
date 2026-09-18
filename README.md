@@ -1,6 +1,16 @@
 # AutoPrint para Windows
 
-Aplicativo com painel visual integrado, API local e fila persistente para imprimir texto usando os drivers do Windows.
+Aplicativo com painel visual integrado, API local e fila persistente para imprimir texto, PDF, imagem e ESC/POS usando os drivers do Windows.
+
+## Novidades
+
+- Passo a passo do processamento + erro com o quê / onde / por quê
+- `.env` para configs e tipos de status
+- Reimpressão, filtros, export CSV/JSON, tema escuro, sons, iniciar com o Windows
+- Webhook com HMAC (`WEBHOOK_SECRET`) e retry; sem URL → `logs/events-yyyy-MM-dd.log`
+- Dashboard web em `http://127.0.0.1:5178/dashboard`
+- Métricas (jobs/h, taxa de uncertain), busca de impressoras na rede
+- Roteamento por tipo, templates, PDF/imagem/ESC-POS
 
 ## Abrir e configurar
 
@@ -35,11 +45,14 @@ Uma referência repetida retorna o trabalho existente, mesmo se o texto mudar. P
 
 | Rota | Uso |
 | --- | --- |
-| `GET /api/status` | Estado e configuração em uso |
+| `GET /api/status` | Estado, saúde, fila e flags |
 | `GET /api/printers` | Impressoras instaladas no Windows |
+| `GET /api/templates` | Templates do `.env` |
 | `GET /api/settings` | Configuração e versão atuais |
 | `PUT /api/settings` | Salvar e aplicar sem reiniciar |
-| `POST /api/jobs` | Receber um pedido de texto |
+| `POST /api/startup` | Ligar/desligar início com o Windows |
+| `POST /api/jobs` | Receber pedido (`text`/`pdf`/`image`/`escpos`) |
+| `POST /api/jobs/{id}/reprint` | Reimprimir com nova referência |
 | `GET /api/jobs` | Histórico completo |
 | `GET /api/jobs/{id}` | Consultar um pedido |
 

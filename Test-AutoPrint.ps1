@@ -4,6 +4,12 @@ $testFolder = Join-Path $PSScriptRoot ('.tools\smoke-' + [Guid]::NewGuid().ToStr
 New-Item -ItemType Directory -Path $testFolder -Force | Out-Null
 Copy-Item -LiteralPath $Executable -Destination $testFolder
 Copy-Item -LiteralPath (Join-Path (Split-Path $Executable) 'appsettings.json') -Destination $testFolder
+$envFile = Join-Path (Split-Path $Executable) '.env'
+if (Test-Path -LiteralPath $envFile) { Copy-Item -LiteralPath $envFile -Destination $testFolder }
+$exampleEnv = Join-Path (Split-Path $Executable) '.env.example'
+if (-not (Test-Path (Join-Path $testFolder '.env')) -and (Test-Path -LiteralPath $exampleEnv)) {
+    Copy-Item -LiteralPath $exampleEnv -Destination (Join-Path $testFolder '.env')
+}
 $testExe = Join-Path $testFolder 'AutoPrint.exe'
 $testUrl = 'http://127.0.0.1:15178'
 $process = $null
