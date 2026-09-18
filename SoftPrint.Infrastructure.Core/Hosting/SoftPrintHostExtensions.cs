@@ -41,6 +41,10 @@ public static class SoftPrintHostExtensions
         {
             client.Timeout = TimeSpan.FromSeconds(12);
         });
+        services.AddHttpClient("softprint-update-download", client =>
+        {
+            client.Timeout = TimeSpan.FromMinutes(30);
+        });
         services.AddSingleton<IAppPaths, UserAppPaths>();
         services.AddSingleton<IApiKeyProvider, FileApiKeyProvider>();
         services.AddSingleton<IJobRepository, JsonJobRepository>();
@@ -62,6 +66,7 @@ public static class SoftPrintHostExtensions
         services.AddSingleton<SettingsService>();
         services.AddSingleton<InboxService>();
         services.AddSingleton<IUpdateChecker, SoftPrint.Infrastructure.Updates.GitHubReleaseUpdateChecker>();
+        services.AddSingleton<IUpdateApplier, SoftPrint.Infrastructure.Updates.SoftPrintUpdateApplier>();
         services.AddHostedService<SoftPrint.Infrastructure.Updates.UpdateCheckHostedService>();
         services.AddHostedService<PrintWorker>();
         services.AddHostedService<InboxFolderWatcher>();

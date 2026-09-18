@@ -1,6 +1,6 @@
 #define AppName "SoftPrint"
 ; Manter alinhado a VERSION e SoftPrint.Domain/SoftPrintVersion.cs
-#define AppVersion "1.0.0"
+#define AppVersion "1.0.2"
 
 [Setup]
 AppId={{A8BC75EF-2131-48A1-BA66-1B5EB2261F11}
@@ -12,6 +12,8 @@ DefaultDirName={autopf}\SoftPrint
 DefaultGroupName=SoftPrint
 OutputBaseFilename=SoftPrint-Setup
 ArchitecturesAllowed=x86 x64compatible
+CloseApplications=force
+RestartApplications=no
 PrivilegesRequired=lowest
 Compression=lzma2
 SolidCompression=yes
@@ -19,6 +21,7 @@ WizardStyle=modern
 WizardSizePercent=120
 DisableWelcomePage=no
 DisableProgramGroupPage=yes
+DisableFinishedPage=yes
 LicenseFile=termos-de-uso.txt
 SetupLogging=yes
 VersionInfoProductName=SoftPrint
@@ -30,7 +33,7 @@ Name: "brazilianportuguese"; MessagesFile: "compiler:Languages\BrazilianPortugue
 
 [Messages]
 WelcomeLabel1=Bem-vindo ao instalador do SoftPrint
-WelcomeLabel2=Este assistente instala o SoftPrint, o painel local de impressão, neste computador.%n%nFeche outros programas antes de continuar. Na próxima tela você precisa aceitar os termos de uso e confirmar a política de privacidade.
+WelcomeLabel2=Este assistente instala o SoftPrint, o painel local de impressÃ£o, neste computador.%n%nFeche outros programas antes de continuar. Na prÃ³xima tela vocÃª precisa aceitar os termos de uso e confirmar a polÃ­tica de privacidade.
 
 [Files]
 Source: "..\dist\windows-modern-x64\*"; DestDir: "{app}"; Flags: recursesubdirs; Check: IsModernWindows and IsWin64
@@ -45,12 +48,12 @@ Source: "politica-de-privacidade.txt"; Flags: dontcopy
 Name: "{group}\SoftPrint"; Filename: "{app}\SoftPrint.exe"; Check: IsModernWindows
 Name: "{group}\SoftPrint Legacy"; Filename: "{app}\SoftPrint.Legacy.exe"; Check: not IsModernWindows
 Name: "{group}\Termos de uso"; Filename: "{app}\docs\termos-de-uso.txt"
-Name: "{group}\Política de privacidade"; Filename: "{app}\docs\politica-de-privacidade.txt"
+Name: "{group}\PolÃ­tica de privacidade"; Filename: "{app}\docs\politica-de-privacidade.txt"
 Name: "{autodesktop}\SoftPrint"; Filename: "{app}\SoftPrint.exe"; Tasks: desktopicon; Check: IsModernWindows
 Name: "{autodesktop}\SoftPrint Legacy"; Filename: "{app}\SoftPrint.Legacy.exe"; Tasks: desktopicon; Check: not IsModernWindows
 
 [Tasks]
-Name: "desktopicon"; Description: "Criar atalho na área de trabalho"
+Name: "desktopicon"; Description: "Criar atalho na Ã¡rea de trabalho"
 
 [InstallDelete]
 Type: files; Name: "{group}\AutoPrint.lnk"
@@ -87,34 +90,45 @@ begin
     end;
   end
   else
-    Result := 'Não foi possível carregar a política de privacidade.';
+    Result := 'NÃ£o foi possÃ­vel carregar a polÃ­tica de privacidade.';
 end;
 
 procedure InitializeWizard;
 begin
   PrivacyPage := CreateOutputMsgMemoPage(
     wpLicense,
-    'Política de privacidade',
+    'PolÃ­tica de privacidade',
     'O SoftPrint trata dados neste computador. Leia antes de continuar.',
-    'A instalação só avança se você confirmar que leu esta política.',
+    'A instalaÃ§Ã£o sÃ³ avanÃ§a se vocÃª confirmar que leu esta polÃ­tica.',
     LoadPrivacyText);
 
   PrivacyCheck := TNewCheckBox.Create(PrivacyPage);
   PrivacyCheck.Parent := PrivacyPage.Surface;
-  PrivacyCheck.Caption := 'Li e concordo com a política de privacidade do SoftPrint';
+  PrivacyCheck.Caption := 'Li e concordo com a polÃ­tica de privacidade do SoftPrint';
   PrivacyCheck.Top := PrivacyPage.SurfaceHeight - ScaleY(22);
   PrivacyCheck.Left := 0;
   PrivacyCheck.Width := PrivacyPage.SurfaceWidth;
   PrivacyCheck.Height := ScaleY(22);
   PrivacyPage.RichEditViewer.Height := PrivacyCheck.Top - ScaleY(8);
+
+  { AtualizaÃ§Ã£o automÃ¡tica / silent: nÃ£o bloqueia por falta de clique no checkbox. }
+  if WizardSilent then
+    PrivacyCheck.Checked := True;
+end;
+
+function ShouldSkipPage(PageID: Integer): Boolean;
+begin
+  Result := WizardSilent and (PrivacyPage <> nil) and (PageID = PrivacyPage.ID);
 end;
 
 function NextButtonClick(CurPageID: Integer): Boolean;
 begin
   Result := True;
+  if WizardSilent then
+    Exit;
   if (PrivacyPage <> nil) and (CurPageID = PrivacyPage.ID) and (not PrivacyCheck.Checked) then
   begin
-    MsgBox('Marque a confirmação da política de privacidade para continuar.', mbError, MB_OK);
+    MsgBox('Marque a confirmaÃ§Ã£o da polÃ­tica de privacidade para continuar.', mbError, MB_OK);
     Result := False;
   end;
 end;

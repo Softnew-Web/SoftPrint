@@ -1,4 +1,5 @@
 using SoftPrint.Application.Abstractions;
+using SoftPrint.Domain;
 
 namespace SoftPrint.Api.Endpoints;
 
@@ -15,7 +16,8 @@ public static class WebDashboardEndpoints
 
             var html = File.ReadAllText(path)
                 // Não usar HtmlEncode na chave: quebraria o JS se tivesse caracteres especiais.
-                .Replace("{{API_KEY}}", keys.ApiKey.Replace("\\", "\\\\").Replace("\"", "\\\"").Replace("\r", "").Replace("\n", ""), StringComparison.Ordinal);
+                .Replace("{{API_KEY}}", keys.ApiKey.Replace("\\", "\\\\").Replace("\"", "\\\"").Replace("\r", "").Replace("\n", ""), StringComparison.Ordinal)
+                .Replace("{{APP_VERSION}}", SoftPrintVersion.Current, StringComparison.Ordinal);
             return Results.Content(html, "text/html; charset=utf-8");
         });
         return app;

@@ -1,5 +1,6 @@
 using Microsoft.Web.WebView2.Core;
 using Microsoft.Web.WebView2.WinForms;
+using SoftPrint.Domain;
 
 namespace SoftPrint.UI;
 
@@ -19,7 +20,7 @@ public sealed class Dashboard : Form
         _address = address.TrimEnd('/');
         _tray = tray;
 
-        Text = "SoftPrint";
+        Text = $"SoftPrint v{SoftPrintVersion.Current}";
         ClientSize = new Size(1400, 920);
         MinimumSize = new Size(1200, 760);
         StartPosition = FormStartPosition.CenterScreen;

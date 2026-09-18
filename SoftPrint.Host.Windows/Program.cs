@@ -1,6 +1,7 @@
 using SoftPrint.Api.Endpoints;
 using SoftPrint.Composition;
 using SoftPrint.Application.Services;
+using SoftPrint.Domain;
 
 if (args.Contains("--diagnose"))
 {
@@ -25,7 +26,15 @@ using var instance = SingleInstanceGuard.TryAcquire();
 if (instance is null)
 {
     if (!args.Contains("--headless"))
-        MessageBox.Show("O SoftPrint desta pasta já está em segundo plano. Use o ícone na bandeja do sistema para abrir o painel.", "SoftPrint");
+    {
+        MessageBox.Show(
+            $"O SoftPrint v{SoftPrintVersion.Current} já está em execução.\n\n" +
+            "Use o ícone na bandeja do sistema (canto da barra de tarefas) para abrir o painel.\n" +
+            "Não é preciso abrir o atalho de novo.",
+            "SoftPrint já aberto",
+            MessageBoxButtons.OK,
+            MessageBoxIcon.Information);
+    }
     return;
 }
 

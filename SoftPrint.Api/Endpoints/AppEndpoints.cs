@@ -249,6 +249,36 @@ public static class SettingsEndpoints
                 checkedAt = result.CheckedAt
             });
         });
+        app.MapGet("/api/update/progress", (IUpdateApplier applier) =>
+        {
+            var s = applier.GetStatus();
+            return Results.Ok(new
+            {
+                s.Phase,
+                s.Percent,
+                s.Message,
+                s.InProgress,
+                s.Failed,
+                s.Restarting,
+                s.Error
+            });
+        });
+        app.MapPost("/api/update/apply", (IUpdateApplier applier) =>
+        {
+            if (!applier.TryStart(out var error))
+                return Results.Conflict(new { error = error ?? "Não foi possível iniciar a atualização." });
+            var s = applier.GetStatus();
+            return Results.Accepted("/api/update/progress", new
+            {
+                s.Phase,
+                s.Percent,
+                s.Message,
+                s.InProgress,
+                s.Failed,
+                s.Restarting,
+                s.Error
+            });
+        });
         app.MapPost("/api/startup", (StartupRequest request, IWindowsStartupService startup) =>
         {
             startup.ApplyFromOptions(request.Enabled);

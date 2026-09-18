@@ -76,17 +76,30 @@ public static class ApplicationComposer
                 System.Windows.Forms.Application.SetHighDpiMode(HighDpiMode.PerMonitorV2);
                 System.Windows.Forms.Application.EnableVisualStyles();
                 System.Windows.Forms.Application.SetCompatibleTextRenderingDefault(false);
+
+                SoftPrint.UI.SplashForm? splash = null;
+                if (!startInTray)
+                {
+                    splash = new SoftPrint.UI.SplashForm();
+                    splash.Show();
+                    splash.SetStatus("Iniciando painel…");
+                    System.Windows.Forms.Application.DoEvents();
+                }
+
                 using var notify = new NotifyIcon
                 {
                     Visible = true,
-                    Text = "SoftPrint — em segundo plano",
+                    Text = $"SoftPrint v{SoftPrint.Domain.SoftPrintVersion.Current}",
                     Icon = SystemIcons.Application,
                     BalloonTipTitle = "SoftPrint"
                 };
                 tray.Attach(notify);
+                splash?.SetStatus("Carregando interface…");
                 using var panel = new Dashboard(address, apiKey, features, notify);
                 using var menu = new ContextMenuStrip();
                 menu.Items.Add("Abrir painel", null, (_, _) => panel.ShowFromTray());
+                menu.Items.Add($"Versão {SoftPrint.Domain.SoftPrintVersion.Current}", null, (_, _) => { });
+                menu.Items[^1].Enabled = false;
                 menu.Items.Add("Sair", null, (_, _) =>
                 {
                     panel.RequestExit();
@@ -104,8 +117,18 @@ public static class ApplicationComposer
                     notify.Visible = false;
                     app.Lifetime.StopApplication();
                 };
+                panel.Shown += (_, _) =>
+                {
+                    splash?.SetStatus("Quase pronto…");
+                    // Fecha o splash logo após o painel aparecer.
+                    var s = splash;
+                    splash = null;
+                    s?.CloseSafe();
+                    s?.Dispose();
+                };
                 using var registration = app.Lifetime.ApplicationStopping.Register(() =>
                 {
+                    splash?.CloseSafe();
                     panel.RequestExit();
                 });
                 RegisteredWaitHandle? wait = null;
@@ -139,6 +162,8 @@ public static class ApplicationComposer
                 finally
                 {
                     wait?.Unregister(null);
+                    splash?.CloseSafe();
+                    splash?.Dispose();
                 }
             });
             thread.SetApartmentState(ApartmentState.STA);

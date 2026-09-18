@@ -5,7 +5,7 @@ import { bindPrinterTab } from "./components/printer-tab.js";
 import { bindMonitorTab } from "./components/monitor-tab.js";
 import { bindConnectTab } from "./components/connect-tab.js";
 import { bindSystemSettingsTab } from "./components/system-settings-tab.js";
-import { applyUpdateInfo } from "./components/update-banner.js";
+import { applyUpdateInfo, applyVersion } from "./components/update-banner.js";
 
 const KEY = window.SOFTPRINT_KEY || "";
 const { api } = createApi(KEY);
@@ -115,7 +115,14 @@ async function refreshAll() {
     const appName = status.application || "SoftPrint";
     setConnection(true, appName);
     setApiHint(status.baseUrl || location.origin);
-    applyUpdateInfo(status.update || { currentVersion: status.version });
+    applyVersion(status.version || status.update?.currentVersion);
+    applyUpdateInfo(
+      {
+        ...(status.update || {}),
+        currentVersion: status.version || status.update?.currentVersion,
+      },
+      { api }
+    );
     const endpoint = document.getElementById("endpoint");
     if (endpoint) {
       const origin = (status.baseUrl || location.origin).replace(/\/$/, "");
@@ -192,7 +199,7 @@ setTab(localStorage.getItem("softprint-tab") || "config");
 async function refreshUpdate() {
   try {
     const update = await api("/api/update");
-    applyUpdateInfo(update);
+    applyUpdateInfo(update, { api });
   } catch (err) {
     console.warn("Falha ao verificar atualização", err);
   }

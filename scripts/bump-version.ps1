@@ -37,13 +37,17 @@ function Set-VersionFiles([string] $version) {
     $versionCs = Join-Path $root "SoftPrint.Domain\SoftPrintVersion.cs"
     $cs = [System.IO.File]::ReadAllText($versionCs)
     $cs2 = [regex]::Replace($cs, 'public const string Current = "[^"]+";', "public const string Current = `"$version`";")
-    if ($cs2 -eq $cs) { throw "Não foi possível atualizar SoftPrintVersion.cs" }
+    if ($cs2 -notmatch [regex]::Escape("Current = `"$version`"")) {
+        throw "Não foi possível atualizar SoftPrintVersion.cs"
+    }
     Write-Utf8NoBom $versionCs $cs2
 
     $iss = Join-Path $root "installer\SoftPrint.iss"
     $issText = [System.IO.File]::ReadAllText($iss)
     $iss2 = [regex]::Replace($issText, '#define AppVersion "[^"]+"', "#define AppVersion `"$version`"")
-    if ($iss2 -eq $issText) { throw "Não foi possível atualizar SoftPrint.iss" }
+    if ($iss2 -notmatch [regex]::Escape("#define AppVersion `"$version`"")) {
+        throw "Não foi possível atualizar SoftPrint.iss"
+    }
     Write-Utf8NoBom $iss $iss2
 }
 

@@ -111,14 +111,18 @@ public sealed class GitHubReleaseUpdateChecker : IUpdateChecker
                 ContainsMandatoryMarker(release.Body));
 
             var assetName = opts.UpdateAssetName.Trim();
-            var download = release.Assets?
+            var asset = release.Assets?
                 .FirstOrDefault(a =>
-                    !string.IsNullOrWhiteSpace(a.BrowserDownloadUrl) &&
                     (string.IsNullOrWhiteSpace(assetName)
                         ? a.Name?.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) == true
-                        : string.Equals(a.Name, assetName, StringComparison.OrdinalIgnoreCase)))
-                ?.BrowserDownloadUrl
-                ?? release.HtmlUrl;
+                        : string.Equals(a.Name, assetName, StringComparison.OrdinalIgnoreCase))
+                    && (!string.IsNullOrWhiteSpace(a.Url) || !string.IsNullOrWhiteSpace(a.BrowserDownloadUrl)));
+
+            // Em repos privados, browser_download_url retorna 404.
+            // A URL da API (assets/{id}) com Accept: application/octet-stream funciona com o token.
+            var download = !string.IsNullOrWhiteSpace(asset?.Url)
+                ? asset!.Url
+                : asset?.BrowserDownloadUrl ?? release.HtmlUrl;
 
             return Cache(new UpdateCheckResult(
                 current,
@@ -147,6 +151,16 @@ public sealed class GitHubReleaseUpdateChecker : IUpdateChecker
     {
         lock (_gate)
             return _cached;
+    }
+
+    /// <summary>Força nova consulta na próxima verificação (ex.: após falha de download).</summary>
+    public void InvalidateCache()
+    {
+        lock (_gate)
+        {
+            _cached = null;
+            _cachedUntil = DateTimeOffset.MinValue;
+        }
     }
 
     private UpdateCheckResult Cache(UpdateCheckResult result)
@@ -195,6 +209,9 @@ public sealed class GitHubReleaseUpdateChecker : IUpdateChecker
     {
         [JsonPropertyName("name")]
         public string? Name { get; set; }
+
+        [JsonPropertyName("url")]
+        public string? Url { get; set; }
 
         [JsonPropertyName("browser_download_url")]
         public string? BrowserDownloadUrl { get; set; }

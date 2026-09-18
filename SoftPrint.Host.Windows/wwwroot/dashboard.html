@@ -36,7 +36,6 @@
       <div>
         <p class="font-display text-3xl font-extrabold tracking-tight text-white">SoftPrint</p>
         <p class="text-mist text-sm mt-1">Painel de impressão local</p>
-        <p id="appVersionLabel" class="text-mist/70 text-xs mt-1">v—</p>
       </div>
 
       <nav class="space-y-2" aria-label="Abas do painel">
@@ -60,6 +59,8 @@
 
       <div class="mt-auto text-xs text-mist/80 leading-relaxed">
         <span id="closeHint">Fechar o painel deixa o SoftPrint imprimindo na bandeja.<br /></span>
+        <span id="appVersionLabel" class="text-sea-glow font-semibold">v{{APP_VERSION}}</span>
+        <span class="text-mist/50"> · </span>
         API em <span id="apiHint" class="text-paper/80">—</span>
       </div>
     </aside>
@@ -72,6 +73,9 @@
           <p id="healthLine" class="text-xs text-mist/80 mt-0.5 truncate">Conectando…</p>
         </div>
         <div class="flex items-center gap-3 shrink-0">
+          <span id="headerVersion" class="hidden sm:inline-flex items-center rounded-lg border border-ink-line bg-ink px-2.5 py-1 text-xs text-mist">
+            v{{APP_VERSION}}
+          </span>
           <span id="connDot" class="inline-flex items-center gap-2 text-sm text-mist">
             <span class="w-2.5 h-2.5 rounded-full bg-mist animate-pulse"></span>
             Conectando…
@@ -84,11 +88,25 @@
         <div class="flex flex-wrap items-center justify-between gap-2">
           <p id="updateBannerText" class="text-paper/95"></p>
           <div class="flex items-center gap-2 shrink-0">
-            <a id="updateDownloadLink" href="#" target="_blank" rel="noopener"
-               class="px-3 py-1.5 rounded-lg bg-sea text-white text-sm font-medium hover:bg-sea-deep">Baixar atualização</a>
+            <button id="updateDownloadLink" type="button"
+               class="px-3 py-1.5 rounded-lg bg-sea text-white text-sm font-medium hover:bg-sea-deep">Atualizar agora</button>
             <button id="updateDismissBtn" type="button"
                     class="px-3 py-1.5 rounded-lg bg-ink-line hover:bg-ink-line/80 text-sm">Depois</button>
           </div>
+        </div>
+      </div>
+
+      <div id="updateOverlay" class="hidden fixed inset-0 z-50 bg-ink/80 backdrop-blur-sm flex items-center justify-center p-6">
+        <div class="w-full max-w-md rounded-2xl border border-ink-line bg-ink-soft p-6 shadow-xl">
+          <p class="font-display text-lg font-bold text-white">Atualizando SoftPrint</p>
+          <p id="updateProgressText" class="text-sm text-mist mt-2">Preparando…</p>
+          <div class="mt-4 h-2.5 rounded-full bg-ink overflow-hidden border border-ink-line">
+            <div id="updateProgressBar" class="h-full w-0 bg-sea-glow transition-[width] duration-300"></div>
+          </div>
+          <p id="updateProgressPct" class="text-xs text-mist mt-2 tabular-nums">0%</p>
+          <p id="updateProgressError" class="hidden text-sm text-bad mt-3"></p>
+          <button id="updateProgressClose" type="button"
+                  class="hidden mt-4 px-3 py-1.5 rounded-lg bg-ink-line hover:bg-ink-line/80 text-sm">Fechar</button>
         </div>
       </div>
 
@@ -324,6 +342,11 @@ Teste de impressão de texto.</textarea>
         </section>
 
         <section id="panel-settings" class="panel-hidden space-y-4 h-full overflow-y-auto scroll-thin">
+          <div class="rounded-2xl bg-ink-soft border border-sea/40 p-5 max-w-4xl">
+            <p class="text-xs uppercase tracking-wider text-sea-glow font-semibold">Sobre</p>
+            <p class="font-display text-2xl font-bold text-white mt-1">SoftPrint <span id="settingsVersion" class="text-sea-glow">v{{APP_VERSION}}</span></p>
+            <p class="text-sm text-mist mt-2">Versão instalada neste computador. Se houver atualização, o aviso aparece no topo do painel.</p>
+          </div>
           <div class="rounded-2xl bg-ink-soft border border-ink-line p-5 space-y-4 max-w-4xl">
             <div>
               <h2 class="font-display text-xl font-bold">Configurações deste computador</h2>
@@ -586,7 +609,7 @@ Teste de impressão de texto.</textarea>
       }
     }, 4000);
   </script>
-  <script defer src="/js/app.bundle.js?v=20260918d"
+  <script defer src="/js/app.bundle.js?v=20260918g"
           onerror="document.getElementById('healthLine').textContent='Falha ao carregar o painel.'"></script>
 </body>
 </html>

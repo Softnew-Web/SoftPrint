@@ -6,6 +6,8 @@ public interface IUpdateChecker
 
     /// <summary>Retorna o último resultado em cache, sem chamar a rede.</summary>
     UpdateCheckResult? TryGetCached();
+
+    void InvalidateCache();
 }
 
 public sealed record UpdateCheckResult(

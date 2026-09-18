@@ -32737,15 +32737,27 @@ fn fs_main(in : VertexOutput) -> @location(0) vec4<f32> {
 
   // SoftPrint.Host.Windows/wwwroot/js/components/update-banner.js
   var DISMISS_KEY = "softprint-update-dismissed";
-  function applyUpdateInfo(update) {
-    const versionLabel = document.getElementById("appVersionLabel");
+  var applyBound = false;
+  var pollTimer = null;
+  function applyVersion(version2) {
+    const text = `v${version2 || "\u2014"}`;
+    for (const id of ["appVersionLabel", "headerVersion", "settingsVersion"]) {
+      const el = document.getElementById(id);
+      if (el) el.textContent = text;
+    }
+    try {
+      document.title = `SoftPrint ${text}`;
+    } catch {
+    }
+  }
+  function applyUpdateInfo(update, { api: api2 } = {}) {
     const banner = document.getElementById("updateBanner");
     const text = document.getElementById("updateBannerText");
-    const link = document.getElementById("updateDownloadLink");
+    const btn = document.getElementById("updateDownloadLink");
     const dismiss = document.getElementById("updateDismissBtn");
-    if (!banner || !text || !link) return;
     const current = update?.currentVersion || "\u2014";
-    if (versionLabel) versionLabel.textContent = `v${current}`;
+    applyVersion(current);
+    if (!banner || !text || !btn) return;
     if (!update?.updateAvailable) {
       banner.classList.add("hidden");
       return;
@@ -32761,16 +32773,84 @@ fn fs_main(in : VertexOutput) -> @location(0) vec4<f32> {
     banner.classList.toggle("border-bad/40", !!update.mandatory);
     banner.classList.toggle("bg-warn/15", !update.mandatory);
     banner.classList.toggle("border-warn/40", !update.mandatory);
-    text.textContent = update.mandatory ? `Atualiza\xE7\xE3o obrigat\xF3ria: ${current} \u2192 ${latest}. Instale a nova vers\xE3o para continuar com seguran\xE7a.` : `Nova vers\xE3o dispon\xEDvel: ${current} \u2192 ${latest}.`;
-    const href = update.downloadUrl || update.releaseUrl || "#";
-    link.href = href;
-    link.classList.toggle("pointer-events-none", href === "#");
+    text.textContent = update.mandatory ? `Atualiza\xE7\xE3o obrigat\xF3ria: ${current} \u2192 ${latest}. Instale a nova vers\xE3o para continuar.` : `Nova vers\xE3o dispon\xEDvel: ${current} \u2192 ${latest}.`;
     if (dismiss) {
       dismiss.classList.toggle("hidden", !!update.mandatory);
       dismiss.onclick = () => {
         sessionStorage.setItem(DISMISS_KEY, latest);
         banner.classList.add("hidden");
       };
+    }
+    if (api2 && !applyBound) {
+      applyBound = true;
+      btn.addEventListener("click", () => startAutoUpdate(api2));
+      document.getElementById("updateProgressClose")?.addEventListener("click", hideOverlay);
+    }
+  }
+  function showOverlay() {
+    const overlay = document.getElementById("updateOverlay");
+    const err = document.getElementById("updateProgressError");
+    const close = document.getElementById("updateProgressClose");
+    if (overlay) overlay.classList.remove("hidden");
+    if (err) {
+      err.classList.add("hidden");
+      err.textContent = "";
+    }
+    if (close) close.classList.add("hidden");
+    setProgress(1, "Preparando atualiza\xE7\xE3o\u2026");
+  }
+  function hideOverlay() {
+    document.getElementById("updateOverlay")?.classList.add("hidden");
+  }
+  function setProgress(percent, message) {
+    const bar = document.getElementById("updateProgressBar");
+    const pct = document.getElementById("updateProgressPct");
+    const text = document.getElementById("updateProgressText");
+    const value = Math.max(0, Math.min(100, Number(percent) || 0));
+    if (bar) bar.style.width = `${value}%`;
+    if (pct) pct.textContent = `${value}%`;
+    if (text && message) text.textContent = message;
+  }
+  function showError(message) {
+    const err = document.getElementById("updateProgressError");
+    const close = document.getElementById("updateProgressClose");
+    if (err) {
+      err.textContent = message || "Falha na atualiza\xE7\xE3o.";
+      err.classList.remove("hidden");
+    }
+    if (close) close.classList.remove("hidden");
+    const text = document.getElementById("updateProgressText");
+    if (text) text.textContent = "N\xE3o foi poss\xEDvel concluir a atualiza\xE7\xE3o.";
+  }
+  async function startAutoUpdate(api2) {
+    showOverlay();
+    try {
+      await api2("/api/update/apply", { method: "POST", body: "{}" });
+    } catch (err) {
+      showError(err.message || String(err));
+      return;
+    }
+    if (pollTimer) clearInterval(pollTimer);
+    pollTimer = setInterval(() => pollProgress(api2), 500);
+    pollProgress(api2);
+  }
+  async function pollProgress(api2) {
+    try {
+      const s = await api2("/api/update/progress");
+      setProgress(s.percent, s.message || "Atualizando\u2026");
+      if (s.failed) {
+        clearInterval(pollTimer);
+        pollTimer = null;
+        showError(s.error || "Falha na atualiza\xE7\xE3o.");
+        return;
+      }
+      if (s.restarting) {
+        clearInterval(pollTimer);
+        pollTimer = null;
+        setProgress(100, "Reiniciando o SoftPrint\u2026");
+      }
+    } catch (err) {
+      setProgress(100, "Reiniciando o SoftPrint\u2026");
     }
   }
 
@@ -32878,7 +32958,14 @@ fn fs_main(in : VertexOutput) -> @location(0) vec4<f32> {
       const appName = status.application || "SoftPrint";
       setConnection(true, appName);
       setApiHint(status.baseUrl || location.origin);
-      applyUpdateInfo(status.update || { currentVersion: status.version });
+      applyVersion(status.version || status.update?.currentVersion);
+      applyUpdateInfo(
+        {
+          ...status.update || {},
+          currentVersion: status.version || status.update?.currentVersion
+        },
+        { api }
+      );
       const endpoint = document.getElementById("endpoint");
       if (endpoint) {
         const origin = (status.baseUrl || location.origin).replace(/\/$/, "");
@@ -32938,7 +33025,7 @@ fn fs_main(in : VertexOutput) -> @location(0) vec4<f32> {
   async function refreshUpdate() {
     try {
       const update = await api("/api/update");
-      applyUpdateInfo(update);
+      applyUpdateInfo(update, { api });
     } catch (err) {
       console.warn("Falha ao verificar atualiza\xE7\xE3o", err);
     }
