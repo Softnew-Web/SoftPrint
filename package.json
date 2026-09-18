@@ -2,7 +2,7 @@
   "name": "softprint-dashboard",
   "private": true,
   "scripts": {
-    "build:js": "esbuild AutoPrint/wwwroot/js/app.js --bundle --format=iife --target=chrome109 --outfile=AutoPrint/wwwroot/js/app.bundle.js"
+    "build:js": "esbuild SoftPrint.Host.Windows/wwwroot/js/app.js --bundle --format=iife --target=chrome109 --outfile=SoftPrint.Host.Windows/wwwroot/js/app.bundle.js"
   },
   "devDependencies": {
     "esbuild": "0.25.10",

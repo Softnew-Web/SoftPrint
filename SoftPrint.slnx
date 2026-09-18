@@ -1,4 +1,12 @@
 <Solution>
-  <Project Path="AutoPrint.Tests/AutoPrint.Tests.csproj" />
-  <Project Path="AutoPrint/AutoPrint.csproj" />
+  <Project Path="SoftPrint.Tests/SoftPrint.Tests.csproj" />
+  <Project Path="SoftPrint.Host.Windows/SoftPrint.csproj" />
+  <Project Path="SoftPrint.Domain/SoftPrint.Domain.csproj" />
+  <Project Path="SoftPrint.Application/SoftPrint.Application.csproj" />
+  <Project Path="SoftPrint.Infrastructure.Core/SoftPrint.Infrastructure.Core.csproj" />
+  <Project Path="SoftPrint.Api/SoftPrint.Api.csproj" />
+  <Project Path="SoftPrint.Host.Linux/SoftPrint.Host.Linux.csproj" />
+  <Project Path="SoftPrint.Printing.Windows/SoftPrint.Printing.Windows.csproj" />
+    <Project Path="SoftPrint.Printing.Linux/SoftPrint.Printing.Linux.csproj" />
+    <Project Path="SoftPrint.Host.Windows.Legacy/SoftPrint.Host.Windows.Legacy.csproj" />
 </Solution>

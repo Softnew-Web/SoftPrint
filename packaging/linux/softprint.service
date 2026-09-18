@@ -1,0 +1,14 @@
+[Unit]
+Description=SoftPrint local printing service
+After=network.target cups.service
+
+[Service]
+Type=simple
+ExecStart=%h/.local/lib/softprint/softprint --headless
+WorkingDirectory=%h/.local/lib/softprint
+Restart=on-failure
+RestartSec=5
+Environment=ASPNETCORE_URLS=http://127.0.0.1:5178
+
+[Install]
+WantedBy=default.target

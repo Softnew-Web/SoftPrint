@@ -1,56 +1,59 @@
-# AutoPrint para Windows
+# SoftPrint multiplataforma
 
-Aplicativo com painel visual integrado, API local e fila persistente para imprimir texto, PDF, imagem e ESC/POS usando os drivers do Windows.
+Aplicativo com painel local, API e fila persistente para imprimir texto, PDF, imagem e ESC/POS no Windows e via CUPS no Linux.
 
 ## Novidades
 
+- Núcleo compartilhado com hosts Windows 10/11, Windows 7 Legacy e Linux/CUPS
+- Configuração por usuário (sem depender de `.env`) e aba **Configurações**
 - Passo a passo do processamento + erro com o quê / onde / por quê
-- `.env` para configs e tipos de status
-- Reimpressão, filtros, export CSV/JSON, tema escuro, sons, iniciar com o Windows
-- Webhook com HMAC (`WEBHOOK_SECRET`) e retry; sem URL → `logs/events-yyyy-MM-dd.log`
+- Reimpressão, filtros, export CSV/JSON, tema escuro, sons, inicialização automática
+- Webhook com HMAC (`X-SoftPrint-Signature`) e retry; sem URL → `logs/events-yyyy-MM-dd.log`
 - Dashboard web em `http://127.0.0.1:5178/dashboard`
-- Métricas (jobs/h, taxa de uncertain), busca de impressoras na rede
-- Roteamento por tipo, templates, PDF/imagem/ESC-POS
+- Métricas, busca de impressoras na rede e diagnóstico (`--diagnose` e `/api/diagnose`)
 
 ## Abrir e configurar
 
-1. Abra `release/AutoPrint/AutoPrint.exe`. O painel e o mecanismo de impressão iniciam juntos. O executável funciona no Windows x64 sem instalar .NET.
-2. Escolha uma impressora instalada no Windows. Use **Atualizar impressoras** depois de instalar ou conectar um equipamento.
-3. Mantenha **Simular sem gastar papel** marcado durante a configuração.
-4. Clique em **Salvar configurações**. A mensagem **Reconhecida pelo AutoPrint** confirma a aplicação e mostra a versão salva.
+1. Abra `dist/windows-modern-x64/SoftPrint.exe` (ou o atalho do instalador). O painel e o mecanismo de impressão iniciam juntos. O executável Windows x64 não exige .NET instalado.
+2. Escolha uma impressora. Use **Atualizar impressoras** depois de instalar ou conectar um equipamento.
+3. Mantenha **Simular** marcado durante a configuração.
+4. Clique em **Salvar configurações**. A mensagem **Reconhecida pelo SoftPrint** confirma a aplicação e mostra a versão salva.
 5. Clique em **Enviar teste** e acompanhe o resultado no histórico. Dê duplo clique em um pedido para ver detalhes ou erros.
 6. Para imprimir de verdade, desmarque a simulação e salve novamente. O envio de teste nesse modo pede confirmação.
 
 As configurações entram em vigor sem reiniciar. Um trabalho já iniciado mantém a configuração capturada no início do envio. A pausa mantém novos pedidos na fila, sem cancelar um envio em andamento. As configurações e o histórico são recuperados ao abrir novamente.
 
-Minimize a janela para continuar usando outros programas. **Fechar o painel encerra também o AutoPrint.** Uma segunda execução da mesma pasta é bloqueada para proteger os dados.
+Minimize a janela para continuar usando outros programas. **Fechar o painel da edição Windows moderna encerra também o SoftPrint.** Nas edições Legacy e Linux o painel abre no navegador. Uma segunda execução da mesma pasta é bloqueada para proteger os dados.
 
 ## Conectar um sistema
 
-No rodapé do painel, use **Copiar endereço** e **Copiar chave**. O sistema precisa oferecer integração por API ou ser adaptado para fazer as chamadas abaixo. Copiar esses dados não conecta automaticamente sistemas comerciais que não suportam essa integração.
+No rodapé do painel, use **Copiar endereço** e **Copiar chave**. O sistema precisa oferecer integração por API ou ser adaptado para fazer as chamadas abaixo.
 
-Endereço padrão: `http://127.0.0.1:5178`. O acesso desta versão é local, no mesmo computador. Todas as rotas exigem o cabeçalho `X-AutoPrint-Key`.
+Endereço padrão: `http://127.0.0.1:5178`. O acesso desta versão é local, no mesmo computador. Todas as rotas exigem o cabeçalho `X-SoftPrint-Key`. Durante a transição, `X-AutoPrint-Key` continua aceito.
 
-Na raiz do projeto, com o executável aberto:
+A chave fica em `%LocalAppData%\SoftPrint\data\api-key.txt` no Windows e em `~/.local/share/softprint/api-key.txt` no Linux.
 
 ```powershell
-$autoPrintKey = (Get-Content .\release\AutoPrint\data\api-key.txt -Raw).Trim()
-$autoPrintHeaders = @{ 'X-AutoPrint-Key' = $autoPrintKey }
-$autoPrintBody = @{ reference = 'pedido-001'; text = "PEDIDO 001`nProduto: exemplo`nQuantidade: 1" } | ConvertTo-Json
-Invoke-RestMethod http://127.0.0.1:5178/api/jobs -Method Post -Headers $autoPrintHeaders -ContentType 'application/json; charset=utf-8' -Body ([System.Text.Encoding]::UTF8.GetBytes($autoPrintBody))
-Invoke-RestMethod http://127.0.0.1:5178/api/jobs -Headers $autoPrintHeaders
+$key = (Get-Content "$env:LOCALAPPDATA\SoftPrint\data\api-key.txt" -Raw).Trim()
+$headers = @{ 'X-SoftPrint-Key' = $key }
+$body = @{ reference = 'pedido-001'; text = "PEDIDO 001`nProduto: exemplo`nQuantidade: 1" } | ConvertTo-Json
+Invoke-RestMethod http://127.0.0.1:5178/api/jobs -Method Post -Headers $headers -ContentType 'application/json; charset=utf-8' -Body ([System.Text.Encoding]::UTF8.GetBytes($body))
+Invoke-RestMethod http://127.0.0.1:5178/api/jobs -Headers $headers
 ```
 
 Uma referência repetida retorna o trabalho existente, mesmo se o texto mudar. Para reimprimir deliberadamente, confira o resultado anterior e envie uma nova referência.
 
 | Rota | Uso |
 | --- | --- |
-| `GET /api/status` | Estado, saúde, fila e flags |
-| `GET /api/printers` | Impressoras instaladas no Windows |
-| `GET /api/templates` | Templates do `.env` |
+| `GET /api/status` | Estado, saúde, fila, flags e capacidades da plataforma |
+| `GET /api/diagnose` | Diagnóstico de SO, runtime, backend e recursos |
+| `GET /api/printers` | Impressoras instaladas |
+| `GET /api/templates` | Templates |
 | `GET /api/settings` | Configuração e versão atuais |
 | `PUT /api/settings` | Salvar e aplicar sem reiniciar |
-| `POST /api/startup` | Ligar/desligar início com o Windows |
+| `GET /api/system-settings` | Opções deste computador (segredos mascarados) |
+| `PUT /api/system-settings` | Salvar opções deste computador |
+| `POST /api/startup` | Ligar/desligar inicialização automática |
 | `POST /api/jobs` | Receber pedido (`text`/`pdf`/`image`/`escpos`) |
 | `POST /api/jobs/{id}/reprint` | Reimprimir com nova referência |
 | `GET /api/jobs` | Histórico completo |
@@ -69,21 +72,60 @@ Para configurar por outro painel ou sistema, leia `/api/settings` e envie para `
 
 Use em `expectedRevision` a versão retornada pela consulta. HTTP 409 significa que outra alteração foi salva nesse intervalo: recarregue antes de tentar novamente. O painel consulta o estado a cada dois segundos e preserva alterações locais ainda não salvas, avisando se houver conflito.
 
+## Compatibilidade
+
+- Windows 10/11: `SoftPrint.exe`, painel WebView2 integrado (se o runtime faltar, o painel abre no navegador) e spooler do Windows.
+- Windows 7 SP1: `SoftPrint.Legacy.exe`, painel aberto no navegador e runtime .NET 6 congelado. Essa edição funciona como compatibilidade, mas Windows 7 e .NET 6 não recebem atualizações de segurança da Microsoft.
+- Linux x64: executável `softprint`, painel no navegador, catálogo via `lpstat`/`lpoptions` e impressão via `lp`. ESC/POS usa CUPS raw ou TCP 9100 (`tcp:IP:9100`).
+
+Execute `SoftPrint.exe --diagnose` (ou `softprint --diagnose`) para conferir sistema, arquitetura e backend. O endpoint `/api/status` informa as capacidades para o painel ocultar recursos indisponíveis. A aba Configurações mostra o diagnóstico completo.
+
 ## Arquivos e estados
 
-Mantenha o executável e `appsettings.json` juntos. O aplicativo cria `data/api-key.txt`, `data/jobs.json` e, no primeiro salvamento, `data/settings.json`, ao lado do executável. Preserve essa pasta para manter chave, histórico e configurações. A configuração salva no painel tem prioridade sobre os valores iniciais de `appsettings.json`.
+As configurações de cada usuário ficam em `%LocalAppData%\SoftPrint` no Windows e em `~/.config/softprint` / `~/.local/share/softprint` no Linux. Dados antigos ao lado do executável e de instalações AutoPrint são migrados automaticamente. O `.env` é apenas um override administrativo opcional; o programa inicia com defaults seguros sem esse arquivo.
 
-Estados dos pedidos: `pending` (na fila), `processing` (enviando), `simulated` (simulado), `sent` (enviado ao Windows), `uncertain` (exige conferência). `sent` confirma entrega ao spooler, não a saída física do papel. Não há reenvio automático de trabalhos incertos, para evitar duplicatas. O histórico inclui a impressora e a versão de configuração usadas.
+Estados dos pedidos: `pending` (na fila), `processing` (enviando), `simulated` (simulado), `sent` (enviado ao spooler/CUPS), `uncertain` (exige conferência). `sent` confirma entrega ao sistema de impressão, não a saída física do papel. Não há reenvio automático de trabalhos incertos, para evitar duplicatas. O histórico inclui a impressora e a versão de configuração usadas.
 
-O suporte atual é texto, com papel e margens definidos no driver. PDF, etiquetas, protocolos de impressoras térmicas e integração com sistemas específicos dependem de implementação conforme o equipamento e o sistema escolhido. Ainda não inclui serviço do Windows ou inicialização automática.
+O suporte atual é texto, PDF, imagem e ESC/POS, com papel e margens definidos no driver ou no CUPS. Integração com sistemas específicos depende do equipamento e do sistema escolhido.
 
 ## Compilar e testar
 
-Para desenvolvimento, instale o SDK .NET 10 para Windows:
+Para desenvolvimento, instale o SDK .NET 10 (e o SDK .NET 6 se for publicar a edição Legacy):
 
 ```powershell
-dotnet publish .\AutoPrint -p:PublishProfile=Windows -o .\release\AutoPrint
-.\Test-AutoPrint.ps1
+dotnet build .\SoftPrint.slnx
+dotnet test .\SoftPrint.Tests\SoftPrint.Tests.csproj -f net10.0
+.\scripts\publish-all.ps1
+.\Test-SoftPrint.ps1
 ```
 
-Use `AutoPrint.exe --headless true` para iniciar somente a API, sem painel. O teste automatizado cria uma cópia isolada e verifica autenticação, fila simulada, deduplicação, configuração dinâmica, validação da impressora, conflitos, pausa, retomada e persistência após reiniciar. Não envia nada para impressão física.
+Use `SoftPrint.exe --headless true` para iniciar somente a API, sem painel. O teste automatizado cria uma cópia isolada e verifica autenticação, fila simulada, deduplicação, configuração dinâmica, validação da impressora, conflitos, pausa, retomada e persistência após reiniciar. Não envia nada para impressão física.
+
+Pacote Linux, depois do publish:
+
+```sh
+./packaging/linux/install.sh
+```
+
+## Checklist de testes externos
+
+Esta máquina de desenvolvimento é Windows 10. Os itens abaixo **não** podem ser comprovados aqui e precisam de validação no hardware real.
+
+### Windows 7 SP1 (x64 e, se possível, x86)
+
+- [ ] Instalar pelo `SoftPrint-Setup.exe` e confirmar que a edição Legacy é escolhida automaticamente
+- [ ] Abrir `SoftPrint.Legacy.exe`; o painel deve abrir no navegador em `http://127.0.0.1:5178/dashboard`
+- [ ] Confirmar o aviso de edição sem suporte de segurança
+- [ ] Listar impressoras USB/GDI, enviar teste simulado e um texto real
+- [ ] Conferir PDF/imagem/ESC-POS no equipamento disponível
+- [ ] Migrar dados de uma pasta AutoPrint antiga (`jobs.json`, `settings.json`, `api-key.txt`)
+- [ ] Executar `SoftPrint.Legacy.exe --diagnose`
+
+### Linux x64 com CUPS
+
+- [ ] Instalar `cups-client` e executar `packaging/linux/install.sh`
+- [ ] Abrir o painel no navegador e listar filas `lpstat -a`
+- [ ] Imprimir texto/PDF via `lp` em simulação e depois em modo real
+- [ ] ESC/POS por fila CUPS raw e por `tcp:IP:9100`
+- [ ] Habilitar/desabilitar `systemctl --user enable --now softprint.service`
+- [ ] Executar `softprint --diagnose` e conferir `/api/status` (`platform=linux`, `printingBackend=cups`)

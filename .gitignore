@@ -5,6 +5,7 @@
 .vs/
 .tools/
 release/
+dist/
 .env.local
 **/.env
 !**/.env.example

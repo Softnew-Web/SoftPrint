@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFrameworks>net6.0-windows;net10.0-windows</TargetFrameworks>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\SoftPrint.Domain\SoftPrint.Domain.csproj" />
+    <ProjectReference Include="..\SoftPrint.Application\SoftPrint.Application.csproj" />
+    <PackageReference Include="PDFtoImage" Version="5.4.0" />
+    <PackageReference Include="SkiaSharp" Version="4.152.0" />
+    <PackageReference Include="System.Management" Version="9.0.0" Condition="'$(TargetFramework)' == 'net10.0-windows'" />
+    <PackageReference Include="System.Management" Version="6.0.2" Condition="'$(TargetFramework)' == 'net6.0-windows'" />
+  </ItemGroup>
+</Project>

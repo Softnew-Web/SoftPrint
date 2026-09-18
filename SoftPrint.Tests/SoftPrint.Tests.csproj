@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFrameworks>net6.0;net10.0</TargetFrameworks>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+    <SuppressTfmSupportBuildErrors>true</SuppressTfmSupportBuildErrors>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="PDFtoImage" Version="5.4.0" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4">
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\SoftPrint.Domain\SoftPrint.Domain.csproj" />
+    <ProjectReference Include="..\SoftPrint.Application\SoftPrint.Application.csproj" />
+    <ProjectReference Include="..\SoftPrint.Infrastructure.Core\SoftPrint.Infrastructure.Core.csproj" />
+    <ProjectReference Include="..\SoftPrint.Api\SoftPrint.Api.csproj" />
+    <ProjectReference Include="..\SoftPrint.Printing.Linux\SoftPrint.Printing.Linux.csproj" />
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+</Project>
