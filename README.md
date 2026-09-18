@@ -110,20 +110,26 @@ Pacote Linux, depois do publish:
 
 ## Versionamento e atualizações (GitHub Releases)
 
-A versão do produto fica em:
+A cada **push na `main`**, o GitHub Actions:
 
-1. `VERSION` (fonte da verdade do build / assembly)
-2. `SoftPrint.Domain/SoftPrintVersion.cs` (`Current` — deve bater com `VERSION`)
+1. Incrementa automaticamente o patch (`1.0.2` → `1.0.3`)
+2. Atualiza `VERSION`, `SoftPrintVersion.cs` e `installer/SoftPrint.iss`
+3. Publica os builds Windows/Linux e gera `SoftPrint-Setup.exe`
+4. Cria a tag `vX.Y.Z` e o **GitHub Release** com o instalador
+
+Os clientes instalados consultam o release mais recente e mostram o aviso no painel (com download/instalação automática no Windows).
+
+### Manual
+
+- **Actions → Release → Run workflow**: escolha `patch`, `minor` ou `major`
+- Marque **mandatory** para release obrigatória (`[mandatory]` nas notas)
+- Para não gerar release num commit: inclua `[skip release]` na mensagem
+
+Arquivos de versão (atualizados pelo CI):
+
+1. `VERSION`
+2. `SoftPrint.Domain/SoftPrintVersion.cs`
 3. `installer/SoftPrint.iss` (`#define AppVersion`)
-
-Fluxo para publicar uma atualização:
-
-1. Suba `VERSION`, `SoftPrintVersion.Current` e `AppVersion` do instalador (ex.: `1.0.1`).
-2. Faça publish + compile `SoftPrint-Setup.exe`.
-3. No GitHub (`Softnew-Web/SoftPrint`), crie um **Release** com tag `v1.0.1` e anexe o asset **`SoftPrint-Setup.exe`**.
-4. Os clientes instalados consultam `GET /repos/.../releases/latest` e o painel mostra o aviso **Nova versão disponível**.
-
-Atualização **obrigatória**: coloque `[mandatory]` (ou `softprint:mandatory`) no título ou na descrição do release, ou use `UPDATE_ALWAYS_MANDATORY=true` no `.env`.
 
 API:
 
