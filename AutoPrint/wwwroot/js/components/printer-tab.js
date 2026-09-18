@@ -2,6 +2,7 @@ import { state, feedback } from "../state.js";
 import { escapeHtml } from "../api.js";
 import { drawPaperPreview, resolvePaperMm, PAPER_PRESETS } from "../image-layout.js";
 import { buildSettingsPayload } from "../settings-payload.js";
+import { loadPdfPreview } from "../pdf-preview.js";
 
 export function bindPrinterTab({ api, onSaved }) {
   const printers = document.getElementById("printers");
@@ -20,12 +21,18 @@ export function bindPrinterTab({ api, onSaved }) {
   const summary = document.getElementById("printerSummary");
   const previewMeta = document.getElementById("previewMeta");
   const canvas = document.getElementById("printPreview");
-  const pdfPreview = document.getElementById("pdfPreview");
+  const pdfControls = document.getElementById("pdfPreviewControls");
+  const pdfPageLabel = document.getElementById("pdfPageLabel");
+  const pdfZoom = document.getElementById("pdfZoom");
   const previewFile = document.getElementById("previewFile");
 
   let previewImage = null;
   let previewPdf = false;
+  let pdfDocument = null;
+  let pdfPage = 1;
   let objectUrl = null;
+  let previewMargins = null;
+  let marginRequest = 0;
 
   const syncCustomRow = () => {
     if (!customPaperRow || !paperSize) return;
@@ -46,6 +53,7 @@ export function bindPrinterTab({ api, onSaved }) {
     }
     syncCustomRow();
     redrawPreview();
+    refreshPreviewMargins();
   };
 
   ["simulation", "paused", "printers", "imageFit", "paperSize", "paperLandscape"].forEach((id) => {
@@ -80,27 +88,29 @@ export function bindPrinterTab({ api, onSaved }) {
 
   if (previewFile) {
     // Preferir o botão do bootstrap; manter sync se o módulo carregar.
-    previewFile.addEventListener("change", () => {
+    previewFile.addEventListener("change", async () => {
       const file = previewFile.files?.[0];
       if (!file) return;
+      await pdfDocument?.destroy();
+      pdfDocument = null;
       if (objectUrl) URL.revokeObjectURL(objectUrl);
       objectUrl = URL.createObjectURL(file);
       previewPdf = file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
       if (previewPdf) {
-        previewImage = null;
-        if (canvas) canvas.classList.add("hidden");
-        if (pdfPreview) {
-          pdfPreview.src = objectUrl;
-          pdfPreview.classList.remove("hidden");
+        try {
+          previewImage = null;
+          pdfPage = 1;
+          pdfDocument = await loadPdfPreview(file);
+          pdfControls?.classList.replace("hidden", "flex");
+          await renderPdfPage();
+        } catch (err) {
+          previewPdf = false;
+          pdfControls?.classList.replace("flex", "hidden");
+          if (previewMeta) previewMeta.textContent = `PDF inválido ou protegido: ${err.message}`;
         }
-        if (previewMeta) previewMeta.textContent = `${file.name} · PDF usa as opções do driver do Windows; visualização aproximada.`;
         return;
       }
-      if (canvas) canvas.classList.remove("hidden");
-      if (pdfPreview) {
-        pdfPreview.classList.add("hidden");
-        pdfPreview.removeAttribute("src");
-      }
+      pdfControls?.classList.replace("flex", "hidden");
       const img = new Image();
       img.onload = () => {
         previewImage = img;
@@ -117,20 +127,30 @@ export function bindPrinterTab({ api, onSaved }) {
 
   const btnClear = document.getElementById("btnClearPreview");
   if (btnClear) {
-    btnClear.addEventListener("click", () => {
+    btnClear.addEventListener("click", async () => {
+      await pdfDocument?.destroy();
+      pdfDocument = null;
       if (objectUrl) URL.revokeObjectURL(objectUrl);
       objectUrl = null;
       previewImage = null;
       previewPdf = false;
-      if (canvas) canvas.classList.remove("hidden");
-      if (pdfPreview) {
-        pdfPreview.classList.add("hidden");
-        pdfPreview.removeAttribute("src");
-      }
+      pdfControls?.classList.replace("flex", "hidden");
       if (previewFile) previewFile.value = "";
       redrawPreview();
     });
   }
+
+  document.getElementById("btnPdfPrev")?.addEventListener("click", async () => {
+    if (!pdfDocument || pdfPage <= 1) return;
+    pdfPage--;
+    await renderPdfPage();
+  });
+  document.getElementById("btnPdfNext")?.addEventListener("click", async () => {
+    if (!pdfDocument || pdfPage >= pdfDocument.pageCount) return;
+    pdfPage++;
+    await renderPdfPage();
+  });
+  pdfZoom?.addEventListener("change", renderPdfPage);
 
   const btnLoad = document.getElementById("btnLoadPrinters");
   if (btnLoad) btnLoad.addEventListener("click", () => loadPrinters(api));
@@ -173,17 +193,40 @@ export function bindPrinterTab({ api, onSaved }) {
   }
 
   function currentPaper() {
-    return resolvePaperMm(
+    return {
+      ...resolvePaperMm(
       paperSize?.value || "a4",
       paperWidthMm?.value || 210,
       paperHeightMm?.value || 297,
       !!paperLandscape?.checked
-    );
+      ),
+      margins: previewMargins,
+    };
+  }
+
+  async function refreshPreviewMargins() {
+    const request = ++marginRequest;
+    try {
+      const query = new URLSearchParams({
+        printerName: printers?.value || "",
+        paperSize: paperSize?.value || "a4",
+        widthMm: paperWidthMm?.value || "210",
+        heightMm: paperHeightMm?.value || "297",
+        landscape: String(!!paperLandscape?.checked),
+      });
+      const metrics = await api(`/api/printers/page-metrics?${query}`);
+      if (request !== marginRequest) return;
+      previewMargins = metrics;
+      redrawPreview();
+    } catch {
+      if (request !== marginRequest) return;
+      previewMargins = null;
+      redrawPreview();
+    }
   }
 
   function redrawPreview() {
     if (!canvas) return;
-    if (previewPdf) return;
     const fit = imageFit?.value || "contain";
     const scale = Number(imageScale?.value) || 100;
     const paper = currentPaper();
@@ -192,9 +235,24 @@ export function bindPrinterTab({ api, onSaved }) {
     if (!previewMeta) return;
     if (previewImage) {
       const fitLabel = imageFit?.options?.[imageFit.selectedIndex]?.text || fit;
-      previewMeta.textContent = `${paperLabel} · ${previewImage.naturalWidth}×${previewImage.naturalHeight}px · ${fitLabel} · ${scale}%`;
+      const dimensions = previewImage.naturalWidth
+        ? `${previewImage.naturalWidth}×${previewImage.naturalHeight}px`
+        : `PDF página ${pdfPage}/${pdfDocument?.pageCount || 1}`;
+      previewMeta.textContent = `${paperLabel} · ${dimensions} · ${fitLabel} · ${scale}%`;
     } else {
       previewMeta.textContent = `Papel padrão: ${paperLabel}${paperLandscape?.checked ? " (paisagem)" : ""}`;
+    }
+  }
+
+  async function renderPdfPage() {
+    if (!pdfDocument) return;
+    try {
+      previewImage = await pdfDocument.render(pdfPage, Number(pdfZoom?.value || 1));
+      if (pdfPageLabel) pdfPageLabel.textContent = `Página ${pdfPage} / ${pdfDocument.pageCount}`;
+      redrawPreview();
+    } catch (err) {
+      if (err?.name !== "RenderingCancelledException" && previewMeta)
+        previewMeta.textContent = `Falha ao renderizar PDF: ${err.message}`;
     }
   }
 
@@ -237,6 +295,7 @@ export function bindPrinterTab({ api, onSaved }) {
     if (paperHeightMm) paperHeightMm.value = String(state.applied.paperHeightMm ?? 297);
     if (paperLandscape) paperLandscape.checked = !!state.applied.paperLandscape;
     syncCustomRow();
+    refreshPreviewMargins();
     if (msg) {
       msg.textContent = `v${state.applied.revision} · ${
         state.applied.printerName || "Nenhuma impressora"

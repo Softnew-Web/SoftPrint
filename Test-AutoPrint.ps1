@@ -12,6 +12,12 @@ if (-not (Test-Path (Join-Path $testFolder '.env')) -and (Test-Path -LiteralPath
 }
 $testExe = Join-Path $testFolder 'AutoPrint.exe'
 $testUrl = 'http://127.0.0.1:15178'
+$testEnv = Join-Path $testFolder '.env'
+if (Test-Path $testEnv) {
+    $content = Get-Content $testEnv
+    $content = @($content | Where-Object { $_ -notmatch '^URLS=' })
+    @("URLS=$testUrl") + $content | Set-Content $testEnv -Encoding utf8
+}
 $process = $null
 function Start-TestApp {
     $script:process = Start-Process -FilePath $testExe -ArgumentList '--urls', $testUrl, '--headless', 'true' -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $testFolder 'stdout.log') -RedirectStandardError (Join-Path $testFolder 'stderr.log')
@@ -44,7 +50,7 @@ try {
     if ($result.status -ne 'simulated') { throw 'Fila não processou o trabalho.' }
     $installedPrinters = Invoke-RestMethod "$testUrl/api/printers" -Headers $headers
     $config = Invoke-RestMethod "$testUrl/api/settings" -Headers $headers
-    $chosenPrinter = if ($installedPrinters.Count -gt 0) { $installedPrinters[0] } else { '' }
+    $chosenPrinter = if ($installedPrinters.Count -gt 0) { $installedPrinters[0].name } else { '' }
     $configBody = @{ printerName = $chosenPrinter; simulation = $true; paused = $true; expectedRevision = $config.revision } | ConvertTo-Json
     $updated = Invoke-RestMethod "$testUrl/api/settings" -Method Put -Headers $headers -ContentType 'application/json' -Body ([Text.Encoding]::UTF8.GetBytes($configBody))
     try { $null = Invoke-RestMethod "$testUrl/api/settings" -Method Put -Headers $headers -ContentType 'application/json' -Body ([Text.Encoding]::UTF8.GetBytes($configBody)); throw 'Configuração antiga sobrescreveu a nova.' }

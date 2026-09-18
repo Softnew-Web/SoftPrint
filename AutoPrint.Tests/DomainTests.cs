@@ -1,4 +1,6 @@
 using AutoPrint.Domain;
+using PDFtoImage;
+using System.Text;
 using Xunit;
 
 namespace AutoPrint.Tests;
@@ -60,5 +62,51 @@ public sealed class DomainTests
         var reference = InboxFileRules.BuildReference(@"C:\temp\arquivo com espaços.pdf");
         Assert.StartsWith("inbox-arquivocomespaços-", reference);
         Assert.True(reference.Length <= 120);
+    }
+
+    [Fact]
+    public void Pdfium_RendersEveryPageWithoutPrinting()
+    {
+        var pdf = BuildMinimalPdf();
+        var pages = Conversion.ToImages(pdf, options: new RenderOptions(Dpi: 72)).ToArray();
+        try
+        {
+            Assert.Equal(2, pages.Length);
+            Assert.All(pages, page =>
+            {
+                Assert.True(page.Width > 0);
+                Assert.True(page.Height > 0);
+            });
+        }
+        finally
+        {
+            foreach (var page in pages) page.Dispose();
+        }
+    }
+
+    private static byte[] BuildMinimalPdf()
+    {
+        string[] objects =
+        [
+            "<< /Type /Catalog /Pages 2 0 R >>",
+            "<< /Type /Pages /Kids [3 0 R 5 0 R] /Count 2 >>",
+            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 300] /Contents 4 0 R >>",
+            "<< /Length 0 >>\nstream\n\nendstream",
+            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 200] /Contents 6 0 R >>",
+            "<< /Length 0 >>\nstream\n\nendstream"
+        ];
+        var text = new StringBuilder("%PDF-1.4\n");
+        var offsets = new List<int> { 0 };
+        for (var i = 0; i < objects.Length; i++)
+        {
+            offsets.Add(Encoding.ASCII.GetByteCount(text.ToString()));
+            text.Append($"{i + 1} 0 obj\n{objects[i]}\nendobj\n");
+        }
+        var xref = Encoding.ASCII.GetByteCount(text.ToString());
+        text.Append($"xref\n0 {objects.Length + 1}\n0000000000 65535 f \n");
+        foreach (var offset in offsets.Skip(1))
+            text.Append($"{offset:0000000000} 00000 n \n");
+        text.Append($"trailer\n<< /Size {objects.Length + 1} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF");
+        return Encoding.ASCII.GetBytes(text.ToString());
     }
 }

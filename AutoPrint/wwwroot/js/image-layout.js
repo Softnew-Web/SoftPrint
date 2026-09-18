@@ -67,12 +67,19 @@ export function drawPaperPreview(canvas, image, fit, scalePercent, paper) {
   }
   const paperX = (W - paperW) / 2;
   const paperY = (H - paperH) / 2;
-  const margin = Math.min(paperW, paperH) * 0.06;
+  const fallbackMargin = Math.min(paperW, paperH) * 0.06;
+  const margins = paper?.margins || {};
+  const mmToX = paperW / paperWmm;
+  const mmToY = paperH / paperHmm;
+  const marginLeft = Number.isFinite(margins.leftMm) ? margins.leftMm * mmToX : fallbackMargin;
+  const marginRight = Number.isFinite(margins.rightMm) ? margins.rightMm * mmToX : fallbackMargin;
+  const marginTop = Number.isFinite(margins.topMm) ? margins.topMm * mmToY : fallbackMargin;
+  const marginBottom = Number.isFinite(margins.bottomMm) ? margins.bottomMm * mmToY : fallbackMargin;
   const area = {
-    x: paperX + margin,
-    y: paperY + margin,
-    w: paperW - margin * 2,
-    h: paperH - margin * 2,
+    x: paperX + marginLeft,
+    y: paperY + marginTop,
+    w: paperW - marginLeft - marginRight,
+    h: paperH - marginTop - marginBottom,
   };
 
   ctx.fillStyle = "#f4f7fa";

@@ -1,0 +1,11 @@
+{
+  "name": "softprint-dashboard",
+  "private": true,
+  "scripts": {
+    "build:js": "esbuild AutoPrint/wwwroot/js/app.js --bundle --format=iife --target=chrome109 --outfile=AutoPrint/wwwroot/js/app.bundle.js"
+  },
+  "devDependencies": {
+    "esbuild": "0.25.10",
+    "pdfjs-dist": "6.2.108"
+  }
+}

@@ -4,6 +4,7 @@ using AutoPrint.Application;
 using AutoPrint.Application.Abstractions;
 using AutoPrint.Application.Services;
 using AutoPrint.Domain;
+using AutoPrint.Infrastructure.Printing;
 using Microsoft.Extensions.Options;
 
 namespace AutoPrint.Api.Endpoints;
@@ -86,6 +87,20 @@ public static class SettingsEndpoints
                 p.Name, p.Port, p.Connection, p.Driver, p.IsDefault, p.IsOffline,
                 p.IsNetwork, p.IsLocal, p.IsShared, p.Status, p.DisplayLabel)));
         app.MapGet("/api/printers/names", (IPrinterCatalog catalog) => catalog.ListInstalled());
+        app.MapGet("/api/printers/page-metrics", (
+            string? printerName, string? paperSize, double? widthMm, double? heightMm,
+            bool? landscape, SettingsService settings) =>
+        {
+            var current = settings.Current;
+            var options = new PrintOptions
+            {
+                PaperSize = PaperSizeCatalog.FromWire(paperSize ?? current.PaperSize.ToWire()),
+                PaperWidthMm = widthMm ?? current.PaperWidthMm,
+                PaperHeightMm = heightMm ?? current.PaperHeightMm,
+                PaperLandscape = landscape ?? current.PaperLandscape
+            };
+            return PrinterPageMetrics.Read(printerName ?? current.PrinterName, options);
+        });
         app.MapPost("/api/printers/discover", async (INetworkPrinterDiscovery discovery, CancellationToken ct) =>
             await discovery.DiscoverAsync(ct));
         app.MapGet("/api/templates", (ITemplateRenderer templates) => templates.List());

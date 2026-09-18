@@ -4,6 +4,8 @@ using System.Runtime.InteropServices;
 using System.Text;
 using AutoPrint.Application.Abstractions;
 using AutoPrint.Domain;
+using PDFtoImage;
+using SkiaSharp;
 
 namespace AutoPrint.Infrastructure.Printing;
 
@@ -37,7 +39,9 @@ public sealed class ImagePrintStrategy : IPrintStrategy
         if (string.IsNullOrWhiteSpace(job.SourcePath) || !File.Exists(job.SourcePath))
             throw new InvalidOperationException("Arquivo de imagem não encontrado.");
 
-        using var image = Image.FromFile(job.SourcePath);
+        using var skiaImage = SKBitmap.Decode(job.SourcePath)
+            ?? throw new InvalidOperationException("Formato de imagem inválido ou não suportado.");
+        using var image = SkiaGdiBridge.ToBitmap(skiaImage);
         using var document = new PrintDocument();
         document.PrinterSettings.PrinterName = settings.PrinterName;
         if (!document.PrinterSettings.IsValid)
@@ -75,30 +79,59 @@ public sealed class PdfPrintStrategy : IPrintStrategy
         if (string.IsNullOrWhiteSpace(job.SourcePath) || !File.Exists(job.SourcePath))
             throw new InvalidOperationException("Arquivo PDF não encontrado.");
 
-        var start = new System.Diagnostics.ProcessStartInfo
-        {
-            FileName = job.SourcePath,
-            Verb = "printto",
-            Arguments = $"\"{settings.PrinterName}\"",
-            CreateNoWindow = true,
-            WindowStyle = System.Diagnostics.ProcessWindowStyle.Hidden,
-            UseShellExecute = true
-        };
+        using var stream = File.OpenRead(job.SourcePath);
+        var renderOptions = new RenderOptions(
+            Dpi: 300,
+            WithAnnotations: true,
+            WithFormFill: true,
+            BackgroundColor: SKColors.White);
+        using var pages = Conversion.ToImages(stream, leaveOpen: true, options: renderOptions).GetEnumerator();
 
-        using var process = System.Diagnostics.Process.Start(start);
-        if (process is null)
+        bool hasPage;
+        try { hasPage = pages.MoveNext(); }
+        catch (Exception ex) { throw new InvalidOperationException($"PDF inválido, protegido ou não suportado: {ex.Message}", ex); }
+        if (!hasPage)
+            throw new InvalidOperationException("O PDF não possui páginas imprimíveis.");
+
+        using var document = new PrintDocument();
+        document.PrinterSettings.PrinterName = settings.PrinterName;
+        if (!document.PrinterSettings.IsValid)
+            throw new InvalidOperationException($"Impressora não encontrada: '{settings.PrinterName}'.");
+        PrintPageSetup.Apply(document, settings);
+        document.DocumentName = $"AutoPrint {job.Reference}";
+        document.PrintController = new StandardPrintController();
+        document.PrintPage += (_, page) =>
         {
-            start.Verb = "print";
-            start.Arguments = "";
-            using var fallback = System.Diagnostics.Process.Start(start)
-                ?? throw new InvalidOperationException("Windows não iniciou a impressão do PDF.");
-            if (!fallback.WaitForExit(120_000))
-                throw new InvalidOperationException("Tempo esgotado aguardando a impressão do PDF.");
-        }
-        else if (!process.WaitForExit(120_000))
-            throw new InvalidOperationException("Tempo esgotado aguardando a impressão do PDF.");
+            cancellationToken.ThrowIfCancellationRequested();
+            using var rendered = pages.Current;
+            using var image = SkiaGdiBridge.ToBitmap(rendered);
+            var area = page.MarginBounds;
+            var dest = ImageLayoutCalculator.ComputeDestination(
+                area.X, area.Y, area.Width, area.Height,
+                image.Width, image.Height, settings.ImageFit, settings.ImageScalePercent);
+            var graphics = page.Graphics ?? throw new InvalidOperationException("Impressora sem área gráfica.");
+            var saved = graphics.Save();
+            graphics.SetClip(area);
+            graphics.DrawImage(image, dest);
+            graphics.Restore(saved);
+            page.HasMorePages = pages.MoveNext();
+        };
+        document.Print();
 
         return Task.FromResult(JobStatus.Sent);
+    }
+}
+
+internal static class SkiaGdiBridge
+{
+    public static Bitmap ToBitmap(SKBitmap source)
+    {
+        using var image = SKImage.FromBitmap(source);
+        using var encoded = image.Encode(SKEncodedImageFormat.Png, 100)
+            ?? throw new InvalidOperationException("Não foi possível converter a página renderizada.");
+        using var stream = encoded.AsStream();
+        using var temporary = new Bitmap(stream);
+        return new Bitmap(temporary);
     }
 }
 
@@ -143,6 +176,61 @@ internal static class PrintPageSetup
         document.DefaultPageSettings.PaperSize = new PaperSize(name, w, h);
         document.DefaultPageSettings.Landscape = false; // rotação já embutida em w×h
     }
+}
+
+public static class PrinterPageMetrics
+{
+    public static object Read(string printerName, PrintOptions settings)
+    {
+        if (string.IsNullOrWhiteSpace(printerName))
+            return Fallback(settings);
+
+        using var document = new PrintDocument();
+        document.PrinterSettings.PrinterName = printerName;
+        if (!document.PrinterSettings.IsValid)
+            return Fallback(settings);
+
+        PrintPageSetup.Apply(document, settings);
+        var page = document.DefaultPageSettings;
+        var bounds = page.Bounds;
+        var requested = new RectangleF(
+            page.Margins.Left,
+            page.Margins.Top,
+            Math.Max(1, bounds.Width - page.Margins.Left - page.Margins.Right),
+            Math.Max(1, bounds.Height - page.Margins.Top - page.Margins.Bottom));
+        var printable = RectangleF.Intersect(requested, page.PrintableArea);
+        if (printable.Width <= 0 || printable.Height <= 0)
+            return Fallback(settings);
+
+        return new
+        {
+            source = "driver",
+            pageWidthMm = HiToMm(bounds.Width),
+            pageHeightMm = HiToMm(bounds.Height),
+            leftMm = HiToMm(printable.Left),
+            topMm = HiToMm(printable.Top),
+            rightMm = HiToMm(bounds.Width - printable.Right),
+            bottomMm = HiToMm(bounds.Height - printable.Bottom)
+        };
+    }
+
+    private static object Fallback(PrintOptions settings)
+    {
+        var (width, height) = settings.EffectivePaperMm();
+        var margin = Math.Min(width, height) * 0.06;
+        return new
+        {
+            source = "approximate",
+            pageWidthMm = width,
+            pageHeightMm = height,
+            leftMm = margin,
+            topMm = margin,
+            rightMm = margin,
+            bottomMm = margin
+        };
+    }
+
+    private static double HiToMm(float value) => Math.Round(value * 25.4 / 100.0, 2);
 }
 
 internal static class TextPrintEngine

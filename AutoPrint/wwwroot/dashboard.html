@@ -179,9 +179,21 @@
                 <button id="btnClearPreview" type="button" class="rounded-lg bg-ink-line hover:bg-ink-line/70 px-2.5 py-1.5 text-sm">Limpar</button>
               </div>
             </div>
+            <div id="pdfPreviewControls" class="hidden items-center justify-center gap-2 text-xs text-mist">
+              <button id="btnPdfPrev" type="button" class="rounded bg-ink-line px-2 py-1">Anterior</button>
+              <span id="pdfPageLabel">Página 1 / 1</span>
+              <button id="btnPdfNext" type="button" class="rounded bg-ink-line px-2 py-1">Próxima</button>
+              <label class="ml-2">Zoom
+                <select id="pdfZoom" class="ml-1 rounded bg-ink border border-ink-line px-1 py-1">
+                  <option value="0.75">75%</option>
+                  <option value="1" selected>100%</option>
+                  <option value="1.5">150%</option>
+                  <option value="2">200%</option>
+                </select>
+              </label>
+            </div>
             <div class="flex-1 min-h-[280px] rounded-xl border border-ink-line bg-ink overflow-hidden flex items-center justify-center p-2">
               <canvas id="printPreview" width="520" height="680" class="block max-h-full max-w-full bg-[#121a22]"></canvas>
-              <embed id="pdfPreview" type="application/pdf" class="hidden h-full w-full bg-white" />
             </div>
             <p id="previewMeta" class="text-[11px] text-mist shrink-0 truncate">Sem imagem — o dimensionamento vale para jobs de imagem.</p>
           </div>
