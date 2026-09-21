@@ -1,6 +1,6 @@
 #define AppName "SoftPrint"
 ; Manter alinhado a VERSION e SoftPrint.Domain/SoftPrintVersion.cs
-#define AppVersion "1.0.6"
+#define AppVersion "1.0.7"
 
 [Setup]
 AppId={{A8BC75EF-2131-48A1-BA66-1B5EB2261F11}
