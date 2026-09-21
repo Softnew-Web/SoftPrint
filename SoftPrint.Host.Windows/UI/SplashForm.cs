@@ -21,14 +21,16 @@ public sealed class SplashForm : Form
     private readonly ProgressBar _bar;
     private readonly Label _percent;
     private readonly System.Windows.Forms.Timer _timer;
-    private readonly DateTime _startedUtc = DateTime.UtcNow;
+    private DateTime _startedUtc;
     private readonly int _durationMs;
+    private bool _started;
 
     public bool IsFinished { get; private set; }
 
     public SplashForm(int durationMs = 15_000)
     {
-        _durationMs = Math.Clamp(durationMs, 3_000, 60_000);
+        _durationMs = Math.Clamp(durationMs, 5_000, 60_000);
+        _startedUtc = DateTime.UtcNow;
         var version = SoftPrintVersion.Current;
         Text = $"SoftPrint v{version}";
         FormBorderStyle = FormBorderStyle.FixedDialog;
@@ -137,11 +139,18 @@ public sealed class SplashForm : Form
 
         _timer = new System.Windows.Forms.Timer { Interval = 50 };
         _timer.Tick += (_, _) => TickProgress();
-        Shown += (_, _) =>
-        {
-            if (!_timer.Enabled && !IsFinished)
-                _timer.Start();
-        };
+        Shown += (_, _) => StartProgress();
+    }
+
+    public void StartProgress()
+    {
+        if (_started || IsFinished || IsDisposed) return;
+        _started = true;
+        _startedUtc = DateTime.UtcNow;
+        _bar.Value = 0;
+        _percent.Text = "0%";
+        if (!_timer.Enabled)
+            _timer.Start();
     }
 
     public void SetStatus(string message)
@@ -154,8 +163,7 @@ public sealed class SplashForm : Form
     public void WaitUntilFinished()
     {
         if (IsFinished || IsDisposed) return;
-        if (!_timer.Enabled)
-            _timer.Start();
+        StartProgress();
 
         while (!IsFinished && !IsDisposed)
         {
@@ -190,10 +198,9 @@ public sealed class SplashForm : Form
     {
         if (IsDisposed) return;
         var elapsed = (DateTime.UtcNow - _startedUtc).TotalMilliseconds;
+        // Progresso linear: exatamente ~durationMs de tela visível.
         var raw = Math.Clamp(elapsed / _durationMs, 0, 1);
-        // Curva suave: sobe rápido no começo e desacelera no fim.
-        var eased = 1 - Math.Pow(1 - raw, 1.65);
-        var value = (int)Math.Round(eased * 100);
+        var value = (int)Math.Round(raw * 100);
         if (value < _bar.Value) value = _bar.Value;
         _bar.Value = Math.Min(100, value);
         _percent.Text = $"{_bar.Value}%";
@@ -217,7 +224,7 @@ public sealed class SplashForm : Form
             _ => "Finalizando…"
         };
 
-        if (raw >= 1 || _bar.Value >= 100)
+        if (raw >= 1)
         {
             _bar.Value = 100;
             _percent.Text = "100%";

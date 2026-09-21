@@ -82,6 +82,7 @@ public static class ApplicationComposer
                 {
                     splash = new SoftPrint.UI.SplashForm(durationMs: 15_000);
                     splash.Show();
+                    splash.StartProgress();
                     System.Windows.Forms.Application.DoEvents();
                 }
 
@@ -116,7 +117,7 @@ public static class ApplicationComposer
                     app.Lifetime.StopApplication();
                 };
 
-                // Mantém o splash na frente ~15s (barra fake de “download”) antes de revelar o painel.
+                // Garante ~15s de splash com barra (o relógio só começa no StartProgress).
                 if (splash is not null)
                 {
                     panel.Opacity = 0;
@@ -126,7 +127,12 @@ public static class ApplicationComposer
                     splash.Dispose();
                     splash = null;
                     panel.ShowInTaskbar = true;
+                    panel.WindowState = FormWindowState.Maximized;
                     panel.Opacity = 1;
+                }
+                else
+                {
+                    panel.WindowState = FormWindowState.Maximized;
                 }
 
                 using var registration = app.Lifetime.ApplicationStopping.Register(() =>

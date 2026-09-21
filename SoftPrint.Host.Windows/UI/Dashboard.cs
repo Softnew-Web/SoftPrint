@@ -24,6 +24,7 @@ public sealed class Dashboard : Form
         ClientSize = new Size(1400, 920);
         MinimumSize = new Size(1200, 760);
         StartPosition = FormStartPosition.CenterScreen;
+        WindowState = FormWindowState.Maximized;
         BackColor = Color.FromArgb(15, 23, 32);
         Controls.Add(_web);
         UiHost.MainForm = this;
@@ -66,7 +67,7 @@ public sealed class Dashboard : Form
         if (IsDisposed) return;
         ShowInTaskbar = true;
         Show();
-        WindowState = FormWindowState.Normal;
+        WindowState = FormWindowState.Maximized;
         Activate();
         BringToFront();
     }
