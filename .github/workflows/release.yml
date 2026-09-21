@@ -82,16 +82,29 @@ jobs:
 
       - name: Install Inno Setup
         shell: pwsh
-        run: choco install innosetup --version=6.4.3 -y --no-progress
-
-      - name: Compile installer
-        shell: pwsh
         run: |
+          choco install innosetup -y --no-progress --ignore-checksums
           $iscc = @(
             "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe",
             "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe",
             "${env:ProgramFiles}\Inno Setup 6\ISCC.exe"
           ) | Where-Object { Test-Path $_ } | Select-Object -First 1
+          if (-not $iscc) { throw "ISCC.exe não encontrado." }
+          Write-Host "ISCC: $iscc"
+          "ISCC=$iscc" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          exit 0
+
+      - name: Compile installer
+        shell: pwsh
+        run: |
+          $iscc = $env:ISCC
+          if (-not $iscc -or -not (Test-Path $iscc)) {
+            $iscc = @(
+              "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe",
+              "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe",
+              "${env:ProgramFiles}\Inno Setup 6\ISCC.exe"
+            ) | Where-Object { Test-Path $_ } | Select-Object -First 1
+          }
           if (-not $iscc) { throw "ISCC.exe não encontrado após instalar o Inno Setup." }
           & $iscc installer\SoftPrint.iss
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
