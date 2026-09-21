@@ -63,9 +63,10 @@ tabs.forEach((t) => {
 
 const refreshBtn = document.getElementById("btnRefresh");
 const dlgClose = document.getElementById("dlgClose");
-if (refreshBtn) refreshBtn.addEventListener("click", () => {
-  refreshAll();
-  refreshUpdate({ force: true });
+if (refreshBtn) refreshBtn.addEventListener("click", async () => {
+  await refreshAll();
+  // Depois do status, força consulta ao GitHub (senão o cache do /api/status pode esconder a versão nova).
+  await refreshUpdate({ force: true });
 });
 if (dlgClose) dlgClose.addEventListener("click", () => document.getElementById("dlg")?.close());
 

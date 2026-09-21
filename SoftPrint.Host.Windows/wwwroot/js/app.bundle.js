@@ -32991,9 +32991,9 @@ Digite o n\xFAmero para instalar no Windows (ou cancele):`,
   });
   var refreshBtn = document.getElementById("btnRefresh");
   var dlgClose = document.getElementById("dlgClose");
-  if (refreshBtn) refreshBtn.addEventListener("click", () => {
-    refreshAll();
-    refreshUpdate({ force: true });
+  if (refreshBtn) refreshBtn.addEventListener("click", async () => {
+    await refreshAll();
+    await refreshUpdate({ force: true });
   });
   if (dlgClose) dlgClose.addEventListener("click", () => document.getElementById("dlg")?.close());
   var printer = {
