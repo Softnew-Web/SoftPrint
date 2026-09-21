@@ -59,7 +59,8 @@ public sealed class DomainTests
     [Fact]
     public void InboxReference_IsSafeAndBounded()
     {
-        var reference = InboxFileRules.BuildReference(@"C:\temp\arquivo com espaços.pdf");
+        var path = Path.Combine(Path.GetTempPath(), "arquivo com espaços.pdf");
+        var reference = InboxFileRules.BuildReference(path);
         Assert.StartsWith("inbox-arquivocomespaços-", reference);
         Assert.True(reference.Length <= 120);
     }
