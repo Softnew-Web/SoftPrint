@@ -32151,6 +32151,76 @@ fn fs_main(in : VertexOutput) -> @location(0) vec4<f32> {
     pdfZoom?.addEventListener("change", renderPdfPage);
     const btnLoad = document.getElementById("btnLoadPrinters");
     if (btnLoad) btnLoad.addEventListener("click", () => loadPrinters(api2));
+    const btnFindNet = document.getElementById("btnFindNetworkPrinters");
+    const netHint = document.getElementById("networkPrinterHint");
+    if (btnFindNet) {
+      btnFindNet.addEventListener("click", async () => {
+        try {
+          btnFindNet.disabled = true;
+          if (netHint) {
+            netHint.classList.remove("hidden");
+            netHint.textContent = "Varrendo a rede local (portas 9100/515/631)\u2026";
+          }
+          feedback("Procurando impressoras na rede\u2026");
+          const found = await api2("/api/printers/discover", { method: "POST", body: "{}" });
+          const byHost = /* @__PURE__ */ new Map();
+          for (const item of found || []) {
+            if (!item?.reachable || !item.address) continue;
+            const prev = byHost.get(item.address);
+            const rank = item.port === 9100 ? 3 : item.port === 631 ? 2 : 1;
+            if (!prev || rank > prev.rank) byHost.set(item.address, { ...item, rank });
+          }
+          const hosts = [...byHost.values()];
+          if (!hosts.length) {
+            if (netHint) netHint.textContent = "Nenhuma impressora de rede encontrada. Confira se ela est\xE1 ligada e na mesma rede.";
+            return feedback("Nenhuma impressora de rede encontrada.", true);
+          }
+          const lines = hosts.map((h, i) => `${i + 1}. ${h.address}:${h.port} \u2014 ${h.hint || "rede"}`);
+          const choice = window.prompt(
+            `Encontradas ${hosts.length} impressora(s) na rede.
+
+${lines.join("\n")}
+
+Digite o n\xFAmero para instalar no Windows (ou cancele):`,
+            "1"
+          );
+          if (choice == null) {
+            if (netHint) netHint.textContent = `${hosts.length} encontrada(s). Instala\xE7\xE3o cancelada.`;
+            return;
+          }
+          const idx = Number(choice) - 1;
+          if (!Number.isInteger(idx) || idx < 0 || idx >= hosts.length) {
+            return feedback("N\xFAmero inv\xE1lido.", true);
+          }
+          const selected = hosts[idx];
+          if (netHint) netHint.textContent = `Instalando ${selected.address}:${selected.port} no Windows\u2026`;
+          const installed = await api2("/api/printers/install-network", {
+            method: "POST",
+            body: JSON.stringify({
+              address: selected.address,
+              port: selected.port,
+              name: `Impressora rede ${selected.address}`
+            })
+          });
+          if (!installed?.ok) {
+            const err = installed?.error || "Falha ao instalar.";
+            if (netHint) netHint.textContent = err;
+            return feedback(err, true);
+          }
+          await loadPrinters(api2);
+          if (printers && installed.printerName) printers.value = installed.printerName;
+          if (netHint) {
+            netHint.textContent = `Instalada: ${installed.printerName}. Selecione e clique em Salvar configura\xE7\xF5es.`;
+          }
+          feedback(`Impressora instalada: ${installed.printerName}`);
+        } catch (err) {
+          if (netHint) netHint.textContent = err.message || "Falha na busca.";
+          feedback(err.message || "Falha na busca.", true);
+        } finally {
+          btnFindNet.disabled = false;
+        }
+      });
+    }
     const btnSave = document.getElementById("btnSaveSettings");
     if (btnSave) {
       btnSave.addEventListener("click", async () => {

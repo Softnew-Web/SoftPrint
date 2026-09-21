@@ -155,6 +155,75 @@ export function bindPrinterTab({ api, onSaved }) {
   const btnLoad = document.getElementById("btnLoadPrinters");
   if (btnLoad) btnLoad.addEventListener("click", () => loadPrinters(api));
 
+  const btnFindNet = document.getElementById("btnFindNetworkPrinters");
+  const netHint = document.getElementById("networkPrinterHint");
+  if (btnFindNet) {
+    btnFindNet.addEventListener("click", async () => {
+      try {
+        btnFindNet.disabled = true;
+        if (netHint) {
+          netHint.classList.remove("hidden");
+          netHint.textContent = "Varrendo a rede local (portas 9100/515/631)…";
+        }
+        feedback("Procurando impressoras na rede…");
+        const found = await api("/api/printers/discover", { method: "POST", body: "{}" });
+        const byHost = new Map();
+        for (const item of found || []) {
+          if (!item?.reachable || !item.address) continue;
+          const prev = byHost.get(item.address);
+          // Preferir 9100 (JetDirect/RAW), depois 631 (IPP), depois 515.
+          const rank = item.port === 9100 ? 3 : item.port === 631 ? 2 : 1;
+          if (!prev || rank > prev.rank) byHost.set(item.address, { ...item, rank });
+        }
+        const hosts = [...byHost.values()];
+        if (!hosts.length) {
+          if (netHint) netHint.textContent = "Nenhuma impressora de rede encontrada. Confira se ela está ligada e na mesma rede.";
+          return feedback("Nenhuma impressora de rede encontrada.", true);
+        }
+
+        const lines = hosts.map((h, i) => `${i + 1}. ${h.address}:${h.port} — ${h.hint || "rede"}`);
+        const choice = window.prompt(
+          `Encontradas ${hosts.length} impressora(s) na rede.\n\n${lines.join("\n")}\n\nDigite o número para instalar no Windows (ou cancele):`,
+          "1"
+        );
+        if (choice == null) {
+          if (netHint) netHint.textContent = `${hosts.length} encontrada(s). Instalação cancelada.`;
+          return;
+        }
+        const idx = Number(choice) - 1;
+        if (!Number.isInteger(idx) || idx < 0 || idx >= hosts.length) {
+          return feedback("Número inválido.", true);
+        }
+        const selected = hosts[idx];
+        if (netHint) netHint.textContent = `Instalando ${selected.address}:${selected.port} no Windows…`;
+        const installed = await api("/api/printers/install-network", {
+          method: "POST",
+          body: JSON.stringify({
+            address: selected.address,
+            port: selected.port,
+            name: `Impressora rede ${selected.address}`,
+          }),
+        });
+        if (!installed?.ok) {
+          const err = installed?.error || "Falha ao instalar.";
+          if (netHint) netHint.textContent = err;
+          return feedback(err, true);
+        }
+        await loadPrinters(api);
+        if (printers && installed.printerName) printers.value = installed.printerName;
+        if (netHint) {
+          netHint.textContent = `Instalada: ${installed.printerName}. Selecione e clique em Salvar configurações.`;
+        }
+        feedback(`Impressora instalada: ${installed.printerName}`);
+      } catch (err) {
+        if (netHint) netHint.textContent = err.message || "Falha na busca.";
+        feedback(err.message || "Falha na busca.", true);
+      } finally {
+        btnFindNet.disabled = false;
+      }
+    });
+  }
+
   const btnSave = document.getElementById("btnSaveSettings");
   if (btnSave) {
     btnSave.addEventListener("click", async () => {

@@ -40,6 +40,7 @@ builder.Services.AddSingleton<IPlatformCapabilities>(new PlatformCapabilities(
 builder.Services.AddSingleton<IPrintStrategy, CupsPrintStrategy>();
 builder.Services.AddSingleton<IPrintStrategy, TcpEscPosPrintStrategy>();
 builder.Services.AddSingleton<IAppNotifier, NoOpNotifier>();
+builder.Services.AddSingleton<INetworkPrinterInstaller, UnsupportedNetworkPrinterInstaller>();
 builder.Logging.AddSoftPrintFileLogging(builder.Environment, builder.Configuration);
 if (builder.Configuration.GetValue("SoftPrint:StartWithWindows", false))
     new SystemdStartupService().ApplyFromOptions(true);

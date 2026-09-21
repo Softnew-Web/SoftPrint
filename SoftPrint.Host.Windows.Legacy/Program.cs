@@ -42,6 +42,7 @@ builder.Services.AddSingleton<IPrintStrategy, ImagePrintStrategy>();
 builder.Services.AddSingleton<IPrintStrategy, PdfPrintStrategy>();
 builder.Services.AddSingleton<IPrintStrategy, EscPosPrintStrategy>();
 builder.Services.AddSingleton<IAppNotifier, LegacyNoOpNotifier>();
+builder.Services.AddSingleton<INetworkPrinterInstaller, WindowsNetworkPrinterInstaller>();
 builder.Logging.AddSoftPrintFileLogging(builder.Environment, builder.Configuration);
 if (builder.Configuration.GetValue("SoftPrint:StartWithWindows", false))
     new LegacyStartupService().ApplyFromOptions(true);

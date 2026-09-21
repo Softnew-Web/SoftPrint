@@ -97,6 +97,11 @@ public record PrinterDeviceDto(
     string Status,
     string DisplayLabel);
 
+public record InstallNetworkPrinterRequest(
+    string? Address,
+    int? Port = 9100,
+    string? Name = null);
+
 public record FeatureFlagsDto(bool SoundEnabled, bool DarkTheme, bool LogToFile, bool StartWithWindows);
 
 public record MetricsDto(

@@ -146,7 +146,9 @@
                   <option value="">Selecionar impressora…</option>
                 </select>
                 <button id="btnLoadPrinters" type="button" class="shrink-0 rounded-lg bg-ink-line hover:bg-ink-line/70 px-2.5 py-1.5 text-sm">Atualizar</button>
+                <button id="btnFindNetworkPrinters" type="button" title="Procurar impressoras na rede e instalar" class="shrink-0 rounded-lg bg-ink-line hover:bg-ink-line/70 px-2.5 py-1.5 text-sm">Rede</button>
               </div>
+              <p id="networkPrinterHint" class="text-[11px] text-mist leading-snug hidden"></p>
               <div class="flex flex-wrap gap-x-4 gap-y-1.5 text-sm">
                 <label class="inline-flex items-center gap-1.5"><input id="simulation" type="checkbox" class="accent-sea" checked /> Simular</label>
                 <label class="inline-flex items-center gap-1.5"><input id="paused" type="checkbox" class="accent-sea" /> Pausar fila</label>

@@ -156,6 +156,20 @@ public static class SettingsEndpoints
         });
         app.MapPost("/api/printers/discover", async (INetworkPrinterDiscovery discovery, CancellationToken ct) =>
             await discovery.DiscoverAsync(ct));
+        app.MapPost("/api/printers/install-network", async (
+            InstallNetworkPrinterRequest request,
+            INetworkPrinterInstaller installer,
+            CancellationToken ct) =>
+        {
+            var result = await installer.InstallAsync(
+                request.Address ?? "",
+                request.Port is > 0 and <= 65535 ? request.Port.Value : 9100,
+                request.Name,
+                ct).ConfigureAwait(false);
+            return result.Ok
+                ? Results.Ok(result)
+                : Results.BadRequest(result);
+        });
         app.MapGet("/api/templates", (ITemplateRenderer templates) => templates.List());
         app.MapGet("/api/metrics", (IMetricsService metrics) => metrics.Compute());
         app.MapGet("/api/events", (IEventLogStore logs, DateOnly? day) =>
