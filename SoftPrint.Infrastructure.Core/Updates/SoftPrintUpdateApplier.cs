@@ -98,7 +98,8 @@ public sealed class SoftPrintUpdateApplier : IUpdateApplier
                     Directory.Delete(extractDir, recursive: true);
                 Directory.CreateDirectory(extractDir);
                 ZipFile.ExtractToDirectory(downloadPath, extractDir, overwriteFiles: true);
-                WriteZipRestartScript(scriptPath, extractDir);
+                var payloadDir = ResolvePayloadDirectory(extractDir);
+                WriteZipRestartScript(scriptPath, payloadDir);
             }
             else
             {
@@ -208,6 +209,36 @@ public sealed class SoftPrintUpdateApplier : IUpdateApplier
         {
             return false;
         }
+    }
+
+    /// <summary>
+    /// Deltas antigos às vezes vinham com pasta x64/x86; o instalador precisa da pasta onde está o .exe.
+    /// </summary>
+    internal static string ResolvePayloadDirectory(string extractDir)
+    {
+        if (string.IsNullOrWhiteSpace(extractDir) || !Directory.Exists(extractDir))
+            return extractDir;
+
+        static bool HasApp(string dir) =>
+            File.Exists(Path.Combine(dir, "SoftPrint.exe")) ||
+            File.Exists(Path.Combine(dir, "SoftPrint.Legacy.exe")) ||
+            File.Exists(Path.Combine(dir, "softprint"));
+
+        if (HasApp(extractDir))
+            return extractDir;
+
+        foreach (var name in new[] { "x64", "x86", "win-x64", "win-x86", "windows-modern-x64", "windows-modern-x86" })
+        {
+            var sub = Path.Combine(extractDir, name);
+            if (HasApp(sub))
+                return sub;
+        }
+
+        var dirs = Directory.GetDirectories(extractDir);
+        if (dirs.Length == 1 && HasApp(dirs[0]))
+            return dirs[0];
+
+        return extractDir;
     }
 
     private static void WriteZipRestartScript(string scriptPath, string extractDir)

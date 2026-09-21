@@ -61,6 +61,16 @@ function Get-FileSha256([string] $path) {
     return (Get-FileHash -Algorithm SHA256 -Path $path).Hash
 }
 
+function Get-RelPath([string] $baseDir, [string] $targetFile) {
+    $baseFull = [IO.Path]::GetFullPath($baseDir).TrimEnd([char]'\', [char]'/')
+    $targetFull = [IO.Path]::GetFullPath($targetFile)
+    if ($targetFull.Length -le $baseFull.Length -or
+        -not $targetFull.StartsWith($baseFull, [StringComparison]::OrdinalIgnoreCase)) {
+        throw "Arquivo fora da pasta base: $targetFull"
+    }
+    return $targetFull.Substring($baseFull.Length).TrimStart([char]'\', [char]'/').Replace("/", "\")
+}
+
 function Expand-ZipTo([string] $zip, [string] $dir) {
     if (Test-Path $dir) { Remove-Item $dir -Recurse -Force }
     New-Item -ItemType Directory -Path $dir | Out-Null
@@ -102,10 +112,13 @@ try {
 
         $patches = @()
         $copied = @()
-        $newFiles = Get-ChildItem $newDir -Recurse -File
+        $newRoot = [IO.Path]::GetFullPath($newDir)
+        $oldRoot = [IO.Path]::GetFullPath($oldDir)
+        $newFiles = Get-ChildItem $newRoot -Recurse -File
         foreach ($nf in $newFiles) {
-            $rel = $nf.FullName.Substring($newDir.Length).TrimStart("\", "/")
-            $oldFile = Join-Path $oldDir $rel
+            $rel = Get-RelPath $newRoot $nf.FullName
+            if ([string]::IsNullOrWhiteSpace($rel)) { continue }
+            $oldFile = Join-Path $oldRoot $rel
             $dest = Join-Path $deltaDir $rel
 
             if ((Test-Path $oldFile) -and (Get-FileSha256 $oldFile) -eq (Get-FileSha256 $nf.FullName)) {
