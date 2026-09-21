@@ -1,0 +1,87 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: softprint-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            10.0.x
+            6.0.x
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Install npm deps
+        run: npm ci
+
+      - name: Build JS bundle
+        shell: pwsh
+        run: .\scripts\build-js.ps1
+
+      - name: Test (net10)
+        run: dotnet test SoftPrint.Tests/SoftPrint.Tests.csproj -c Release -f net10.0 --verbosity minimal
+
+      - name: Test (net6)
+        run: dotnet test SoftPrint.Tests/SoftPrint.Tests.csproj -c Release -f net6.0 --verbosity minimal
+
+  smoke-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            10.0.x
+            6.0.x
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Install npm deps
+        run: npm ci
+
+      - name: Build JS bundle
+        shell: pwsh
+        run: ./scripts/build-js.ps1
+
+      - name: Test (net10)
+        run: dotnet test SoftPrint.Tests/SoftPrint.Tests.csproj -c Release -f net10.0 --verbosity minimal
+
+      - name: Publish Linux host
+        run: >
+          dotnet publish SoftPrint.Host.Linux/SoftPrint.Host.Linux.csproj
+          -c Release -r linux-x64 --self-contained true
+          -p:PublishSingleFile=true
+          -o dist/linux-smoke
+
+      - name: Smoke diagnose
+        run: |
+          set -e
+          test -x dist/linux-smoke/softprint
+          chmod +x dist/linux-smoke/softprint
+          out=$(dist/linux-smoke/softprint --diagnose)
+          echo "$out"
+          echo "$out" | grep -qi linux

@@ -32698,6 +32698,8 @@ fn fs_main(in : VertexOutput) -> @location(0) vec4<f32> {
         byId("sysWebhookMax").value = value.webhookMaxRetries;
         byId("sysEventRetention").value = value.eventLogRetentionDays;
         byId("sysNetworkTimeout").value = value.networkScanTimeoutMs;
+        if (byId("sysTelemetry")) byId("sysTelemetry").checked = !!value.telemetryEnabled;
+        if (byId("sysTelemetryUrl")) byId("sysTelemetryUrl").value = value.telemetryUrl || "";
         message.textContent = "Configura\xE7\xF5es carregadas.";
       } catch (err) {
         message.textContent = err.message;
@@ -32721,7 +32723,9 @@ fn fs_main(in : VertexOutput) -> @location(0) vec4<f32> {
             webhookRetrySeconds: Number(byId("sysWebhookRetry").value),
             webhookMaxRetries: Number(byId("sysWebhookMax").value),
             eventLogRetentionDays: Number(byId("sysEventRetention").value),
-            networkScanTimeoutMs: Number(byId("sysNetworkTimeout").value)
+            networkScanTimeoutMs: Number(byId("sysNetworkTimeout").value),
+            telemetryEnabled: !!byId("sysTelemetry")?.checked,
+            telemetryUrl: byId("sysTelemetryUrl")?.value.trim() || ""
           })
         });
         message.textContent = "Configura\xE7\xF5es salvas. Reinicie o SoftPrint para aplicar tudo.";

@@ -12,7 +12,9 @@ public sealed record SystemSettings(
     int WebhookRetrySeconds,
     int WebhookMaxRetries,
     int EventLogRetentionDays,
-    int NetworkScanTimeoutMs);
+    int NetworkScanTimeoutMs,
+    bool TelemetryEnabled = false,
+    string TelemetryUrl = "");
 
 public interface ISystemSettingsRepository
 {

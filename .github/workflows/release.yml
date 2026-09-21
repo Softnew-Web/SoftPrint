@@ -23,7 +23,43 @@ permissions:
   contents: write
 
 jobs:
+  test:
+    runs-on: windows-latest
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      (
+        github.event_name == 'push' &&
+        !contains(github.event.head_commit.message, 'chore(release):') &&
+        !contains(github.event.head_commit.message, '[skip release]')
+      )
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            10.0.x
+            6.0.x
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Install npm deps
+        run: npm ci
+
+      - name: Build JS bundle
+        shell: pwsh
+        run: .\scripts\build-js.ps1
+
+      - name: Test
+        run: dotnet test SoftPrint.Tests/SoftPrint.Tests.csproj -c Release --verbosity minimal
+
   release:
+    needs: test
     runs-on: windows-latest
     if: >
       github.event_name == 'workflow_dispatch' ||
@@ -60,9 +96,11 @@ jobs:
         shell: pwsh
         run: |
           $bump = "${{ github.event.inputs.bump || 'patch' }}"
-          $next = & .\scripts\bump-version.ps1 -Bump $bump
+          $next = (& .\scripts\bump-version.ps1 -Bump $bump | Select-Object -Last 1).ToString().Trim()
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          "version=$next" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          if ($next -notmatch '^\d+\.\d+\.\d+$') { throw "Versão inválida: '$next'" }
+          # Evitar Out-File -Encoding utf8 (BOM) — quebra o parser do GITHUB_OUTPUT no Windows.
+          [System.IO.File]::AppendAllText($env:GITHUB_OUTPUT, "version=$next$([Environment]::NewLine)")
           Write-Host "Nova versão: $next"
 
       - name: Commit version bump
@@ -80,6 +118,10 @@ jobs:
         shell: pwsh
         run: .\scripts\publish-all.ps1
 
+      - name: Package update zips
+        shell: pwsh
+        run: .\scripts\package-update-zips.ps1
+
       - name: Install Inno Setup
         shell: pwsh
         run: |
@@ -91,8 +133,7 @@ jobs:
           ) | Where-Object { Test-Path $_ } | Select-Object -First 1
           if (-not $iscc) { throw "ISCC.exe não encontrado." }
           Write-Host "ISCC: $iscc"
-          "ISCC=$iscc" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
-          exit 0
+          [System.IO.File]::AppendAllText($env:GITHUB_ENV, "ISCC=$iscc$([Environment]::NewLine)")
 
       - name: Compile installer
         shell: pwsh
@@ -112,12 +153,15 @@ jobs:
             throw "SoftPrint-Setup.exe não foi gerado."
           }
 
-      - name: Package Linux zip
+      - name: Sign installer (optional)
+        env:
+          CODE_SIGNING_PFX_BASE64: ${{ secrets.CODE_SIGNING_PFX_BASE64 }}
+          CODE_SIGNING_PASSWORD: ${{ secrets.CODE_SIGNING_PASSWORD }}
         shell: pwsh
         run: |
-          if (Test-Path dist\linux-x64) {
-            Compress-Archive -Path dist\linux-x64\* -DestinationPath dist\softprint-linux-x64.zip -Force
-          }
+          .\scripts\sign-authenticode.ps1 -Files @(
+            "installer\Output\SoftPrint-Setup.exe"
+          )
 
       - name: Create GitHub Release
         env:
@@ -129,21 +173,25 @@ jobs:
           $notes = @"
           Release automático gerado no push para ``main``.
 
-          Clientes com SoftPrint instalado recebem o aviso de atualização no painel.
+          Clientes Windows preferem o zip leve da arquitetura instalada; o Setup completo continua disponível.
           "@
           if ("${{ github.event_name }}" -eq "workflow_dispatch" -and "${{ github.event.inputs.mandatory }}" -eq "true") {
             $notes = "[mandatory]`n`n" + $notes
             $title = "$title (obrigatória)"
           }
-          if (Test-Path dist\softprint-linux-x64.zip) {
-            gh release create "v$ver" `
-              "installer/Output/SoftPrint-Setup.exe#SoftPrint-Setup.exe" `
-              "dist/softprint-linux-x64.zip#softprint-linux-x64.zip" `
-              --title $title `
-              --notes $notes
-          } else {
-            gh release create "v$ver" `
-              "installer/Output/SoftPrint-Setup.exe#SoftPrint-Setup.exe" `
-              --title $title `
-              --notes $notes
+
+          $assets = @(
+            "installer/Output/SoftPrint-Setup.exe#SoftPrint-Setup.exe",
+            "dist/SoftPrint-win-x64.zip#SoftPrint-win-x64.zip",
+            "dist/SoftPrint-win-x86.zip#SoftPrint-win-x86.zip",
+            "dist/SoftPrint-legacy-x64.zip#SoftPrint-legacy-x64.zip",
+            "dist/SoftPrint-legacy-x86.zip#SoftPrint-legacy-x86.zip",
+            "dist/softprint-linux-x64.zip#softprint-linux-x64.zip"
+          ) | Where-Object {
+            $path = ($_ -split '#')[0]
+            Test-Path $path
           }
+
+          if ($assets.Count -lt 1) { throw "Nenhum asset para publicar." }
+
+          gh release create "v$ver" @assets --title $title --notes $notes

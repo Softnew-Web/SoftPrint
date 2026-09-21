@@ -68,6 +68,8 @@ public static class SettingsEndpoints
                 value.WebhookMaxRetries,
                 value.EventLogRetentionDays,
                 value.NetworkScanTimeoutMs,
+                value.TelemetryEnabled,
+                value.TelemetryUrl,
                 restartRequired = true
             });
         });
@@ -91,14 +93,18 @@ public static class SettingsEndpoints
                 request.WebhookRetrySeconds,
                 request.WebhookMaxRetries,
                 request.EventLogRetentionDays,
-                request.NetworkScanTimeoutMs));
+                request.NetworkScanTimeoutMs,
+                request.TelemetryEnabled,
+                request.TelemetryUrl?.Trim() ?? ""));
             return Results.Ok(new
             {
                 saved = true,
                 restartRequired = true,
                 value.PollIntervalMs,
                 value.RetentionDays,
-                value.BackupIntervalMinutes
+                value.BackupIntervalMinutes,
+                value.TelemetryEnabled,
+                value.TelemetryUrl
             });
         });
         app.MapPut("/api/settings", (SettingsRequest request, SettingsService settings) =>

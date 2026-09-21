@@ -32,13 +32,18 @@ public sealed class SoftPrintFeatureOptions
     public bool UpdateCheckEnabled { get; set; } = true;
     public string UpdateGitHubOwner { get; set; } = "Softnew-Web";
     public string UpdateGitHubRepo { get; set; } = "SoftPrint";
-    /// <summary>Token opcional (repo privado). Preferir variável de ambiente GITHUB_TOKEN.</summary>
-    public string UpdateGitHubToken { get; set; } = "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";
+    /// <summary>Token opcional (repo privado). Preferir variável de ambiente UPDATE_GITHUB_TOKEN / GITHUB_TOKEN.</summary>
+    public string UpdateGitHubToken { get; set; } = "";
     public int UpdateCacheMinutes { get; set; } = 360;
     /// <summary>Nome preferido do asset no release (instalador Windows).</summary>
     public string UpdateAssetName { get; set; } = "SoftPrint-Setup.exe";
     /// <summary>Se true, qualquer versão mais nova é tratada como obrigatória.</summary>
     public bool UpdateAlwaysMandatory { get; set; }
+
+    /// <summary>Opt-in: envia telemetria anônima de falhas de impressão (status uncertain).</summary>
+    public bool TelemetryEnabled { get; set; }
+    /// <summary>URL POST para telemetria (somente se TelemetryEnabled).</summary>
+    public string TelemetryUrl { get; set; } = "";
 
     public IReadOnlyDictionary<string, string> ParseRoutes()
     {

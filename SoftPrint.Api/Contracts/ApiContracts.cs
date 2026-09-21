@@ -37,7 +37,9 @@ public record SystemSettingsRequest(
     int WebhookRetrySeconds,
     int WebhookMaxRetries,
     int EventLogRetentionDays,
-    int NetworkScanTimeoutMs);
+    int NetworkScanTimeoutMs,
+    bool TelemetryEnabled = false,
+    string? TelemetryUrl = null);
 
 public record PrinterOptionsDto(
     string PrinterName,

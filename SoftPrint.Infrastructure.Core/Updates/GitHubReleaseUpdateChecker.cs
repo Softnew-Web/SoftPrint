@@ -110,16 +110,9 @@ public sealed class GitHubReleaseUpdateChecker : IUpdateChecker
                 ContainsMandatoryMarker(release.Name) ||
                 ContainsMandatoryMarker(release.Body));
 
-            var assetName = opts.UpdateAssetName.Trim();
-            var asset = release.Assets?
-                .FirstOrDefault(a =>
-                    (string.IsNullOrWhiteSpace(assetName)
-                        ? a.Name?.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) == true
-                        : string.Equals(a.Name, assetName, StringComparison.OrdinalIgnoreCase))
-                    && (!string.IsNullOrWhiteSpace(a.Url) || !string.IsNullOrWhiteSpace(a.BrowserDownloadUrl)));
+            var asset = SelectAsset(release.Assets, opts.UpdateAssetName);
 
-            // Em repos privados, browser_download_url retorna 404.
-            // A URL da API (assets/{id}) com Accept: application/octet-stream funciona com o token.
+            // Preferir URL da API (assets/{id}); browser_download_url falha em repos privados.
             var download = !string.IsNullOrWhiteSpace(asset?.Url)
                 ? asset!.Url
                 : asset?.BrowserDownloadUrl ?? release.HtmlUrl;
@@ -133,7 +126,8 @@ public sealed class GitHubReleaseUpdateChecker : IUpdateChecker
                 release.HtmlUrl,
                 release.Body,
                 null,
-                now));
+                now,
+                updateAvailable ? asset?.Name : null));
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -172,6 +166,36 @@ public sealed class GitHubReleaseUpdateChecker : IUpdateChecker
             _cachedUntil = DateTimeOffset.UtcNow.AddMinutes(minutes);
             return result;
         }
+    }
+
+    internal static string PreferredZipAssetName()
+    {
+        var isLegacy = (Environment.ProcessPath ?? "")
+            .Contains("Legacy", StringComparison.OrdinalIgnoreCase);
+        var arch = Environment.Is64BitProcess ? "x64" : "x86";
+        return isLegacy
+            ? $"SoftPrint-legacy-{arch}.zip"
+            : $"SoftPrint-win-{arch}.zip";
+    }
+
+    private static GitHubAsset? SelectAsset(List<GitHubAsset>? assets, string updateAssetName)
+    {
+        if (assets is null || assets.Count == 0) return null;
+
+        static bool HasUrl(GitHubAsset a) =>
+            !string.IsNullOrWhiteSpace(a.Url) || !string.IsNullOrWhiteSpace(a.BrowserDownloadUrl);
+
+        var preferredZip = PreferredZipAssetName();
+        var zip = assets.FirstOrDefault(a =>
+            string.Equals(a.Name, preferredZip, StringComparison.OrdinalIgnoreCase) && HasUrl(a));
+        if (zip is not null) return zip;
+
+        var assetName = updateAssetName.Trim();
+        return assets.FirstOrDefault(a =>
+            (string.IsNullOrWhiteSpace(assetName)
+                ? a.Name?.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) == true
+                : string.Equals(a.Name, assetName, StringComparison.OrdinalIgnoreCase))
+            && HasUrl(a));
     }
 
     private static bool ContainsMandatoryMarker(string? text)

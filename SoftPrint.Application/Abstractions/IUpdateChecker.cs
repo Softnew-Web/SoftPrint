@@ -19,4 +19,5 @@ public sealed record UpdateCheckResult(
     string? ReleaseUrl,
     string? ReleaseNotes,
     string? Error,
-    DateTimeOffset CheckedAt);
+    DateTimeOffset CheckedAt,
+    string? AssetName = null);

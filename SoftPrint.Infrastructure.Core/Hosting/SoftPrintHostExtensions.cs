@@ -45,6 +45,10 @@ public static class SoftPrintHostExtensions
         {
             client.Timeout = TimeSpan.FromMinutes(30);
         });
+        services.AddHttpClient("softprint-telemetry", client =>
+        {
+            client.Timeout = TimeSpan.FromSeconds(8);
+        });
         services.AddSingleton<IAppPaths, UserAppPaths>();
         services.AddSingleton<IApiKeyProvider, FileApiKeyProvider>();
         services.AddSingleton<IJobRepository, JsonJobRepository>();
@@ -60,6 +64,7 @@ public static class SoftPrintHostExtensions
         services.AddSingleton<IWebhookRetryQueue>(sp => sp.GetRequiredService<WebhookRetryQueue>());
         services.AddSingleton<WebhookNotifier>();
         services.AddSingleton<IWebhookNotifier>(sp => sp.GetRequiredService<WebhookNotifier>());
+        services.AddSingleton<ITelemetryService, SoftPrint.Infrastructure.Integrations.TelemetryService>();
         services.AddSingleton<IPrintStrategy, SimulationPrintStrategy>();
         services.AddSingleton<PrintStrategyResolver>();
         services.AddSingleton<JobQueueService>();

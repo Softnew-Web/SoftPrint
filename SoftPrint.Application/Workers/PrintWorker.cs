@@ -12,6 +12,7 @@ public sealed class PrintWorker(
     PrintStrategyResolver strategies,
     IWebhookNotifier webhook,
     IAppNotifier notifier,
+    ITelemetryService telemetry,
     IOptions<SoftPrintFeatureOptions> features,
     IConfiguration configuration,
     ILogger<PrintWorker> logger) : BackgroundService
@@ -104,7 +105,11 @@ public sealed class PrintWorker(
 
             TryDeleteInboxSource(options, finished, status);
 
-            if (status == JobStatus.Uncertain) notifier.NotifyUncertain(finished);
+            if (status == JobStatus.Uncertain)
+            {
+                notifier.NotifyUncertain(finished);
+                _ = telemetry.ReportPrintFailureAsync(finished, CancellationToken.None);
+            }
             else notifier.NotifyCompleted(finished);
             await webhook.NotifyFinishedAsync(finished, stoppingToken);
         }

@@ -367,7 +367,10 @@ Teste de impressão de texto.</textarea>
             <div class="flex flex-wrap gap-5 text-sm">
               <label><input id="sysSound" type="checkbox" class="accent-sea" /> Sons e avisos</label>
               <label><input id="sysLog" type="checkbox" class="accent-sea" /> Gravar logs em arquivo</label>
+              <label><input id="sysTelemetry" type="checkbox" class="accent-sea" /> Telemetria de falhas (opt-in)</label>
             </div>
+            <label class="block text-sm">URL de telemetria<input id="sysTelemetryUrl" type="url" placeholder="https://…" class="mt-1 w-full rounded-lg bg-ink border border-ink-line px-3 py-2" /></label>
+            <p class="text-xs text-mist">Quando ativo, envia só metadados de falha (versão, SO, tipo, erro) — sem texto do pedido, caminhos ou chaves.</p>
             <div class="flex items-center gap-3">
               <button id="btnSaveSystem" type="button" class="rounded-xl bg-sea hover:bg-sea-deep text-white font-semibold px-5 py-2.5">Salvar configurações</button>
               <p id="systemSettingsMsg" class="text-sm text-mist"></p>
@@ -609,7 +612,7 @@ Teste de impressão de texto.</textarea>
       }
     }, 4000);
   </script>
-  <script defer src="/js/app.bundle.js?v=20260918g"
+  <script defer src="/js/app.bundle.js?v=20260921a"
           onerror="document.getElementById('healthLine').textContent='Falha ao carregar o painel.'"></script>
 </body>
 </html>

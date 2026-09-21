@@ -21,7 +21,8 @@ public sealed class JsonSystemSettingsRepository : ISystemSettingsRepository
             value.PollIntervalMs, value.RetentionDays, value.BackupIntervalMinutes,
             value.SoundEnabled, value.LogToFile, value.WebhookUrl, value.WebhookSecret,
             value.WebhookTimeoutMs, value.WebhookRetrySeconds, value.WebhookMaxRetries,
-            value.EventLogRetentionDays, value.NetworkScanTimeoutMs));
+            value.EventLogRetentionDays, value.NetworkScanTimeoutMs,
+            value.TelemetryEnabled, value.TelemetryUrl ?? ""));
         LoadFromDisk();
     }
 
@@ -72,6 +73,7 @@ public sealed class JsonSystemSettingsRepository : ISystemSettingsRepository
         WebhookRetrySeconds = Math.Clamp(settings.WebhookRetrySeconds, 1, 3600),
         WebhookMaxRetries = Math.Clamp(settings.WebhookMaxRetries, 0, 100),
         EventLogRetentionDays = Math.Clamp(settings.EventLogRetentionDays, 1, 3650),
-        NetworkScanTimeoutMs = Math.Clamp(settings.NetworkScanTimeoutMs, 50, 30_000)
+        NetworkScanTimeoutMs = Math.Clamp(settings.NetworkScanTimeoutMs, 50, 30_000),
+        TelemetryUrl = settings.TelemetryUrl?.Trim() ?? ""
     };
 }

@@ -100,12 +100,15 @@ public sealed class PlatformTests
                 Options.Create(new SoftPrintFeatureOptions()));
             var saved = repository.Update(new SystemSettings(
                 1, 0, 1, true, true, "", "secret",
-                1, 0, 500, 0, 1));
+                1, 0, 500, 0, 1, true, " https://telemetry.example/hook "));
 
             Assert.Equal(100, saved.PollIntervalMs);
             Assert.Equal(1, saved.RetentionDays);
+            Assert.True(saved.TelemetryEnabled);
+            Assert.Equal("https://telemetry.example/hook", saved.TelemetryUrl);
             Assert.True(File.Exists(Path.Combine(root, "system-settings.json")));
             Assert.Contains("secret", File.ReadAllText(Path.Combine(root, "system-settings.json")), StringComparison.Ordinal);
+            Assert.Contains("telemetry", File.ReadAllText(Path.Combine(root, "system-settings.json")), StringComparison.OrdinalIgnoreCase);
         }
         finally
         {

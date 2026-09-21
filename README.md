@@ -138,7 +138,13 @@ API:
 | `GET /api/update` | Versão atual, última do GitHub, URL de download e se é obrigatória |
 | `GET /api/status` | Inclui `version` e `update` (cache) |
 
-Releases privadas usam o token padrão embutido no app (pode ser sobrescrito com `UPDATE_GITHUB_TOKEN` / `SOFTPRINT_GITHUB_TOKEN`).
+Releases públicos não precisam de token. Para repositório privado, configure `UPDATE_GITHUB_TOKEN` (ou `SOFTPRINT_GITHUB_TOKEN` / `GITHUB_TOKEN`).
+
+Atualização no Windows: o cliente prefere o zip leve (`SoftPrint-win-*.zip` / `SoftPrint-legacy-*.zip`); se não houver zip, usa o `SoftPrint-Setup.exe`.
+
+Assinatura Authenticode (opcional no CI): secrets `CODE_SIGNING_PFX_BASE64` e `CODE_SIGNING_PASSWORD`.
+
+Telemetria de falhas: opt-in no painel (Sistema) ou `TELEMETRY_ENABLED` / `TELEMETRY_URL` — envia só metadados anônimos (versão, plataforma, tipo, erro), sem conteúdo do pedido.
 
 ## Checklist de testes externos
 

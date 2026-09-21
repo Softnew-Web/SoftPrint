@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.IO.Compression;
 using System.Net.Http.Headers;
 using SoftPrint.Application;
 using SoftPrint.Application.Abstractions;
@@ -64,7 +65,6 @@ public sealed class SoftPrintUpdateApplier : IUpdateApplier
     private async Task RunAsync()
     {
         var tempDir = Path.Combine(Path.GetTempPath(), "SoftPrintUpdate");
-        var setupPath = Path.Combine(tempDir, "SoftPrint-Setup.exe");
         var scriptPath = Path.Combine(tempDir, "apply-update.cmd");
 
         try
@@ -80,11 +80,31 @@ public sealed class SoftPrintUpdateApplier : IUpdateApplier
             if (!check.UpdateAvailable || string.IsNullOrWhiteSpace(check.DownloadUrl))
                 throw new InvalidOperationException("Nenhuma atualização disponível para instalar.");
 
-            Set(new UpdateApplyStatus("downloading", 8, $"Baixando SoftPrint {check.LatestVersion}…", true, false, false));
-            await DownloadAsync(check.DownloadUrl!, setupPath).ConfigureAwait(false);
+            var downloadUrl = check.DownloadUrl!;
+            var preferZip = LooksLikeZipUrl(downloadUrl)
+                || (check.AssetName?.EndsWith(".zip", StringComparison.OrdinalIgnoreCase) == true);
+            var downloadPath = Path.Combine(tempDir, preferZip ? "SoftPrint-update.zip" : "SoftPrint-Setup.exe");
 
+            Set(new UpdateApplyStatus("downloading", 8, $"Baixando SoftPrint {check.LatestVersion}…", true, false, false));
+            await DownloadAsync(downloadUrl, downloadPath).ConfigureAwait(false);
+
+            var isZip = preferZip || IsZipFile(downloadPath);
             Set(new UpdateApplyStatus("installing", 92, "Instalando atualização…", true, false, false));
-            WriteRestartScript(scriptPath, setupPath);
+
+            if (isZip)
+            {
+                var extractDir = Path.Combine(tempDir, "extracted");
+                if (Directory.Exists(extractDir))
+                    Directory.Delete(extractDir, recursive: true);
+                Directory.CreateDirectory(extractDir);
+                ZipFile.ExtractToDirectory(downloadPath, extractDir, overwriteFiles: true);
+                WriteZipRestartScript(scriptPath, extractDir);
+            }
+            else
+            {
+                WriteExeRestartScript(scriptPath, downloadPath);
+            }
+
             LaunchDetached(scriptPath);
 
             Set(new UpdateApplyStatus("restarting", 100, "Reiniciando o SoftPrint…", true, false, true));
@@ -157,7 +177,81 @@ public sealed class SoftPrintUpdateApplier : IUpdateApplier
         Set(new UpdateApplyStatus("downloading", 90, "Download concluído.", true, false, false));
     }
 
-    private static void WriteRestartScript(string scriptPath, string setupPath)
+    private static bool LooksLikeZipUrl(string url)
+    {
+        if (url.Contains(".zip", StringComparison.OrdinalIgnoreCase))
+            return true;
+        try
+        {
+            if (Uri.TryCreate(url, UriKind.Absolute, out var uri))
+                return uri.AbsolutePath.EndsWith(".zip", StringComparison.OrdinalIgnoreCase);
+        }
+        catch
+        {
+            /* ignore */
+        }
+
+        return false;
+    }
+
+    private static bool IsZipFile(string path)
+    {
+        try
+        {
+            using var fs = File.OpenRead(path);
+            Span<byte> header = stackalloc byte[4];
+            if (fs.Read(header) < 2) return false;
+            return header[0] == (byte)'P' && header[1] == (byte)'K';
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static void WriteZipRestartScript(string scriptPath, string extractDir)
+    {
+        var installDir = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "Programs",
+            "SoftPrint");
+        var modern = Path.Combine(installDir, "SoftPrint.exe");
+        var legacy = Path.Combine(installDir, "SoftPrint.Legacy.exe");
+        var current = Environment.ProcessPath ?? "";
+        var preferLegacy = current.Contains("Legacy", StringComparison.OrdinalIgnoreCase);
+        var fallback = File.Exists(current) ? current : modern;
+        var pid = Environment.ProcessId;
+
+        var lines = new[]
+        {
+            "@echo off",
+            "setlocal",
+            "timeout /t 2 /nobreak >nul",
+            $":waitpid",
+            $"tasklist /FI \"PID eq {pid}\" 2>NUL | find \"{pid}\" >NUL",
+            "if not errorlevel 1 (",
+            "  timeout /t 1 /nobreak >nul",
+            "  goto waitpid",
+            ")",
+            $"if not exist \"{installDir}\" mkdir \"{installDir}\"",
+            $"xcopy /E /Y /I /Q \"{extractDir}\\*\" \"{installDir}\\\" >nul",
+            "set ERR=%ERRORLEVEL%",
+            "timeout /t 1 /nobreak >nul",
+            preferLegacy
+                ? $"if exist \"{legacy}\" start \"\" \"{legacy}\" & goto done"
+                : $"if exist \"{modern}\" start \"\" \"{modern}\" & goto done",
+            $"if exist \"{modern}\" start \"\" \"{modern}\" & goto done",
+            $"if exist \"{legacy}\" start \"\" \"{legacy}\" & goto done",
+            $"if exist \"{fallback}\" start \"\" \"{fallback}\" & goto done",
+            "echo SoftPrint update could not restart > \"%TEMP%\\softprint-update-error.txt\"",
+            ":done",
+            "if not \"%ERR%\"==\"0\" echo SoftPrint zip update exit %ERR%>> \"%TEMP%\\softprint-update-error.txt\"",
+            "endlocal"
+        };
+        File.WriteAllLines(scriptPath, lines);
+    }
+
+    private static void WriteExeRestartScript(string scriptPath, string setupPath)
     {
         var installDir = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),

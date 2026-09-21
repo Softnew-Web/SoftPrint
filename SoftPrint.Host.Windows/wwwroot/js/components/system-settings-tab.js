@@ -40,6 +40,8 @@ export function bindSystemSettingsTab({ api }) {
       byId("sysWebhookMax").value = value.webhookMaxRetries;
       byId("sysEventRetention").value = value.eventLogRetentionDays;
       byId("sysNetworkTimeout").value = value.networkScanTimeoutMs;
+      if (byId("sysTelemetry")) byId("sysTelemetry").checked = !!value.telemetryEnabled;
+      if (byId("sysTelemetryUrl")) byId("sysTelemetryUrl").value = value.telemetryUrl || "";
       message.textContent = "Configurações carregadas.";
     } catch (err) {
       message.textContent = err.message;
@@ -65,6 +67,8 @@ export function bindSystemSettingsTab({ api }) {
           webhookMaxRetries: Number(byId("sysWebhookMax").value),
           eventLogRetentionDays: Number(byId("sysEventRetention").value),
           networkScanTimeoutMs: Number(byId("sysNetworkTimeout").value),
+          telemetryEnabled: !!byId("sysTelemetry")?.checked,
+          telemetryUrl: byId("sysTelemetryUrl")?.value.trim() || "",
         }),
       });
       message.textContent = "Configurações salvas. Reinicie o SoftPrint para aplicar tudo.";
