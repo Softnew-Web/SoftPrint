@@ -13,6 +13,12 @@ function Write-Utf8NoBom([string] $path, [string] $content) {
     [System.IO.File]::WriteAllText($path, $content, $utf8)
 }
 
+function Write-Utf8Bom([string] $path, [string] $content) {
+    # Inno Setup Unicode exige BOM para acentos corretos no SoftPrint.iss.
+    $utf8 = New-Object System.Text.UTF8Encoding $true
+    [System.IO.File]::WriteAllText($path, $content, $utf8)
+}
+
 function Get-CurrentVersion {
     $raw = [System.IO.File]::ReadAllText((Join-Path $root "VERSION")).Trim().TrimStart([char]0xFEFF)
     if ($raw -notmatch '^\d+\.\d+\.\d+$') {
@@ -43,12 +49,12 @@ function Set-VersionFiles([string] $version) {
     Write-Utf8NoBom $versionCs $cs2
 
     $iss = Join-Path $root "installer\SoftPrint.iss"
-    $issText = [System.IO.File]::ReadAllText($iss)
+    $issText = [System.IO.File]::ReadAllText($iss).TrimStart([char]0xFEFF)
     $iss2 = [regex]::Replace($issText, '#define AppVersion "[^"]+"', "#define AppVersion `"$version`"")
     if ($iss2 -notmatch [regex]::Escape("#define AppVersion `"$version`"")) {
         throw "Não foi possível atualizar SoftPrint.iss"
     }
-    Write-Utf8NoBom $iss $iss2
+    Write-Utf8Bom $iss $iss2
 }
 
 $next = if ($SetVersion) {
