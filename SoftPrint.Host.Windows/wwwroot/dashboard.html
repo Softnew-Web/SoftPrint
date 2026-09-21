@@ -515,10 +515,15 @@ Teste de impressão de texto.</textarea>
         ctx.strokeStyle = "#2a3644";
         ctx.lineWidth = Math.max(1, dpr);
         ctx.strokeRect(paperX, paperY, paperW, paperH);
-        ctx.setLineDash([4 * dpr, 4 * dpr]);
-        ctx.strokeStyle = "#c5d0da";
+        ctx.setLineDash([8 * dpr, 5 * dpr]);
+        ctx.strokeStyle = "#0f766e";
+        ctx.lineWidth = Math.max(2, 2.25 * dpr);
         ctx.strokeRect(area.x, area.y, area.w, area.h);
         ctx.setLineDash([]);
+        ctx.fillStyle = "#0f766e";
+        ctx.font = "600 " + Math.max(11, 11 * dpr) + "px sans-serif";
+        ctx.textAlign = "left";
+        ctx.fillText("área imprimível aproximada", area.x + 5 * dpr, area.y + 14 * dpr);
 
         ctx.fillStyle = "#6b7c8c";
         ctx.font = Math.max(12, 12 * dpr) + "px sans-serif";
