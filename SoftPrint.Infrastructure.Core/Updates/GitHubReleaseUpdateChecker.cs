@@ -121,7 +121,7 @@ public sealed class GitHubReleaseUpdateChecker : IUpdateChecker
                 ContainsMandatoryMarker(release.Name) ||
                 ContainsMandatoryMarker(release.Body));
 
-            var asset = SelectAsset(release.Assets, opts.UpdateAssetName);
+            var asset = SelectAsset(release.Assets, opts.UpdateAssetName, current);
 
             // Preferir URL da API (assets/{id}); browser_download_url falha em repos privados.
             var download = !string.IsNullOrWhiteSpace(asset?.Url)
@@ -194,13 +194,31 @@ public sealed class GitHubReleaseUpdateChecker : IUpdateChecker
             : $"SoftPrint-win-{arch}.zip";
     }
 
-    private static GitHubAsset? SelectAsset(List<GitHubAsset>? assets, string updateAssetName)
+    internal static string PreferredDeltaAssetName(string currentVersion)
+    {
+        var ver = SoftPrintVersionCompare.Normalize(currentVersion);
+        var isLegacy = (Environment.ProcessPath ?? "")
+            .Contains("Legacy", StringComparison.OrdinalIgnoreCase);
+        var arch = Environment.Is64BitProcess ? "x64" : "x86";
+        return isLegacy
+            ? $"SoftPrint-legacy-{arch}-from-{ver}.zip"
+            : $"SoftPrint-win-{arch}-from-{ver}.zip";
+    }
+
+    private static GitHubAsset? SelectAsset(List<GitHubAsset>? assets, string updateAssetName, string currentVersion)
     {
         if (assets is null || assets.Count == 0) return null;
 
         static bool HasUrl(GitHubAsset a) =>
             !string.IsNullOrWhiteSpace(a.Url) || !string.IsNullOrWhiteSpace(a.BrowserDownloadUrl);
 
+        // 1) Delta a partir da versão instalada (só o que mudou).
+        var deltaName = PreferredDeltaAssetName(currentVersion);
+        var delta = assets.FirstOrDefault(a =>
+            string.Equals(a.Name, deltaName, StringComparison.OrdinalIgnoreCase) && HasUrl(a));
+        if (delta is not null) return delta;
+
+        // 2) Zip completo da arquitetura.
         var preferredZip = PreferredZipAssetName();
         var zip = assets.FirstOrDefault(a =>
             string.Equals(a.Name, preferredZip, StringComparison.OrdinalIgnoreCase) && HasUrl(a));

@@ -134,6 +134,12 @@ jobs:
         shell: pwsh
         run: .\scripts\package-update-zips.ps1
 
+      - name: Package delta updates
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: pwsh
+        run: .\scripts\package-delta-updates.ps1 -CurrentVersion $env:SOFTPRINT_VERSION
+
       - name: Install Inno Setup
         shell: pwsh
         run: |
@@ -189,7 +195,7 @@ jobs:
           $notes = @"
           Release automático gerado no push para ``main``.
 
-          Clientes Windows preferem o zip leve da arquitetura instalada; o Setup completo continua disponível.
+          Clientes Windows preferem o zip **delta** (`*-from-<versão>.zip`) quando existir; senão o zip completo da arquitetura. O Setup completo continua disponível para instalação nova.
           "@
           if ("${{ github.event_name }}" -eq "workflow_dispatch" -and "${{ github.event.inputs.mandatory }}" -eq "true") {
             $notes = "[mandatory]`n`n" + $notes
@@ -197,13 +203,12 @@ jobs:
           }
 
           $assets = @(
-            "installer/Output/SoftPrint-Setup.exe#SoftPrint-Setup.exe",
-            "dist/SoftPrint-win-x64.zip#SoftPrint-win-x64.zip",
-            "dist/SoftPrint-win-x86.zip#SoftPrint-win-x86.zip",
-            "dist/SoftPrint-legacy-x64.zip#SoftPrint-legacy-x64.zip",
-            "dist/SoftPrint-legacy-x86.zip#SoftPrint-legacy-x86.zip",
-            "dist/softprint-linux-x64.zip#softprint-linux-x64.zip"
-          ) | Where-Object {
+            "installer/Output/SoftPrint-Setup.exe#SoftPrint-Setup.exe"
+          )
+          $assets += Get-ChildItem dist -Filter "*.zip" -File -ErrorAction SilentlyContinue |
+            ForEach-Object { "$($_.FullName)#$($_.Name)" }
+
+          $assets = $assets | Where-Object {
             $path = ($_ -split '#')[0]
             Test-Path $path
           }

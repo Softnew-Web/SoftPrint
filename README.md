@@ -140,7 +140,7 @@ API:
 
 Releases públicos não precisam de token. Para repositório privado, configure o secret `SOFTPRINT_UPDATE_TOKEN` no GitHub Actions (é injetado nos builds) ou `UPDATE_GITHUB_TOKEN` no `.env` local.
 
-Atualização no Windows: o cliente prefere o zip leve (`SoftPrint-win-*.zip` / `SoftPrint-legacy-*.zip`); se não houver zip, usa o `SoftPrint-Setup.exe`.
+Atualização no Windows: o cliente prefere o zip **delta** (`SoftPrint-win-x64-from-1.0.8.zip`, etc.) com patch binário do `.exe` + só arquivos alterados; se não houver delta para a versão instalada, usa o zip completo; por último o `SoftPrint-Setup.exe`. Pacotes de update não incluem `.pdb`/`.xml`.
 
 Assinatura Authenticode (opcional no CI): secrets `CODE_SIGNING_PFX_BASE64` e `CODE_SIGNING_PASSWORD`.
 

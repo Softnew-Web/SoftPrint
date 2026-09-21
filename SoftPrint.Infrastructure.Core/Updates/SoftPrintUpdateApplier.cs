@@ -222,21 +222,40 @@ public sealed class SoftPrintUpdateApplier : IUpdateApplier
         var preferLegacy = current.Contains("Legacy", StringComparison.OrdinalIgnoreCase);
         var fallback = File.Exists(current) ? current : modern;
         var pid = Environment.ProcessId;
+        var hpatch = Path.Combine(extractDir, "hpatchz.exe");
+        if (!File.Exists(hpatch))
+            hpatch = Path.Combine(extractDir, "hpatchz");
 
-        var lines = new[]
+        var lines = new List<string>
         {
             "@echo off",
             "setlocal",
             "timeout /t 2 /nobreak >nul",
-            $":waitpid",
+            ":waitpid",
             $"tasklist /FI \"PID eq {pid}\" 2>NUL | find \"{pid}\" >NUL",
             "if not errorlevel 1 (",
             "  timeout /t 1 /nobreak >nul",
             "  goto waitpid",
             ")",
             $"if not exist \"{installDir}\" mkdir \"{installDir}\"",
-            $"xcopy /E /Y /I /Q \"{extractDir}\\*\" \"{installDir}\\\" >nul",
+            $"set HPATCH={hpatch}",
+            // Patches binários (delta): gera o exe novo a partir do instalado + .hdiff
+            $"if exist \"%HPATCH%\" if exist \"{extractDir}\\SoftPrint.exe.hdiff\" if exist \"{modern}\" (",
+            $"  \"%HPATCH%\" \"{modern}\" \"{extractDir}\\SoftPrint.exe.hdiff\" \"{extractDir}\\SoftPrint.exe\"",
+            "  if errorlevel 1 echo SoftPrint hpatch SoftPrint.exe failed>> \"%TEMP%\\softprint-update-error.txt\"",
+            ")",
+            $"if exist \"%HPATCH%\" if exist \"{extractDir}\\SoftPrint.Legacy.exe.hdiff\" if exist \"{legacy}\" (",
+            $"  \"%HPATCH%\" \"{legacy}\" \"{extractDir}\\SoftPrint.Legacy.exe.hdiff\" \"{extractDir}\\SoftPrint.Legacy.exe\"",
+            "  if errorlevel 1 echo SoftPrint hpatch SoftPrint.Legacy.exe failed>> \"%TEMP%\\softprint-update-error.txt\"",
+            ")",
+            // Copia só o que veio no pacote (delta ou completo), ignorando ferramentas de patch.
+            $"robocopy \"{extractDir}\" \"{installDir}\" /E /IS /IT /NFL /NDL /NJH /NJS /NC /NS /NP /XF *.hdiff hpatchz.exe hpatchz softprint-delta.json >nul",
             "set ERR=%ERRORLEVEL%",
+            "if %ERR% GEQ 8 (",
+            "  echo SoftPrint robocopy exit %ERR%>> \"%TEMP%\\softprint-update-error.txt\"",
+            ") else (",
+            "  set ERR=0",
+            ")",
             "timeout /t 1 /nobreak >nul",
             preferLegacy
                 ? $"if exist \"{legacy}\" start \"\" \"{legacy}\" & goto done"
@@ -246,7 +265,6 @@ public sealed class SoftPrintUpdateApplier : IUpdateApplier
             $"if exist \"{fallback}\" start \"\" \"{fallback}\" & goto done",
             "echo SoftPrint update could not restart > \"%TEMP%\\softprint-update-error.txt\"",
             ":done",
-            "if not \"%ERR%\"==\"0\" echo SoftPrint zip update exit %ERR%>> \"%TEMP%\\softprint-update-error.txt\"",
             "endlocal"
         };
         File.WriteAllLines(scriptPath, lines);
