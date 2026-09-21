@@ -1,6 +1,6 @@
 import { createApi } from "./api.js";
 import { state, feedback } from "./state.js";
-import { renderStats, setConnection, setApiHint } from "./components/stats.js";
+import { renderStats, setConnection, setApiHint, modeLabel } from "./components/stats.js";
 import { bindPrinterTab } from "./components/printer-tab.js";
 import { bindMonitorTab } from "./components/monitor-tab.js";
 import { bindConnectTab } from "./components/connect-tab.js";
@@ -141,11 +141,10 @@ async function refreshAll() {
     const startup = document.getElementById("startup");
     if (startup) startup.checked = !!status.health?.startWithWindows;
 
-    const mode = state.applied.paused
-      ? "Pausado"
-      : state.applied.simulation
-        ? "Simulação"
-        : "Real";
+    const mode = modeLabel({
+      paused: !!state.applied.paused,
+      simulation: !!state.applied.simulation,
+    });
     renderStats({
       mode,
       queue: (metrics.pending || 0) + (metrics.processing || 0),

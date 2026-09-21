@@ -60,12 +60,21 @@
   }
 
   // SoftPrint.Host.Windows/wwwroot/js/components/stats.js
+  function modeLabel({ paused, simulation } = {}) {
+    const base = simulation ? "Simula\xE7\xE3o" : "Real";
+    return paused ? `${base} \xB7 pausa` : base;
+  }
   function renderStats({ mode, queue, done, bad, healthLine }) {
-    document.getElementById("statMode").textContent = mode;
-    document.getElementById("statQueue").textContent = queue;
-    document.getElementById("statDone").textContent = done;
-    document.getElementById("statBad").textContent = bad;
-    document.getElementById("healthLine").textContent = healthLine;
+    const modeEl = document.getElementById("statMode");
+    if (modeEl && mode != null) modeEl.textContent = mode;
+    const queueEl = document.getElementById("statQueue");
+    if (queueEl && queue != null) queueEl.textContent = queue;
+    const doneEl = document.getElementById("statDone");
+    if (doneEl && done != null) doneEl.textContent = done;
+    const badEl = document.getElementById("statBad");
+    if (badEl && bad != null) badEl.textContent = bad;
+    const healthEl = document.getElementById("healthLine");
+    if (healthEl && healthLine != null) healthEl.textContent = healthLine;
   }
   function setConnection(ok, application = "SoftPrint") {
     const el = document.getElementById("connDot");
@@ -32065,6 +32074,14 @@ fn fs_main(in : VertexOutput) -> @location(0) vec4<f32> {
     let objectUrl = null;
     let previewMargins = null;
     let marginRequest = 0;
+    const syncModeStat = () => {
+      renderStats({
+        mode: modeLabel({
+          paused: !!paused?.checked,
+          simulation: !!simulation?.checked
+        })
+      });
+    };
     const syncCustomRow = () => {
       if (!customPaperRow || !paperSize) return;
       const isCustom = paperSize.value === "custom";
@@ -32110,6 +32127,7 @@ fn fs_main(in : VertexOutput) -> @location(0) vec4<f32> {
         msg.className = "text-sm text-warn leading-relaxed";
       }
       syncCustomRow();
+      syncModeStat();
       redrawPreview();
       refreshPreviewMargins();
     };
@@ -32312,6 +32330,7 @@ Digite o n\xFAmero para instalar no Windows (ou cancele):`,
           });
           state.dirty = false;
           applySettingsToForm();
+          syncModeStat();
           feedback("Configura\xE7\xE3o salva.");
           onSaved?.();
         } catch (err) {
@@ -32410,6 +32429,7 @@ Digite o n\xFAmero para instalar no Windows (ou cancele):`,
       if (paperHeightMm) paperHeightMm.value = String(state.applied.paperHeightMm ?? 297);
       if (paperLandscape) paperLandscape.checked = !!state.applied.paperLandscape;
       syncCustomRow();
+      syncModeStat();
       refreshPreviewMargins();
       if (msg) {
         msg.textContent = `v${state.applied.revision} \xB7 ${state.applied.printerName || "Nenhuma impressora"}`;
@@ -33135,7 +33155,10 @@ Digite o n\xFAmero para instalar no Windows (ou cancele):`,
       connect.refreshInbox?.();
       const startup = document.getElementById("startup");
       if (startup) startup.checked = !!status.health?.startWithWindows;
-      const mode = state.applied.paused ? "Pausado" : state.applied.simulation ? "Simula\xE7\xE3o" : "Real";
+      const mode = modeLabel({
+        paused: !!state.applied.paused,
+        simulation: !!state.applied.simulation
+      });
       renderStats({
         mode,
         queue: (metrics.pending || 0) + (metrics.processing || 0),

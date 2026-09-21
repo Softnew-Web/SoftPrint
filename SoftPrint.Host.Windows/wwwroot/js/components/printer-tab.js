@@ -3,6 +3,7 @@ import { escapeHtml } from "../api.js";
 import { drawPaperPreview, resolvePaperMm, PAPER_PRESETS } from "../image-layout.js";
 import { buildSettingsPayload } from "../settings-payload.js";
 import { loadPdfPreview } from "../pdf-preview.js";
+import { modeLabel, renderStats } from "./stats.js";
 
 export function bindPrinterTab({ api, onSaved }) {
   const printers = document.getElementById("printers");
@@ -33,6 +34,15 @@ export function bindPrinterTab({ api, onSaved }) {
   let objectUrl = null;
   let previewMargins = null;
   let marginRequest = 0;
+
+  const syncModeStat = () => {
+    renderStats({
+      mode: modeLabel({
+        paused: !!paused?.checked,
+        simulation: !!simulation?.checked,
+      }),
+    });
+  };
 
   const syncCustomRow = () => {
     if (!customPaperRow || !paperSize) return;
@@ -84,6 +94,7 @@ export function bindPrinterTab({ api, onSaved }) {
       msg.className = "text-sm text-warn leading-relaxed";
     }
     syncCustomRow();
+    syncModeStat();
     redrawPreview();
     refreshPreviewMargins();
   };
@@ -296,6 +307,7 @@ export function bindPrinterTab({ api, onSaved }) {
         });
         state.dirty = false;
         applySettingsToForm();
+        syncModeStat();
         feedback("Configuração salva.");
         onSaved?.();
       } catch (err) {
@@ -407,6 +419,7 @@ export function bindPrinterTab({ api, onSaved }) {
     if (paperHeightMm) paperHeightMm.value = String(state.applied.paperHeightMm ?? 297);
     if (paperLandscape) paperLandscape.checked = !!state.applied.paperLandscape;
     syncCustomRow();
+    syncModeStat();
     refreshPreviewMargins();
     if (msg) {
       msg.textContent = `v${state.applied.revision} · ${

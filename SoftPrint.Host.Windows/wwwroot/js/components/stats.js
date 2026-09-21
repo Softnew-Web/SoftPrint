@@ -1,9 +1,19 @@
+export function modeLabel({ paused, simulation } = {}) {
+  const base = simulation ? "Simulação" : "Real";
+  return paused ? `${base} · pausa` : base;
+}
+
 export function renderStats({ mode, queue, done, bad, healthLine }) {
-  document.getElementById("statMode").textContent = mode;
-  document.getElementById("statQueue").textContent = queue;
-  document.getElementById("statDone").textContent = done;
-  document.getElementById("statBad").textContent = bad;
-  document.getElementById("healthLine").textContent = healthLine;
+  const modeEl = document.getElementById("statMode");
+  if (modeEl && mode != null) modeEl.textContent = mode;
+  const queueEl = document.getElementById("statQueue");
+  if (queueEl && queue != null) queueEl.textContent = queue;
+  const doneEl = document.getElementById("statDone");
+  if (doneEl && done != null) doneEl.textContent = done;
+  const badEl = document.getElementById("statBad");
+  if (badEl && bad != null) badEl.textContent = bad;
+  const healthEl = document.getElementById("healthLine");
+  if (healthEl && healthLine != null) healthEl.textContent = healthLine;
 }
 
 export function setConnection(ok, application = "SoftPrint") {
