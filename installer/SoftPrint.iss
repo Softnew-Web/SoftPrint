@@ -1,7 +1,7 @@
 ﻿#define AppName "SoftPrint"
 ; Manter alinhado a VERSION e SoftPrint.Domain/SoftPrintVersion.cs
 ; Este arquivo deve ser UTF-8 com BOM (Inno Setup Unicode).
-#define AppVersion "1.0.14"
+#define AppVersion "1.0.15"
 
 [Setup]
 AppId={{A8BC75EF-2131-48A1-BA66-1B5EB2261F11}
