@@ -50,26 +50,50 @@ export function computeDestination(pageX, pageY, pageW, pageH, imageW, imageH, f
 
 export function drawPaperPreview(canvas, image, fit, scalePercent, paper) {
   const ctx = canvas.getContext("2d");
-  const W = canvas.width;
-  const H = canvas.height;
-  ctx.clearRect(0, 0, W, H);
-
-  ctx.fillStyle = "#121a22";
-  ctx.fillRect(0, 0, W, H);
+  if (!ctx) return null;
 
   const paperWmm = paper?.w || 210;
   const paperHmm = paper?.h || 297;
-  const paperRatio = paperWmm / paperHmm;
+  const paperRatio = paperWmm / Math.max(1e-6, paperHmm);
 
-  let paperH = H * 0.92;
-  let paperW = paperH * paperRatio;
-  if (paperW > W * 0.86) {
-    paperW = W * 0.86;
-    paperH = paperW / paperRatio;
+  // Ajusta o canvas à proporção do papel, preenchendo o container (sem “folha minúscula”).
+  const parent = canvas.parentElement;
+  const maxW = Math.max(180, parent?.clientWidth || canvas.clientWidth || 520);
+  const maxH = Math.max(180, parent?.clientHeight || canvas.clientHeight || 680);
+  const dpr = Math.min(typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1, 2);
+  const padCss = 10;
+  let cssW = maxW - padCss;
+  let cssH = cssW / paperRatio;
+  if (cssH > maxH - padCss) {
+    cssH = maxH - padCss;
+    cssW = cssH * paperRatio;
+  }
+  cssW = Math.max(120, Math.floor(cssW));
+  cssH = Math.max(120, Math.floor(cssH));
+  canvas.style.width = `${cssW}px`;
+  canvas.style.height = `${cssH}px`;
+  const W = Math.round(cssW * dpr);
+  const H = Math.round(cssH * dpr);
+  if (canvas.width !== W) canvas.width = W;
+  if (canvas.height !== H) canvas.height = H;
+
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.clearRect(0, 0, W, H);
+  ctx.fillStyle = "#121a22";
+  ctx.fillRect(0, 0, W, H);
+
+  // Papel quase tela cheia (só uma margem mínima para borda/rótulo).
+  const edge = Math.max(4 * dpr, Math.min(W, H) * 0.015);
+  const labelRoom = 16 * dpr;
+  let paperW = W - edge * 2;
+  let paperH = paperW / paperRatio;
+  if (paperH > H - edge * 2 - labelRoom) {
+    paperH = H - edge * 2 - labelRoom;
+    paperW = paperH * paperRatio;
   }
   const paperX = (W - paperW) / 2;
-  const paperY = (H - paperH) / 2;
-  const fallbackMargin = Math.min(paperW, paperH) * 0.06;
+  const paperY = (H - paperH - labelRoom) / 2;
+  const fallbackMargin = Math.min(paperW, paperH) * 0.04;
   const margins = paper?.margins || {};
   const mmToX = paperW / paperWmm;
   const mmToY = paperH / paperHmm;
@@ -80,36 +104,35 @@ export function drawPaperPreview(canvas, image, fit, scalePercent, paper) {
   const area = {
     x: paperX + marginLeft,
     y: paperY + marginTop,
-    w: paperW - marginLeft - marginRight,
-    h: paperH - marginTop - marginBottom,
+    w: Math.max(1, paperW - marginLeft - marginRight),
+    h: Math.max(1, paperH - marginTop - marginBottom),
   };
 
   ctx.fillStyle = "#f4f7fa";
   ctx.strokeStyle = "#2a3644";
-  ctx.lineWidth = 1;
+  ctx.lineWidth = Math.max(1, dpr);
   ctx.fillRect(paperX, paperY, paperW, paperH);
   ctx.strokeRect(paperX, paperY, paperW, paperH);
 
   ctx.strokeStyle = "#c5d0da";
-  ctx.setLineDash([4, 4]);
+  ctx.setLineDash([4 * dpr, 4 * dpr]);
   ctx.strokeRect(area.x, area.y, area.w, area.h);
   ctx.setLineDash([]);
   ctx.fillStyle = "#6b7c8c";
-  ctx.font = "10px 'IBM Plex Sans', sans-serif";
+  ctx.font = `${Math.max(10, 10 * dpr)}px 'IBM Plex Sans', sans-serif`;
   ctx.textAlign = "left";
-  ctx.fillText("área imprimível aproximada", area.x + 4, area.y + 12);
+  ctx.fillText("área imprimível aproximada", area.x + 4 * dpr, area.y + 12 * dpr);
 
-  // Rótulo do tamanho
   ctx.fillStyle = "#6b7c8c";
-  ctx.font = "11px 'IBM Plex Sans', sans-serif";
+  ctx.font = `${Math.max(11, 11 * dpr)}px 'IBM Plex Sans', sans-serif`;
   ctx.textAlign = "center";
   const sizeLabel = `${fmtMm(paperWmm)}×${fmtMm(paperHmm)} mm`;
-  ctx.fillText(sizeLabel, W / 2, Math.min(paperY + paperH + 16, H - 6));
+  ctx.fillText(sizeLabel, W / 2, Math.min(paperY + paperH + 14 * dpr, H - 4 * dpr));
 
   if (!image) {
     ctx.fillStyle = "#6b7c8c";
-    ctx.font = "13px 'IBM Plex Sans', sans-serif";
-    ctx.fillText("Escolha uma imagem para pré-visualizar", W / 2, H / 2);
+    ctx.font = `${Math.max(13, 13 * dpr)}px 'IBM Plex Sans', sans-serif`;
+    ctx.fillText("Escolha uma imagem para pré-visualizar", W / 2, paperY + paperH / 2);
     return { paperW, paperH, area, paperWmm, paperHmm };
   }
 
@@ -127,17 +150,17 @@ export function drawPaperPreview(canvas, image, fit, scalePercent, paper) {
     ctx.fillStyle = "rgba(220, 38, 38, 0.12)";
     ctx.fillRect(area.x, area.y, area.w, area.h);
     ctx.strokeStyle = "#dc2626";
-    ctx.setLineDash([6, 4]);
+    ctx.setLineDash([6 * dpr, 4 * dpr]);
     ctx.strokeRect(area.x, area.y, area.w, area.h);
     ctx.setLineDash([]);
     ctx.fillStyle = "#b91c1c";
     ctx.textAlign = "center";
-    ctx.font = "bold 11px 'IBM Plex Sans', sans-serif";
-    ctx.fillText("partes fora da linha serão cortadas", area.x + area.w / 2, area.y + area.h - 8);
+    ctx.font = `bold ${Math.max(11, 11 * dpr)}px 'IBM Plex Sans', sans-serif`;
+    ctx.fillText("partes fora da linha serão cortadas", area.x + area.w / 2, area.y + area.h - 8 * dpr);
   }
 
   ctx.strokeStyle = "#0d9488";
-  ctx.lineWidth = 1.5;
+  ctx.lineWidth = Math.max(1.5, 1.5 * dpr);
   ctx.strokeRect(
     Math.max(dest.x, area.x),
     Math.max(dest.y, area.y),

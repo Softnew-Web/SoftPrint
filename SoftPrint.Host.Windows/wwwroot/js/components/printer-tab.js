@@ -424,6 +424,10 @@ export function bindPrinterTab({ api, onSaved }) {
 
   syncCustomRow();
   redrawPreview();
+  window.addEventListener("resize", () => {
+    clearTimeout(window.__softprintPreviewResize);
+    window.__softprintPreviewResize = setTimeout(() => redrawPreview(), 80);
+  });
 
   return { loadPrinters, applySettingsToForm, redrawPreview };
 }

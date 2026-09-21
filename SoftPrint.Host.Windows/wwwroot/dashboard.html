@@ -237,8 +237,8 @@
                 </select>
               </label>
             </div>
-            <div class="flex-1 min-h-[280px] rounded-xl border border-ink-line bg-ink overflow-hidden flex items-center justify-center p-2">
-              <canvas id="printPreview" width="520" height="680" class="block max-h-full max-w-full bg-[#121a22]"></canvas>
+            <div class="flex-1 min-h-[280px] rounded-xl border border-ink-line bg-ink overflow-hidden flex items-center justify-center p-1">
+              <canvas id="printPreview" width="640" height="560" class="block max-h-full max-w-full bg-[#121a22]"></canvas>
             </div>
             <p id="previewMeta" class="text-[11px] text-mist shrink-0 truncate">Sem imagem — o dimensionamento vale para jobs de imagem.</p>
           </div>
@@ -480,38 +480,56 @@ Teste de impressão de texto.</textarea>
           if (meta) meta.textContent = "Canvas sem contexto 2D.";
           return;
         }
-        var W = canvas.width, H = canvas.height;
+
+        var paper = paperMm();
+        var ratio = paper.w / Math.max(0.001, paper.h);
+        var parent = canvas.parentElement;
+        var maxW = Math.max(180, (parent && parent.clientWidth) || 520);
+        var maxH = Math.max(180, (parent && parent.clientHeight) || 680);
+        var dpr = Math.min(window.devicePixelRatio || 1, 2);
+        var cssW = maxW - 10;
+        var cssH = cssW / ratio;
+        if (cssH > maxH - 10) { cssH = maxH - 10; cssW = cssH * ratio; }
+        cssW = Math.max(120, Math.floor(cssW));
+        cssH = Math.max(120, Math.floor(cssH));
+        canvas.style.width = cssW + "px";
+        canvas.style.height = cssH + "px";
+        var W = Math.round(cssW * dpr), H = Math.round(cssH * dpr);
+        if (canvas.width !== W) canvas.width = W;
+        if (canvas.height !== H) canvas.height = H;
+
         ctx.clearRect(0, 0, W, H);
         ctx.fillStyle = "#121a22";
         ctx.fillRect(0, 0, W, H);
 
-        var paper = paperMm();
-        var ratio = paper.w / paper.h;
-        var paperH = H * 0.92, paperW = paperH * ratio;
-        if (paperW > W * 0.86) { paperW = W * 0.86; paperH = paperW / ratio; }
-        var paperX = (W - paperW) / 2, paperY = (H - paperH) / 2;
-        var margin = Math.min(paperW, paperH) * 0.06;
+        var edge = Math.max(4 * dpr, Math.min(W, H) * 0.015);
+        var labelRoom = 16 * dpr;
+        var paperW = W - edge * 2, paperH = paperW / ratio;
+        if (paperH > H - edge * 2 - labelRoom) { paperH = H - edge * 2 - labelRoom; paperW = paperH * ratio; }
+        var paperX = (W - paperW) / 2, paperY = (H - paperH - labelRoom) / 2;
+        var margin = Math.min(paperW, paperH) * 0.04;
         var area = { x: paperX + margin, y: paperY + margin, w: paperW - margin * 2, h: paperH - margin * 2 };
 
         ctx.fillStyle = "#f4f7fa";
         ctx.fillRect(paperX, paperY, paperW, paperH);
         ctx.strokeStyle = "#2a3644";
+        ctx.lineWidth = Math.max(1, dpr);
         ctx.strokeRect(paperX, paperY, paperW, paperH);
-        ctx.setLineDash([4, 4]);
+        ctx.setLineDash([4 * dpr, 4 * dpr]);
         ctx.strokeStyle = "#c5d0da";
         ctx.strokeRect(area.x, area.y, area.w, area.h);
         ctx.setLineDash([]);
 
         ctx.fillStyle = "#6b7c8c";
-        ctx.font = "12px sans-serif";
+        ctx.font = Math.max(12, 12 * dpr) + "px sans-serif";
         ctx.textAlign = "center";
-        ctx.fillText(paper.w + "×" + paper.h + " mm", W / 2, Math.min(paperY + paperH + 16, H - 6));
+        ctx.fillText(paper.w + "×" + paper.h + " mm", W / 2, Math.min(paperY + paperH + 14 * dpr, H - 4 * dpr));
 
         var fit = (document.getElementById("imageFit") || {}).value || "contain";
         var scale = Number((document.getElementById("imageScale") || {}).value) || 100;
 
         if (!previewImage) {
-          ctx.fillText("Escolha uma imagem para pré-visualizar", W / 2, H / 2);
+          ctx.fillText("Escolha uma imagem para pré-visualizar", W / 2, paperY + paperH / 2);
           if (meta) meta.textContent = "Sem imagem — clique em Escolher imagem.";
           return;
         }
@@ -524,6 +542,7 @@ Teste de impressão de texto.</textarea>
         ctx.drawImage(previewImage, d.x, d.y, d.w, d.h);
         ctx.restore();
         ctx.strokeStyle = "#0d9488";
+        ctx.lineWidth = Math.max(1.5, 1.5 * dpr);
         ctx.strokeRect(Math.max(d.x, area.x), Math.max(d.y, area.y), Math.min(d.w, area.w), Math.min(d.h, area.h));
         if (meta) {
           meta.textContent = paper.w + "×" + paper.h + " mm · " +
