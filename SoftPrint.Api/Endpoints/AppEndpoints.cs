@@ -154,6 +154,15 @@ public static class SettingsEndpoints
             };
             return metrics.Read(printerName ?? current.PrinterName, options);
         });
+        app.MapGet("/api/printers/default-paper", (
+            string? printerName, SettingsService settings, IPrinterPageMetrics metrics) =>
+        {
+            var name = string.IsNullOrWhiteSpace(printerName) ? settings.Current.PrinterName : printerName;
+            var paper = metrics.ReadDefaultPaper(name ?? "");
+            return paper is null
+                ? Results.NotFound(new { error = "Não foi possível ler o papel padrão desta impressora." })
+                : Results.Ok(paper);
+        });
         app.MapPost("/api/printers/discover", async (INetworkPrinterDiscovery discovery, CancellationToken ct) =>
             await discovery.DiscoverAsync(ct));
         app.MapPost("/api/printers/install-network", async (

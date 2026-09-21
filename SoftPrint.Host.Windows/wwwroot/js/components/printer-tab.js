@@ -45,6 +45,38 @@ export function bindPrinterTab({ api, onSaved }) {
     }
   };
 
+  const applyDefaultPaper = (paper) => {
+    if (!paper) return false;
+    const kind = paper.suggestedKind || "custom";
+    const resolved = PAPER_PRESETS[kind] ? kind : "custom";
+    if (paperSize) paperSize.value = resolved;
+    if (paperWidthMm) paperWidthMm.value = String(paper.widthMm ?? PAPER_PRESETS[resolved]?.w ?? 210);
+    if (paperHeightMm) paperHeightMm.value = String(paper.heightMm ?? PAPER_PRESETS[resolved]?.h ?? 297);
+    if (paperLandscape) paperLandscape.checked = !!paper.landscape;
+    syncCustomRow();
+    return true;
+  };
+
+  const loadDefaultPaper = async (apiFn, { silent = false } = {}) => {
+    const name = printers?.value || "";
+    if (!name) {
+      if (!silent) feedback("Selecione uma impressora primeiro.", true);
+      return false;
+    }
+    try {
+      const paper = await apiFn(`/api/printers/default-paper?printerName=${encodeURIComponent(name)}`);
+      if (!applyDefaultPaper(paper)) return false;
+      const label = paper.paperName
+        ? `${paper.paperName} (${paper.widthMm}×${paper.heightMm} mm)`
+        : `${paper.widthMm}×${paper.heightMm} mm`;
+      if (!silent) feedback(`Papel da impressora: ${label}`);
+      return true;
+    } catch (err) {
+      if (!silent) feedback(err.message || "Não foi possível ler o papel padrão.", true);
+      return false;
+    }
+  };
+
   const markDirty = () => {
     state.dirty = true;
     if (msg) {
@@ -56,13 +88,24 @@ export function bindPrinterTab({ api, onSaved }) {
     refreshPreviewMargins();
   };
 
-  ["simulation", "paused", "printers", "imageFit", "paperSize", "paperLandscape"].forEach((id) => {
+  ["simulation", "paused", "imageFit", "paperSize", "paperLandscape"].forEach((id) => {
     const el = document.getElementById(id);
     if (el) el.addEventListener("change", markDirty);
   });
+  if (printers) {
+    printers.addEventListener("change", async () => {
+      markDirty();
+      await loadDefaultPaper(api, { silent: true });
+      markDirty();
+    });
+  }
   ["paperWidthMm", "paperHeightMm"].forEach((id) => {
     const el = document.getElementById(id);
     if (el) el.addEventListener("input", markDirty);
+  });
+
+  document.getElementById("btnPrinterPaper")?.addEventListener("click", async () => {
+    if (await loadDefaultPaper(api)) markDirty();
   });
 
   if (imageScale) {

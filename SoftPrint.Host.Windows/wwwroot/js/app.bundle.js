@@ -95,7 +95,9 @@
     a5: { w: 148, h: 210, label: "A5" },
     letter: { w: 215.9, h: 279.4, label: "Letter" },
     legal: { w: 215.9, h: 355.6, label: "Legal" },
-    photo4x6: { w: 101.6, h: 152.4, label: "Foto 10\xD715" }
+    photo4x6: { w: 101.6, h: 152.4, label: "Foto 10\xD715" },
+    receipt58: { w: 58, h: 200, label: "Cupom 58 mm" },
+    receipt80: { w: 80, h: 297, label: "Cupom 80 mm" }
   };
   function resolvePaperMm(kind, widthMm, heightMm, landscape) {
     let w;
@@ -32051,6 +32053,34 @@ fn fs_main(in : VertexOutput) -> @location(0) vec4<f32> {
         paperHeightMm.value = String(preset.h);
       }
     };
+    const applyDefaultPaper = (paper) => {
+      if (!paper) return false;
+      const kind = paper.suggestedKind || "custom";
+      const resolved = PAPER_PRESETS[kind] ? kind : "custom";
+      if (paperSize) paperSize.value = resolved;
+      if (paperWidthMm) paperWidthMm.value = String(paper.widthMm ?? PAPER_PRESETS[resolved]?.w ?? 210);
+      if (paperHeightMm) paperHeightMm.value = String(paper.heightMm ?? PAPER_PRESETS[resolved]?.h ?? 297);
+      if (paperLandscape) paperLandscape.checked = !!paper.landscape;
+      syncCustomRow();
+      return true;
+    };
+    const loadDefaultPaper = async (apiFn, { silent = false } = {}) => {
+      const name = printers?.value || "";
+      if (!name) {
+        if (!silent) feedback("Selecione uma impressora primeiro.", true);
+        return false;
+      }
+      try {
+        const paper = await apiFn(`/api/printers/default-paper?printerName=${encodeURIComponent(name)}`);
+        if (!applyDefaultPaper(paper)) return false;
+        const label = paper.paperName ? `${paper.paperName} (${paper.widthMm}\xD7${paper.heightMm} mm)` : `${paper.widthMm}\xD7${paper.heightMm} mm`;
+        if (!silent) feedback(`Papel da impressora: ${label}`);
+        return true;
+      } catch (err) {
+        if (!silent) feedback(err.message || "N\xE3o foi poss\xEDvel ler o papel padr\xE3o.", true);
+        return false;
+      }
+    };
     const markDirty = () => {
       state.dirty = true;
       if (msg) {
@@ -32061,13 +32091,23 @@ fn fs_main(in : VertexOutput) -> @location(0) vec4<f32> {
       redrawPreview();
       refreshPreviewMargins();
     };
-    ["simulation", "paused", "printers", "imageFit", "paperSize", "paperLandscape"].forEach((id) => {
+    ["simulation", "paused", "imageFit", "paperSize", "paperLandscape"].forEach((id) => {
       const el = document.getElementById(id);
       if (el) el.addEventListener("change", markDirty);
     });
+    if (printers) {
+      printers.addEventListener("change", async () => {
+        markDirty();
+        await loadDefaultPaper(api2, { silent: true });
+        markDirty();
+      });
+    }
     ["paperWidthMm", "paperHeightMm"].forEach((id) => {
       const el = document.getElementById(id);
       if (el) el.addEventListener("input", markDirty);
+    });
+    document.getElementById("btnPrinterPaper")?.addEventListener("click", async () => {
+      if (await loadDefaultPaper(api2)) markDirty();
     });
     if (imageScale) {
       imageScale.addEventListener("input", () => {

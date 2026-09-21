@@ -165,13 +165,21 @@
                       <option value="letter">Letter</option>
                       <option value="legal">Legal</option>
                       <option value="photo4x6">Foto 10×15</option>
+                      <option value="receipt58">Cupom 58 mm</option>
+                      <option value="receipt80">Cupom 80 mm</option>
                       <option value="custom">Personalizado</option>
                     </select>
                   </label>
-                  <label class="inline-flex items-center gap-1.5 text-sm pb-1.5 whitespace-nowrap">
-                    <input id="paperLandscape" type="checkbox" class="accent-sea" />
-                    Paisagem
-                  </label>
+                  <div class="flex flex-col gap-1.5 pb-1.5 items-end">
+                    <label class="inline-flex items-center gap-1.5 text-sm whitespace-nowrap">
+                      <input id="paperLandscape" type="checkbox" class="accent-sea" />
+                      Paisagem
+                    </label>
+                    <button id="btnPrinterPaper" type="button" title="Ler largura/altura padrão do driver da impressora"
+                            class="text-[11px] text-sea-glow hover:text-sea underline-offset-2 hover:underline whitespace-nowrap">
+                      Usar padrão da impressora
+                    </button>
+                  </div>
                 </div>
                 <div id="customPaperRow" class="grid grid-cols-2 gap-2 hidden">
                   <label class="block text-sm">

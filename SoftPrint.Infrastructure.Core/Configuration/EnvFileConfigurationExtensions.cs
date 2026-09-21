@@ -39,6 +39,7 @@ public static class EnvFileConfigurationExtensions
         ["UPDATE_CACHE_MINUTES"] = "SoftPrint:UpdateCacheMinutes",
         ["UPDATE_ASSET_NAME"] = "SoftPrint:UpdateAssetName",
         ["UPDATE_ALWAYS_MANDATORY"] = "SoftPrint:UpdateAlwaysMandatory",
+        ["AUTO_UPDATE_ON_STARTUP"] = "SoftPrint:AutoUpdateOnStartup",
         ["TELEMETRY_ENABLED"] = "SoftPrint:TelemetryEnabled",
         ["TELEMETRY_URL"] = "SoftPrint:TelemetryUrl",
         ["STATUS_PENDING_WIRE"] = "SoftPrint:Statuses:Pending:Wire",

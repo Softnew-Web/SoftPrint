@@ -200,6 +200,42 @@ public sealed class WindowsPrinterPageMetrics : IPrinterPageMetrics
             HiToMm(bounds.Width - printable.Right), HiToMm(bounds.Height - printable.Bottom));
     }
 
+    public PrinterDefaultPaperInfo? ReadDefaultPaper(string printerName)
+    {
+        if (string.IsNullOrWhiteSpace(printerName))
+            return null;
+
+        try
+        {
+            using var document = new PrintDocument();
+            document.PrinterSettings.PrinterName = printerName;
+            if (!document.PrinterSettings.IsValid)
+                return null;
+
+            // Sem PrintPageSetup.Apply — lemos o que o driver/Windows tem como padrão.
+            var page = document.DefaultPageSettings;
+            var paper = page.PaperSize;
+            var widthMm = HiToMm(paper.Width);
+            var heightMm = HiToMm(paper.Height);
+            if (widthMm < 10 || heightMm < 10)
+                return null;
+
+            var kind = PaperSizeCatalog.MatchFromMillimeters(widthMm, heightMm);
+            var (presetW, presetH) = PaperSizeCatalog.GetMillimeters(kind, widthMm, heightMm);
+            return new PrinterDefaultPaperInfo(
+                "driver",
+                kind == PaperSizeKind.Custom ? widthMm : presetW,
+                kind == PaperSizeKind.Custom ? heightMm : presetH,
+                page.Landscape,
+                string.IsNullOrWhiteSpace(paper.PaperName) ? null : paper.PaperName.Trim(),
+                kind.ToWire());
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
     private static PrinterPageMetricsInfo Fallback(PrintOptions settings)
     {
         var (width, height) = settings.EffectivePaperMm();

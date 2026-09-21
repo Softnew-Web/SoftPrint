@@ -100,8 +100,8 @@ public sealed class WindowsNetworkPrinterInstaller : INetworkPrinterInstaller
         await process.StandardInput.WriteAsync(script.AsMemory(), cancellationToken).ConfigureAwait(false);
         process.StandardInput.Close();
 
-        var stdoutTask = process.StandardOutput.ReadToEndAsync(cancellationToken);
-        var stderrTask = process.StandardError.ReadToEndAsync(cancellationToken);
+        var stdoutTask = process.StandardOutput.ReadToEndAsync();
+        var stderrTask = process.StandardError.ReadToEndAsync();
         await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
         return (process.ExitCode, await stdoutTask.ConfigureAwait(false), await stderrTask.ConfigureAwait(false));
     }

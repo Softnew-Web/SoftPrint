@@ -30,6 +30,23 @@ public sealed class DomainTests
         Assert.Equal(210, height);
     }
 
+    [Theory]
+    [InlineData(58, 200, PaperSizeKind.Receipt58)]
+    [InlineData(80, 297, PaperSizeKind.Receipt80)]
+    [InlineData(58.5, 400, PaperSizeKind.Receipt58)]
+    [InlineData(100, 150, PaperSizeKind.Photo4x6)]
+    [InlineData(90, 140, PaperSizeKind.Custom)]
+    public void PaperSize_MatchFromMillimeters(double w, double h, PaperSizeKind expected) =>
+        Assert.Equal(expected, PaperSizeCatalog.MatchFromMillimeters(w, h));
+
+    [Fact]
+    public void PaperSize_ReceiptPresetsHaveExpectedMm()
+    {
+        Assert.Equal((58, 200), PaperSizeCatalog.GetMillimeters(PaperSizeKind.Receipt58));
+        Assert.Equal((80, 297), PaperSizeCatalog.GetMillimeters(PaperSizeKind.Receipt80));
+        Assert.Equal(PaperSizeKind.Receipt80, PaperSizeCatalog.FromWire("cupom80"));
+    }
+
     [Fact]
     public void PrintOptions_ClampsCustomDimensionsAndScale()
     {

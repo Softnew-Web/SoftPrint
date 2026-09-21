@@ -2,14 +2,14 @@ using SoftPrint.Domain;
 
 namespace SoftPrint.UI;
 
-/// <summary>Tela de abertura com barra de progresso (efeito visual ~15s).</summary>
+/// <summary>Tela de abertura com barra de progresso (mínimo ~15s; pode alongar se houver atualização).</summary>
 public sealed class SplashForm : Form
 {
     private static readonly (int UntilPercent, string Message)[] Stages =
     {
         (8, "Preparando SoftPrint…"),
-        (22, "Baixando componentes…"),
-        (38, "Baixando interface do painel…"),
+        (22, "Verificando atualizações…"),
+        (38, "Baixando componentes…"),
         (55, "Baixando módulos de impressão…"),
         (72, "Verificando arquivos locais…"),
         (88, "Carregando painel…"),
@@ -24,6 +24,9 @@ public sealed class SplashForm : Form
     private DateTime _startedUtc;
     private readonly int _durationMs;
     private bool _started;
+    private string? _liveStatus;
+    private string? _liveDetail;
+    private int? _livePercent;
 
     public bool IsFinished { get; private set; }
 
@@ -86,7 +89,7 @@ public sealed class SplashForm : Form
             TextAlign = ContentAlignment.TopCenter,
             ForeColor = Color.FromArgb(154, 171, 188),
             Font = new Font("Segoe UI", 9f, FontStyle.Regular, GraphicsUnit.Point),
-            Text = "Preparando download dos arquivos…"
+            Text = "Preparando…"
         };
 
         _percent = new Label
@@ -144,30 +147,74 @@ public sealed class SplashForm : Form
 
     public void StartProgress()
     {
-        if (_started || IsFinished || IsDisposed) return;
+        if (_started || IsDisposed) return;
         _started = true;
         _startedUtc = DateTime.UtcNow;
+        IsFinished = false;
         _bar.Value = 0;
         _percent.Text = "0%";
         if (!_timer.Enabled)
             _timer.Start();
     }
 
-    public void SetStatus(string message)
+    /// <summary>
+    /// Progresso real (atualização). Antes dos 15s mínimos só o texto muda;
+    /// depois a barra acompanha o download.
+    /// </summary>
+    public void SetLiveProgress(int? percent, string? status, string? detail = null)
     {
-        // Durante a animação fake, a barra controla o texto principal.
-        if (_timer.Enabled) return;
-        SetLabel(_status, message);
+        void Apply()
+        {
+            if (IsDisposed) return;
+            if (status is not null) _liveStatus = status;
+            if (detail is not null) _liveDetail = detail;
+            if (percent is int p)
+                _livePercent = Math.Clamp(p, 0, 100);
+
+            if (_liveStatus is not null) _status.Text = _liveStatus;
+            if (_liveDetail is not null) _detail.Text = _liveDetail;
+
+            if (IsFinished && _livePercent is int live)
+                ApplyBar(Math.Max(_bar.Value, live));
+
+            if (!_timer.Enabled && !IsDisposed)
+                _timer.Start();
+        }
+
+        if (IsDisposed) return;
+        if (InvokeRequired)
+        {
+            try { BeginInvoke(Apply); }
+            catch (InvalidOperationException) { Apply(); }
+        }
+        else Apply();
     }
 
-    public void WaitUntilFinished()
+    public void WaitUntilFinished() => WaitUntilReady(() => false);
+
+    /// <summary>
+    /// Espera o tempo mínimo (~15s) e permanece aberto enquanto
+    /// <paramref name="keepWaiting"/> for true (ex.: baixando atualização).
+    /// </summary>
+    public void WaitUntilReady(Func<bool> keepWaiting, Action? onTick = null)
     {
-        if (IsFinished || IsDisposed) return;
+        if (IsDisposed) return;
         StartProgress();
 
-        while (!IsFinished && !IsDisposed)
+        while (!IsDisposed)
         {
+            try { onTick?.Invoke(); }
+            catch { /* ignore UI tick errors */ }
+
             System.Windows.Forms.Application.DoEvents();
+
+            var busy = false;
+            try { busy = keepWaiting(); }
+            catch { busy = false; }
+
+            if (IsFinished && !busy)
+                break;
+
             Thread.Sleep(20);
         }
     }
@@ -197,62 +244,68 @@ public sealed class SplashForm : Form
     private void TickProgress()
     {
         if (IsDisposed) return;
-        var elapsed = (DateTime.UtcNow - _startedUtc).TotalMilliseconds;
-        // Progresso linear: exatamente ~durationMs de tela visível.
-        var raw = Math.Clamp(elapsed / _durationMs, 0, 1);
-        var value = (int)Math.Round(raw * 100);
-        if (value < _bar.Value) value = _bar.Value;
-        _bar.Value = Math.Min(100, value);
-        _percent.Text = $"{_bar.Value}%";
 
-        foreach (var (until, message) in Stages)
+        if (!IsFinished)
         {
-            if (_bar.Value <= until)
+            var elapsed = (DateTime.UtcNow - _startedUtc).TotalMilliseconds;
+            var raw = Math.Clamp(elapsed / _durationMs, 0, 1);
+            var value = (int)Math.Round(raw * 100);
+            ApplyBar(Math.Max(_bar.Value, value));
+
+            _status.Text = _liveStatus ?? StageMessage(_bar.Value);
+            _detail.Text = _liveDetail ?? DetailMessage(_bar.Value);
+
+            if (raw >= 1)
             {
-                _status.Text = message;
-                break;
+                IsFinished = true;
+                if (_livePercent is null && _liveStatus is null)
+                {
+                    ApplyBar(100);
+                    _status.Text = "Pronto!";
+                    _detail.Text = "Abrindo o painel…";
+                    _timer.Stop();
+                }
             }
-        }
-
-        _detail.Text = _bar.Value switch
-        {
-            < 15 => "Conectando…",
-            < 35 => "Recebendo pacote 1 de 4…",
-            < 55 => "Recebendo pacote 2 de 4…",
-            < 75 => "Recebendo pacote 3 de 4…",
-            < 95 => "Recebendo pacote 4 de 4…",
-            _ => "Finalizando…"
-        };
-
-        if (raw >= 1)
-        {
-            _bar.Value = 100;
-            _percent.Text = "100%";
-            _status.Text = "Pronto!";
-            _detail.Text = "Abrindo o painel…";
-            _timer.Stop();
-            IsFinished = true;
-        }
-    }
-
-    private void SetLabel(Label label, string message)
-    {
-        if (IsDisposed || !label.IsHandleCreated)
-        {
-            label.Text = message;
             return;
         }
 
-        try
+        // Depois dos 15s: só acompanha atualização em curso.
+        if (_livePercent is int live)
         {
-            BeginInvoke(() =>
-            {
-                if (!IsDisposed) label.Text = message;
-            });
+            ApplyBar(Math.Max(_bar.Value, live));
+            if (_liveStatus is not null) _status.Text = _liveStatus;
+            if (_liveDetail is not null) _detail.Text = _liveDetail;
         }
-        catch (InvalidOperationException)
+        else
         {
-            label.Text = message;
+            _timer.Stop();
         }
     }
+
+    private void ApplyBar(int value)
+    {
+        value = Math.Clamp(value, 0, 100);
+        _bar.Value = value;
+        _percent.Text = $"{value}%";
+    }
+
+    private static string StageMessage(int percent)
+    {
+        foreach (var (until, message) in Stages)
+        {
+            if (percent <= until)
+                return message;
+        }
+        return "Quase pronto…";
+    }
+
+    private static string DetailMessage(int percent) => percent switch
+    {
+        < 15 => "Conectando…",
+        < 35 => "Consultando versões…",
+        < 55 => "Recebendo pacote…",
+        < 75 => "Validando arquivos…",
+        < 95 => "Quase lá…",
+        _ => "Finalizando…"
+    };
 }

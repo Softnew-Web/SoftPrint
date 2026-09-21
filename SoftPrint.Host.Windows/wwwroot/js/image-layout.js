@@ -6,6 +6,8 @@ export const PAPER_PRESETS = {
   letter: { w: 215.9, h: 279.4, label: "Letter" },
   legal: { w: 215.9, h: 355.6, label: "Legal" },
   photo4x6: { w: 101.6, h: 152.4, label: "Foto 10×15" },
+  receipt58: { w: 58, h: 200, label: "Cupom 58 mm" },
+  receipt80: { w: 80, h: 297, label: "Cupom 80 mm" },
 };
 
 export function resolvePaperMm(kind, widthMm, heightMm, landscape) {

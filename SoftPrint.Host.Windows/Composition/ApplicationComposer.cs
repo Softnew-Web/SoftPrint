@@ -79,12 +79,52 @@ public static class ApplicationComposer
                 System.Windows.Forms.Application.SetCompatibleTextRenderingDefault(false);
 
                 SoftPrint.UI.SplashForm? splash = null;
+                IUpdateApplier? updateApplier = null;
+                var autoUpdate = features.AutoUpdateOnStartup && features.UpdateCheckEnabled;
+                Task? startupUpdateTask = null;
+
                 if (!startInTray)
                 {
                     splash = new SoftPrint.UI.SplashForm(durationMs: 15_000);
                     splash.Show();
                     splash.StartProgress();
                     System.Windows.Forms.Application.DoEvents();
+
+                    if (autoUpdate)
+                    {
+                        var checker = app.Services.GetRequiredService<IUpdateChecker>();
+                        updateApplier = app.Services.GetRequiredService<IUpdateApplier>();
+                        var applier = updateApplier;
+                        startupUpdateTask = Task.Run(async () =>
+                        {
+                            try
+                            {
+                                checker.InvalidateCache();
+                                splash.SetLiveProgress(null, "Verificando atualizações…", "Consultando GitHub…");
+                                var check = await checker.CheckAsync().ConfigureAwait(false);
+                                if (!check.UpdateAvailable || string.IsNullOrWhiteSpace(check.DownloadUrl))
+                                {
+                                    splash.SetLiveProgress(null, "SoftPrint em dia", "Nenhuma atualização nova.");
+                                    return;
+                                }
+
+                                splash.SetLiveProgress(
+                                    5,
+                                    $"Atualização {check.LatestVersion} encontrada",
+                                    "Iniciando download…");
+                                if (!applier.TryStart(out var err) && !string.IsNullOrWhiteSpace(err))
+                                {
+                                    // Já em andamento (ex.: hosted service) — só acompanhar.
+                                    if (!err.Contains("andamento", StringComparison.OrdinalIgnoreCase))
+                                        splash.SetLiveProgress(null, "Atualização adiada", err);
+                                }
+                            }
+                            catch (Exception ex)
+                            {
+                                splash.SetLiveProgress(null, "Sem atualização automática", ex.Message);
+                            }
+                        });
+                    }
                 }
 
                 using var notify = new NotifyIcon
@@ -118,18 +158,54 @@ public static class ApplicationComposer
                     app.Lifetime.StopApplication();
                 };
 
-                // Garante ~15s de splash com barra (o relógio só começa no StartProgress).
+                // Mínimo ~15s de splash; alonga se ainda estiver baixando atualização.
+                var skipDashboard = false;
                 if (splash is not null)
                 {
                     panel.Opacity = 0;
                     panel.ShowInTaskbar = false;
-                    splash.WaitUntilFinished();
+                    splash.WaitUntilReady(
+                        keepWaiting: () =>
+                        {
+                            if (startupUpdateTask is { IsCompleted: false })
+                                return true;
+                            var status = updateApplier?.Status;
+                            if (status is null) return false;
+                            if (status.Restarting) return true;
+                            return status.InProgress;
+                        },
+                        onTick: () =>
+                        {
+                            var status = updateApplier?.Status;
+                            if (status is null || (!status.InProgress && !status.Restarting && !status.Failed))
+                                return;
+                            if (status.Failed)
+                            {
+                                splash.SetLiveProgress(
+                                    status.Percent,
+                                    "Falha na atualização",
+                                    status.Error ?? status.Message);
+                                return;
+                            }
+                            splash.SetLiveProgress(
+                                status.Percent,
+                                status.Restarting ? "Reiniciando SoftPrint…" : "Atualizando SoftPrint…",
+                                status.Message);
+                        });
+
+                    skipDashboard = updateApplier?.Status.Restarting == true
+                        || updateApplier?.Status.InProgress == true;
+
                     splash.CloseSafe();
                     splash.Dispose();
                     splash = null;
-                    panel.ShowInTaskbar = true;
-                    panel.WindowState = FormWindowState.Maximized;
-                    panel.Opacity = 1;
+
+                    if (!skipDashboard)
+                    {
+                        panel.ShowInTaskbar = true;
+                        panel.WindowState = FormWindowState.Maximized;
+                        panel.Opacity = 1;
+                    }
                 }
                 else
                 {
@@ -165,6 +241,22 @@ public static class ApplicationComposer
                         panel.Opacity = 1;
                     };
                 }
+
+                if (skipDashboard)
+                {
+                    // Atualização vai reiniciar o processo — não abre o painel.
+                    while (updateApplier is { Status: { Restarting: true } } ||
+                           updateApplier is { Status: { InProgress: true } })
+                    {
+                        System.Windows.Forms.Application.DoEvents();
+                        Thread.Sleep(50);
+                        if (app.Lifetime.ApplicationStopping.IsCancellationRequested)
+                            break;
+                    }
+                    wait?.Unregister(null);
+                    return;
+                }
+
                 try
                 {
                     System.Windows.Forms.Application.Run(panel);
