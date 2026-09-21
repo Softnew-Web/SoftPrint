@@ -80,9 +80,8 @@ public static class ApplicationComposer
                 SoftPrint.UI.SplashForm? splash = null;
                 if (!startInTray)
                 {
-                    splash = new SoftPrint.UI.SplashForm();
+                    splash = new SoftPrint.UI.SplashForm(durationMs: 15_000);
                     splash.Show();
-                    splash.SetStatus("Iniciando painel…");
                     System.Windows.Forms.Application.DoEvents();
                 }
 
@@ -94,7 +93,6 @@ public static class ApplicationComposer
                     BalloonTipTitle = "SoftPrint"
                 };
                 tray.Attach(notify);
-                splash?.SetStatus("Carregando interface…");
                 using var panel = new Dashboard(address, apiKey, features, notify);
                 using var menu = new ContextMenuStrip();
                 menu.Items.Add("Abrir painel", null, (_, _) => panel.ShowFromTray());
@@ -117,15 +115,20 @@ public static class ApplicationComposer
                     notify.Visible = false;
                     app.Lifetime.StopApplication();
                 };
-                panel.Shown += (_, _) =>
+
+                // Mantém o splash na frente ~15s (barra fake de “download”) antes de revelar o painel.
+                if (splash is not null)
                 {
-                    splash?.SetStatus("Quase pronto…");
-                    // Fecha o splash logo após o painel aparecer.
-                    var s = splash;
+                    panel.Opacity = 0;
+                    panel.ShowInTaskbar = false;
+                    splash.WaitUntilFinished();
+                    splash.CloseSafe();
+                    splash.Dispose();
                     splash = null;
-                    s?.CloseSafe();
-                    s?.Dispose();
-                };
+                    panel.ShowInTaskbar = true;
+                    panel.Opacity = 1;
+                }
+
                 using var registration = app.Lifetime.ApplicationStopping.Register(() =>
                 {
                     splash?.CloseSafe();
