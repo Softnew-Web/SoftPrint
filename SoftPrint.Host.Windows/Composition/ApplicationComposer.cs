@@ -88,6 +88,7 @@ public static class ApplicationComposer
                     splash = new SoftPrint.UI.SplashForm(durationMs: 15_000);
                     splash.Show();
                     splash.StartProgress();
+                    splash.SetLiveProgress(null, "Buscando versões…", "Procurando se há uma versão nova…");
                     System.Windows.Forms.Application.DoEvents();
 
                     if (autoUpdate)
@@ -100,18 +101,21 @@ public static class ApplicationComposer
                             try
                             {
                                 checker.InvalidateCache();
-                                splash.SetLiveProgress(null, "Verificando atualizações…", "Consultando GitHub…");
+                                splash.SetLiveProgress(null, "Buscando versões…", "Consultando o servidor de atualizações…");
                                 var check = await checker.CheckAsync().ConfigureAwait(false);
                                 if (!check.UpdateAvailable || string.IsNullOrWhiteSpace(check.DownloadUrl))
                                 {
-                                    splash.SetLiveProgress(null, "SoftPrint em dia", "Nenhuma atualização nova.");
+                                    splash.SetLiveProgress(
+                                        null,
+                                        "Nenhuma versão nova",
+                                        $"Você já está na {check.CurrentVersion}.");
                                     return;
                                 }
 
                                 splash.SetLiveProgress(
                                     5,
-                                    $"Atualização {check.LatestVersion} encontrada",
-                                    "Iniciando download…");
+                                    $"Nova versão {check.LatestVersion} encontrada",
+                                    "Baixando atualização…");
                                 if (!applier.TryStart(out var err) && !string.IsNullOrWhiteSpace(err))
                                 {
                                     // Já em andamento (ex.: hosted service) — só acompanhar.
@@ -121,9 +125,13 @@ public static class ApplicationComposer
                             }
                             catch (Exception ex)
                             {
-                                splash.SetLiveProgress(null, "Sem atualização automática", ex.Message);
+                                splash.SetLiveProgress(null, "Não foi possível buscar versões", ex.Message);
                             }
                         });
+                    }
+                    else
+                    {
+                        splash.SetLiveProgress(null, "Abrindo SoftPrint…", "Carregando o painel…");
                     }
                 }
 
@@ -189,7 +197,7 @@ public static class ApplicationComposer
                             }
                             splash.SetLiveProgress(
                                 status.Percent,
-                                status.Restarting ? "Reiniciando SoftPrint…" : "Atualizando SoftPrint…",
+                                status.Restarting ? "Reiniciando SoftPrint…" : "Baixando nova versão…",
                                 status.Message);
                         });
 

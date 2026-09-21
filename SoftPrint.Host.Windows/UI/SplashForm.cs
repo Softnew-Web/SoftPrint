@@ -7,12 +7,11 @@ public sealed class SplashForm : Form
 {
     private static readonly (int UntilPercent, string Message)[] Stages =
     {
-        (8, "Preparando SoftPrint…"),
-        (22, "Verificando atualizações…"),
-        (38, "Baixando componentes…"),
-        (55, "Baixando módulos de impressão…"),
-        (72, "Verificando arquivos locais…"),
-        (88, "Carregando painel…"),
+        (12, "Iniciando SoftPrint…"),
+        (35, "Buscando versões…"),
+        (55, "Conferindo atualizações…"),
+        (72, "Preparando o painel…"),
+        (88, "Carregando interface…"),
         (100, "Quase pronto…")
     };
 
@@ -78,7 +77,7 @@ public sealed class SplashForm : Form
             Height = 32,
             TextAlign = ContentAlignment.MiddleCenter,
             ForeColor = Color.FromArgb(238, 243, 247),
-            Text = "Abrindo o SoftPrint…"
+            Text = "Buscando versões…"
         };
 
         _detail = new Label
@@ -89,7 +88,7 @@ public sealed class SplashForm : Form
             TextAlign = ContentAlignment.TopCenter,
             ForeColor = Color.FromArgb(154, 171, 188),
             Font = new Font("Segoe UI", 9f, FontStyle.Regular, GraphicsUnit.Point),
-            Text = "Preparando…"
+            Text = "Procurando se há uma versão nova…"
         };
 
         _percent = new Label
@@ -301,10 +300,10 @@ public sealed class SplashForm : Form
 
     private static string DetailMessage(int percent) => percent switch
     {
-        < 15 => "Conectando…",
-        < 35 => "Consultando versões…",
-        < 55 => "Recebendo pacote…",
-        < 75 => "Validando arquivos…",
+        < 15 => "Abrindo o SoftPrint…",
+        < 40 => "Procurando se há uma versão nova…",
+        < 60 => "Comparando com a versão instalada…",
+        < 80 => "Organizando arquivos…",
         < 95 => "Quase lá…",
         _ => "Finalizando…"
     };
