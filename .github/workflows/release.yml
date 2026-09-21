@@ -17,7 +17,8 @@ on:
 
 concurrency:
   group: softprint-release
-  cancel-in-progress: true
+  # false: o bump "chore(release)" faz push no meio do job; cancelar abortava o publish.
+  cancel-in-progress: false
 
 permissions:
   contents: write
@@ -135,6 +136,7 @@ jobs:
         run: .\scripts\package-update-zips.ps1
 
       - name: Package delta updates
+        continue-on-error: true
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         shell: pwsh

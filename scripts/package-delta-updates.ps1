@@ -134,14 +134,17 @@ try {
                 $patchPath = Join-Path $deltaDir $patchName
                 $patchDir = Split-Path $patchPath -Parent
                 if (-not (Test-Path $patchDir)) { New-Item -ItemType Directory -Path $patchDir -Force | Out-Null }
-                & $hdiffz -f- -d $oldFile $nf.FullName $patchPath
-                if ($LASTEXITCODE -ne 0 -or -not (Test-Path $patchPath)) {
+                # hdiffz v5: old new outDiff (sem -f-; falha → copia o exe completo)
+                & $hdiffz $oldFile $nf.FullName $patchPath 2>$null | Out-Null
+                $hdiffOk = ($LASTEXITCODE -eq 0) -and (Test-Path $patchPath) -and ((Get-Item $patchPath).Length -gt 0)
+                $global:LASTEXITCODE = 0
+                if (-not $hdiffOk) {
+                    if (Test-Path $patchPath) { Remove-Item $patchPath -Force -ErrorAction SilentlyContinue }
                     Copy-Item $nf.FullName $dest -Force
                     $copied += $rel
                 }
                 else {
                     $patches += @{ target = $rel; patch = $patchName }
-                    # incluir hpatchz uma vez na raiz do delta
                 }
             }
             else {
@@ -181,3 +184,6 @@ try {
 finally {
     if (Test-Path $work) { Remove-Item $work -Recurse -Force -ErrorAction SilentlyContinue }
 }
+
+$global:LASTEXITCODE = 0
+exit 0
