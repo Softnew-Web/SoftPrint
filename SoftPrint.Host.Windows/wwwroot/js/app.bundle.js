@@ -32763,9 +32763,22 @@ fn fs_main(in : VertexOutput) -> @location(0) vec4<f32> {
     applyVersion(current);
     if (!banner || !text || !btn) return;
     if (!update?.updateAvailable) {
+      if (update?.error) {
+        banner.classList.remove("hidden");
+        banner.classList.remove("bg-warn/15", "border-warn/40", "bg-bad/20", "border-bad/40");
+        banner.classList.add("bg-ink-line/40", "border-ink-line");
+        text.textContent = `N\xE3o foi poss\xEDvel verificar atualiza\xE7\xF5es: ${update.error}`;
+        btn.classList.add("hidden");
+        if (dismiss) {
+          dismiss.classList.remove("hidden");
+          dismiss.onclick = () => banner.classList.add("hidden");
+        }
+        return;
+      }
       banner.classList.add("hidden");
       return;
     }
+    btn.classList.remove("hidden");
     const latest = update.latestVersion || "?";
     const dismissed = sessionStorage.getItem(DISMISS_KEY) === latest;
     if (dismissed && !update.mandatory) {
@@ -32908,7 +32921,10 @@ fn fs_main(in : VertexOutput) -> @location(0) vec4<f32> {
   });
   var refreshBtn = document.getElementById("btnRefresh");
   var dlgClose = document.getElementById("dlgClose");
-  if (refreshBtn) refreshBtn.addEventListener("click", () => refreshAll());
+  if (refreshBtn) refreshBtn.addEventListener("click", () => {
+    refreshAll();
+    refreshUpdate({ force: true });
+  });
   if (dlgClose) dlgClose.addEventListener("click", () => document.getElementById("dlg")?.close());
   var printer = {
     applySettingsToForm() {
@@ -33026,9 +33042,9 @@ fn fs_main(in : VertexOutput) -> @location(0) vec4<f32> {
       line.textContent = "Modo Legacy \xB7 painel no navegador \xB7 compatibilidade sem suporte de seguran\xE7a";
   }
   setTab(localStorage.getItem("softprint-tab") || "config");
-  async function refreshUpdate() {
+  async function refreshUpdate({ force = false } = {}) {
     try {
-      const update = await api("/api/update");
+      const update = await api(force ? "/api/update?refresh=1" : "/api/update");
       applyUpdateInfo(update, { api });
     } catch (err) {
       console.warn("Falha ao verificar atualiza\xE7\xE3o", err);

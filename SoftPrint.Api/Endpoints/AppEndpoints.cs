@@ -239,8 +239,14 @@ public static class SettingsEndpoints
                     capabilities.IsLegacy),
                 update);
         });
-        app.MapGet("/api/update", async (IUpdateChecker updates, CancellationToken ct) =>
+        app.MapGet("/api/update", async (HttpRequest request, IUpdateChecker updates, CancellationToken ct) =>
         {
+            var refresh = request.Query.ContainsKey("refresh")
+                          || string.Equals(request.Query["refresh"], "1", StringComparison.OrdinalIgnoreCase)
+                          || string.Equals(request.Query["refresh"], "true", StringComparison.OrdinalIgnoreCase);
+            if (refresh)
+                updates.InvalidateCache();
+
             var result = await updates.CheckAsync(ct).ConfigureAwait(false);
             return Results.Ok(new
             {

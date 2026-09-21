@@ -28,9 +28,23 @@ export function applyUpdateInfo(update, { api } = {}) {
   if (!banner || !text || !btn) return;
 
   if (!update?.updateAvailable) {
+    if (update?.error) {
+      banner.classList.remove("hidden");
+      banner.classList.remove("bg-warn/15", "border-warn/40", "bg-bad/20", "border-bad/40");
+      banner.classList.add("bg-ink-line/40", "border-ink-line");
+      text.textContent = `Não foi possível verificar atualizações: ${update.error}`;
+      btn.classList.add("hidden");
+      if (dismiss) {
+        dismiss.classList.remove("hidden");
+        dismiss.onclick = () => banner.classList.add("hidden");
+      }
+      return;
+    }
     banner.classList.add("hidden");
     return;
   }
+
+  btn.classList.remove("hidden");
 
   const latest = update.latestVersion || "?";
   const dismissed = sessionStorage.getItem(DISMISS_KEY) === latest;

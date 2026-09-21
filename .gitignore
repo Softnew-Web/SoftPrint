@@ -10,5 +10,6 @@ installer/Output/
 .env.local
 **/.env
 !**/.env.example
+**/update-github.token
 NUL
 node_modules/

@@ -72,6 +72,7 @@ public sealed class GitHubReleaseUpdateChecker : IUpdateChecker
 
             var token = FirstNonEmpty(
                 opts.UpdateGitHubToken,
+                Environment.GetEnvironmentVariable("UPDATE_GITHUB_TOKEN"),
                 Environment.GetEnvironmentVariable("SOFTPRINT_GITHUB_TOKEN"),
                 Environment.GetEnvironmentVariable("GITHUB_TOKEN"));
             if (!string.IsNullOrWhiteSpace(token))
@@ -80,16 +81,19 @@ public sealed class GitHubReleaseUpdateChecker : IUpdateChecker
             using var response = await client.SendAsync(request, cancellationToken).ConfigureAwait(false);
             if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
             {
-                return Cache(new UpdateCheckResult(
-                    current, null, false, false, null, null, null,
-                    "Nenhum release publicado ainda neste repositório.", now));
+                // Repo privado sem token também devolve 404.
+                var hint = string.IsNullOrWhiteSpace(token)
+                    ? "Repositório privado ou sem releases. Configure UPDATE_GITHUB_TOKEN (ou torne o repo público)."
+                    : "Nenhum release publicado ainda neste repositório.";
+                return CacheError(new UpdateCheckResult(
+                    current, null, false, false, null, null, null, hint, now));
             }
 
             if (!response.IsSuccessStatusCode)
             {
                 var body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
                 _logger.LogWarning("Falha ao consultar releases GitHub: {Status} {Body}", (int)response.StatusCode, Truncate(body));
-                return Cache(new UpdateCheckResult(
+                return CacheError(new UpdateCheckResult(
                     current, null, false, false, null, null, null,
                     $"GitHub respondeu {(int)response.StatusCode}.", now));
             }
@@ -98,12 +102,19 @@ public sealed class GitHubReleaseUpdateChecker : IUpdateChecker
                           .ConfigureAwait(false);
             if (release is null || string.IsNullOrWhiteSpace(release.TagName))
             {
-                return Cache(new UpdateCheckResult(
+                return CacheError(new UpdateCheckResult(
                     current, null, false, false, null, null, null,
                     "Release GitHub inválido.", now));
             }
 
             var latest = SoftPrintVersionCompare.Normalize(release.TagName);
+            if (!SoftPrintVersionCompare.IsParseable(latest))
+            {
+                return CacheError(new UpdateCheckResult(
+                    current, null, false, false, null, null, null,
+                    $"Tag de release inválida: '{release.TagName}'.", now));
+            }
+
             var updateAvailable = SoftPrintVersionCompare.IsNewer(latest, current);
             var mandatory = updateAvailable && (
                 opts.UpdateAlwaysMandatory ||
@@ -136,7 +147,7 @@ public sealed class GitHubReleaseUpdateChecker : IUpdateChecker
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Erro ao verificar atualização no GitHub");
-            return Cache(new UpdateCheckResult(
+            return CacheError(new UpdateCheckResult(
                 current, null, false, false, null, null, null, ex.Message, now));
         }
     }
@@ -157,9 +168,14 @@ public sealed class GitHubReleaseUpdateChecker : IUpdateChecker
         }
     }
 
-    private UpdateCheckResult Cache(UpdateCheckResult result)
+    private UpdateCheckResult Cache(UpdateCheckResult result) =>
+        CacheForMinutes(result, Math.Clamp(_options.CurrentValue.UpdateCacheMinutes, 5, 24 * 60));
+
+    private UpdateCheckResult CacheError(UpdateCheckResult result) =>
+        CacheForMinutes(result, 2);
+
+    private UpdateCheckResult CacheForMinutes(UpdateCheckResult result, int minutes)
     {
-        var minutes = Math.Clamp(_options.CurrentValue.UpdateCacheMinutes, 5, 24 * 60);
         lock (_gate)
         {
             _cached = result;

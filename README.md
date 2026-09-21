@@ -138,7 +138,7 @@ API:
 | `GET /api/update` | Versão atual, última do GitHub, URL de download e se é obrigatória |
 | `GET /api/status` | Inclui `version` e `update` (cache) |
 
-Releases públicos não precisam de token. Para repositório privado, configure `UPDATE_GITHUB_TOKEN` (ou `SOFTPRINT_GITHUB_TOKEN` / `GITHUB_TOKEN`).
+Releases públicos não precisam de token. Para repositório privado, configure o secret `SOFTPRINT_UPDATE_TOKEN` no GitHub Actions (é injetado nos builds) ou `UPDATE_GITHUB_TOKEN` no `.env` local.
 
 Atualização no Windows: o cliente prefere o zip leve (`SoftPrint-win-*.zip` / `SoftPrint-legacy-*.zip`); se não houver zip, usa o `SoftPrint-Setup.exe`.
 

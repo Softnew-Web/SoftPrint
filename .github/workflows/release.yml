@@ -124,6 +124,12 @@ jobs:
         shell: pwsh
         run: .\scripts\publish-all.ps1
 
+      - name: Inject update token (private repos)
+        env:
+          SOFTPRINT_UPDATE_TOKEN: ${{ secrets.SOFTPRINT_UPDATE_TOKEN }}
+        shell: pwsh
+        run: .\scripts\inject-update-token.ps1
+
       - name: Package update zips
         shell: pwsh
         run: .\scripts\package-update-zips.ps1

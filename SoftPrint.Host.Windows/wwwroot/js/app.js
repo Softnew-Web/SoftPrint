@@ -63,7 +63,10 @@ tabs.forEach((t) => {
 
 const refreshBtn = document.getElementById("btnRefresh");
 const dlgClose = document.getElementById("dlgClose");
-if (refreshBtn) refreshBtn.addEventListener("click", () => refreshAll());
+if (refreshBtn) refreshBtn.addEventListener("click", () => {
+  refreshAll();
+  refreshUpdate({ force: true });
+});
 if (dlgClose) dlgClose.addEventListener("click", () => document.getElementById("dlg")?.close());
 
 let printer = {
@@ -196,9 +199,9 @@ function applyCapabilities(capabilities) {
 
 setTab(localStorage.getItem("softprint-tab") || "config");
 
-async function refreshUpdate() {
+async function refreshUpdate({ force = false } = {}) {
   try {
-    const update = await api("/api/update");
+    const update = await api(force ? "/api/update?refresh=1" : "/api/update");
     applyUpdateInfo(update, { api });
   } catch (err) {
     console.warn("Falha ao verificar atualização", err);

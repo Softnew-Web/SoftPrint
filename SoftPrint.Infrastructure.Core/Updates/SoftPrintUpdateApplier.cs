@@ -131,6 +131,7 @@ public sealed class SoftPrintUpdateApplier : IUpdateApplier
 
         var token = FirstNonEmpty(
             opts.UpdateGitHubToken,
+            Environment.GetEnvironmentVariable("UPDATE_GITHUB_TOKEN"),
             Environment.GetEnvironmentVariable("SOFTPRINT_GITHUB_TOKEN"),
             Environment.GetEnvironmentVariable("GITHUB_TOKEN"));
         if (!string.IsNullOrWhiteSpace(token))

@@ -12,6 +12,11 @@ public static class SoftPrintVersionCompare
         return s;
     }
 
+    public static bool IsParseable(string raw)
+    {
+        return Version.TryParse(Pad(Normalize(raw)), out _);
+    }
+
     public static bool IsNewer(string latest, string current)
     {
         if (!Version.TryParse(Pad(Normalize(latest)), out var a)) return false;

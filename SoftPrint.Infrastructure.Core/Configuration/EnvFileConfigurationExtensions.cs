@@ -72,26 +72,37 @@ public static class EnvFileConfigurationExtensions
 
     public static IConfigurationBuilder AddSoftPrintEnvFile(this IConfigurationBuilder builder, string contentRoot)
     {
-        var path = Path.Combine(contentRoot, ".env");
-        if (!File.Exists(path)) return builder;
-
         var data = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
-        foreach (var line in File.ReadAllLines(path))
+
+        // Token injetado no publish (CI) para repos privados — fora do git.
+        var tokenPath = Path.Combine(contentRoot, "update-github.token");
+        if (File.Exists(tokenPath))
         {
-            var trimmed = line.Trim();
-            if (trimmed.Length == 0 || trimmed.StartsWith('#')) continue;
-
-            var separator = trimmed.IndexOf('=');
-            if (separator <= 0) continue;
-
-            var rawKey = trimmed[..separator].Trim();
-            var value = trimmed[(separator + 1)..].Trim().Trim('"').Trim('\'');
-            if (KeyMap.TryGetValue(rawKey, out var mapped))
-                data[mapped] = value;
-            else
-                data[rawKey.Replace("__", ":")] = value;
+            var token = File.ReadAllText(tokenPath).Trim();
+            if (token.Length > 0)
+                data["SoftPrint:UpdateGitHubToken"] = token;
         }
 
-        return builder.AddInMemoryCollection(data);
+        var path = Path.Combine(contentRoot, ".env");
+        if (File.Exists(path))
+        {
+            foreach (var line in File.ReadAllLines(path))
+            {
+                var trimmed = line.Trim();
+                if (trimmed.Length == 0 || trimmed.StartsWith('#')) continue;
+
+                var separator = trimmed.IndexOf('=');
+                if (separator <= 0) continue;
+
+                var rawKey = trimmed[..separator].Trim();
+                var value = trimmed[(separator + 1)..].Trim().Trim('"').Trim('\'');
+                if (KeyMap.TryGetValue(rawKey, out var mapped))
+                    data[mapped] = value;
+                else
+                    data[rawKey.Replace("__", ":")] = value;
+            }
+        }
+
+        return data.Count == 0 ? builder : builder.AddInMemoryCollection(data);
     }
 }
