@@ -48,6 +48,62 @@ public sealed class DomainTests
     }
 
     [Fact]
+    public void PrintSurfaceMapper_UsesPrintableAreaMinusHardMargin()
+    {
+        var area = PrintSurfaceMapper.ContentBounds(
+            printableX: 25, printableY: 25, printableW: 777, printableH: 1050,
+            hardMarginX: 25, hardMarginY: 25,
+            pageWidth: 827, pageHeight: 1169);
+        Assert.Equal(0, area.X, 3);
+        Assert.Equal(0, area.Y, 3);
+        Assert.Equal(777, area.Width, 3);
+        Assert.Equal(1050, area.Height, 3);
+    }
+
+    [Fact]
+    public void PrinterPaperMatcher_KeepsReceiptHeightInsteadOfLongRoll()
+    {
+        var native = new[]
+        {
+            new PrinterPaperCandidate("A4", 210, 297, 9),
+            new PrinterPaperCandidate("Roll 80 x 3276", 80, 3276, 256),
+        };
+
+        var choice = PrinterPaperMatcher.Resolve(native, 80, 297, PaperSizeKind.Receipt80);
+
+        Assert.False(choice.ExactNativeMatch);
+        Assert.Equal(80, choice.WidthMm);
+        Assert.Equal(297, choice.HeightMm);
+        Assert.True(choice.WidthOnlyNativeMatch);
+        Assert.Equal(256, choice.RawKind);
+    }
+
+    [Fact]
+    public void PrinterPaperMatcher_UsesNativeA4AndLandscapeWhenSwapped()
+    {
+        var native = new[] { new PrinterPaperCandidate("A4", 210, 297, 9) };
+        var portrait = PrinterPaperMatcher.Resolve(native, 210, 297, PaperSizeKind.A4);
+        var landscape = PrinterPaperMatcher.Resolve(native, 297, 210, PaperSizeKind.A4);
+
+        Assert.True(portrait.ExactNativeMatch);
+        Assert.False(portrait.UseDriverLandscape);
+        Assert.True(landscape.ExactNativeMatch);
+        Assert.True(landscape.UseDriverLandscape);
+    }
+
+    [Fact]
+    public void PrintLayout_DescribeIncludesPaperFitAndScale()
+    {
+        var options = new PrintOptions
+        {
+            PaperSize = PaperSizeKind.Receipt80,
+            ImageFit = ImageFitMode.Contain,
+            ImageScalePercent = 100
+        };
+        Assert.Equal("80×297 mm • Caber na página • 100%", PrintSurfaceMapper.Describe(options));
+    }
+
+    [Fact]
     public void PrintOptions_ClampsCustomDimensionsAndScale()
     {
         var updated = new PrintOptions().WithUpdate(

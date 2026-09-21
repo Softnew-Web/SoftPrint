@@ -209,7 +209,8 @@
     ctx.fillStyle = "#0f766e";
     ctx.font = `600 ${Math.max(11, 11 * dpr)}px 'IBM Plex Sans', sans-serif`;
     ctx.textAlign = "left";
-    ctx.fillText("\xE1rea imprim\xEDvel aproximada", area.x + 5 * dpr, area.y + 14 * dpr);
+    const areaLabel = margins.source === "driver" || margins.source === "cups-configured" ? "\xE1rea imprim\xEDvel (mesmo recorte do envio)" : "\xE1rea imprim\xEDvel aproximada";
+    ctx.fillText(areaLabel, area.x + 5 * dpr, area.y + 14 * dpr);
     ctx.fillStyle = "#6b7c8c";
     ctx.font = `${Math.max(11, 11 * dpr)}px 'IBM Plex Sans', sans-serif`;
     ctx.textAlign = "center";
@@ -32339,13 +32340,21 @@ Digite o n\xFAmero para instalar no Windows (ou cancele):`,
       });
     }
     function currentPaper() {
+      const requested = resolvePaperMm(
+        paperSize?.value || "a4",
+        paperWidthMm?.value || 210,
+        paperHeightMm?.value || 297,
+        !!paperLandscape?.checked
+      );
+      const actualW = Number(previewMargins?.pageWidthMm);
+      const actualH = Number(previewMargins?.pageHeightMm);
+      const hasActual = Number.isFinite(actualW) && Number.isFinite(actualH) && actualW > 10 && actualH > 10;
       return {
-        ...resolvePaperMm(
-          paperSize?.value || "a4",
-          paperWidthMm?.value || 210,
-          paperHeightMm?.value || 297,
-          !!paperLandscape?.checked
-        ),
+        w: hasActual ? actualW : requested.w,
+        h: hasActual ? actualH : requested.h,
+        requestedW: requested.w,
+        requestedH: requested.h,
+        honored: previewMargins?.matchesRequest !== false,
         margins: previewMargins
       };
     }
@@ -32377,12 +32386,13 @@ Digite o n\xFAmero para instalar no Windows (ou cancele):`,
       drawPaperPreview(canvas, previewImage, fit, scale, paper);
       const paperLabel = `${fmt(paper.w)}\xD7${fmt(paper.h)} mm`;
       if (!previewMeta) return;
+      const mismatch = paper.honored === false ? ` \xB7 aten\xE7\xE3o: o driver usar\xE1 ${paperLabel} (configurado ${fmt(paper.requestedW)}\xD7${fmt(paper.requestedH)} mm)` : "";
       if (previewImage) {
         const fitLabel = imageFit?.options?.[imageFit.selectedIndex]?.text || fit;
         const dimensions = previewImage.naturalWidth ? `${previewImage.naturalWidth}\xD7${previewImage.naturalHeight}px` : `PDF p\xE1gina ${pdfPage}/${pdfDocument?.pageCount || 1}`;
-        previewMeta.textContent = `${paperLabel} \xB7 ${dimensions} \xB7 ${fitLabel} \xB7 ${scale}%`;
+        previewMeta.textContent = `${paperLabel} \xB7 ${dimensions} \xB7 ${fitLabel} \xB7 ${scale}%${mismatch}`;
       } else {
-        previewMeta.textContent = `Papel padr\xE3o: ${paperLabel}${paperLandscape?.checked ? " (paisagem)" : ""}`;
+        previewMeta.textContent = `Papel da impress\xE3o: ${paperLabel}${paperLandscape?.checked ? " (paisagem)" : ""}${mismatch}`;
       }
     }
     async function renderPdfPage() {

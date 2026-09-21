@@ -9,7 +9,11 @@ public sealed record PrinterPageMetricsInfo(
     double LeftMm,
     double TopMm,
     double RightMm,
-    double BottomMm);
+    double BottomMm,
+    double RequestedWidthMm = 0,
+    double RequestedHeightMm = 0,
+    bool MatchesRequest = true,
+    string? DriverPaperName = null);
 
 /// <summary>Papel padrão configurado no driver da impressora (antes de aplicar SoftPrint).</summary>
 public sealed record PrinterDefaultPaperInfo(

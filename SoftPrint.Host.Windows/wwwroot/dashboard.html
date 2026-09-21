@@ -216,7 +216,7 @@
             <div class="flex items-start justify-between gap-2 shrink-0">
               <div>
                 <h2 class="font-display text-base font-bold">Preview da impressão</h2>
-                <p class="text-[11px] text-mist mt-0.5">Mesma regra do envio no papel escolhido.</p>
+                <p class="text-[11px] text-mist mt-0.5">O envio usa este papel, encaixe e área imprimível — o mesmo recorte do preview.</p>
               </div>
               <div class="flex gap-2 shrink-0">
                 <button id="btnPickPreview" type="button" class="rounded-lg bg-ink-line hover:bg-ink-line/70 px-2.5 py-1.5 text-sm">Escolher arquivo</button>
@@ -240,7 +240,7 @@
             <div class="flex-1 min-h-[280px] rounded-xl border border-ink-line bg-ink overflow-hidden flex items-center justify-center p-1">
               <canvas id="printPreview" width="640" height="560" class="block max-h-full max-w-full bg-[#121a22]"></canvas>
             </div>
-            <p id="previewMeta" class="text-[11px] text-mist shrink-0 truncate">Sem imagem — o dimensionamento vale para jobs de imagem.</p>
+            <p id="previewMeta" class="text-[11px] text-mist shrink-0 truncate">Sem imagem — o dimensionamento vale para PDF e imagem (senha, receita, etiqueta).</p>
           </div>
         </section>
 
@@ -667,7 +667,7 @@ Teste de impressão de texto.</textarea>
       }
     }, 4000);
   </script>
-  <script defer src="/js/app.bundle.js?v=20260921a"
+  <script defer src="/js/app.bundle.js?v=20260921b"
           onerror="document.getElementById('healthLine').textContent='Falha ao carregar o painel.'"></script>
 </body>
 </html>

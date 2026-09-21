@@ -87,7 +87,7 @@ As configurações de cada usuário ficam em `%LocalAppData%\SoftPrint` no Windo
 
 Estados dos pedidos: `pending` (na fila), `processing` (enviando), `simulated` (simulado), `sent` (enviado ao spooler/CUPS), `uncertain` (exige conferência). `sent` confirma entrega ao sistema de impressão, não a saída física do papel. Não há reenvio automático de trabalhos incertos, para evitar duplicatas. O histórico inclui a impressora e a versão de configuração usadas.
 
-O suporte atual é texto, PDF, imagem e ESC/POS, com papel e margens definidos no driver ou no CUPS. Integração com sistemas específicos depende do equipamento e do sistema escolhido.
+O suporte atual é texto, PDF, imagem e ESC/POS. Papel, orientação, encaixe e escala são os salvos no painel: o preview e o envio usam a mesma área imprimível do driver (sem a margem extra de 1" do Windows). Integração com sistemas específicos depende do equipamento e do sistema escolhido.
 
 ## Compilar e testar
 

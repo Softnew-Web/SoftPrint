@@ -77,6 +77,12 @@ public sealed class PrintWorker(
                     PaperLandscape = options.PaperLandscape
                 };
 
+                jobs.AppendStep(job.Id, "layout", "PrintWorker",
+                    $"Layout capturado: {PrintSurfaceMapper.Describe(printOptions)}.",
+                    printOptions.Simulation
+                        ? "A simulação usa a mesma configuração de papel/encaixe do envio real."
+                        : "O spooler recebe este papel, encaixe e escala — os mesmos do preview.");
+
                 var strategy = strategies.Resolve(job, printOptions);
                 var strategyName = strategy.GetType().Name;
                 var mode = printOptions.Simulation ? "simulação (sem papel)" : $"conteúdo {job.ContentKind.ToWire()}";

@@ -317,13 +317,21 @@ export function bindPrinterTab({ api, onSaved }) {
   }
 
   function currentPaper() {
-    return {
-      ...resolvePaperMm(
+    const requested = resolvePaperMm(
       paperSize?.value || "a4",
       paperWidthMm?.value || 210,
       paperHeightMm?.value || 297,
       !!paperLandscape?.checked
-      ),
+    );
+    const actualW = Number(previewMargins?.pageWidthMm);
+    const actualH = Number(previewMargins?.pageHeightMm);
+    const hasActual = Number.isFinite(actualW) && Number.isFinite(actualH) && actualW > 10 && actualH > 10;
+    return {
+      w: hasActual ? actualW : requested.w,
+      h: hasActual ? actualH : requested.h,
+      requestedW: requested.w,
+      requestedH: requested.h,
+      honored: previewMargins?.matchesRequest !== false,
       margins: previewMargins,
     };
   }
@@ -357,14 +365,17 @@ export function bindPrinterTab({ api, onSaved }) {
     drawPaperPreview(canvas, previewImage, fit, scale, paper);
     const paperLabel = `${fmt(paper.w)}×${fmt(paper.h)} mm`;
     if (!previewMeta) return;
+    const mismatch = paper.honored === false
+      ? ` · atenção: o driver usará ${paperLabel} (configurado ${fmt(paper.requestedW)}×${fmt(paper.requestedH)} mm)`
+      : "";
     if (previewImage) {
       const fitLabel = imageFit?.options?.[imageFit.selectedIndex]?.text || fit;
       const dimensions = previewImage.naturalWidth
         ? `${previewImage.naturalWidth}×${previewImage.naturalHeight}px`
         : `PDF página ${pdfPage}/${pdfDocument?.pageCount || 1}`;
-      previewMeta.textContent = `${paperLabel} · ${dimensions} · ${fitLabel} · ${scale}%`;
+      previewMeta.textContent = `${paperLabel} · ${dimensions} · ${fitLabel} · ${scale}%${mismatch}`;
     } else {
-      previewMeta.textContent = `Papel padrão: ${paperLabel}${paperLandscape?.checked ? " (paisagem)" : ""}`;
+      previewMeta.textContent = `Papel da impressão: ${paperLabel}${paperLandscape?.checked ? " (paisagem)" : ""}${mismatch}`;
     }
   }
 

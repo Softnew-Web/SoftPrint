@@ -122,7 +122,10 @@ export function drawPaperPreview(canvas, image, fit, scalePercent, paper) {
   ctx.fillStyle = "#0f766e";
   ctx.font = `600 ${Math.max(11, 11 * dpr)}px 'IBM Plex Sans', sans-serif`;
   ctx.textAlign = "left";
-  ctx.fillText("área imprimível aproximada", area.x + 5 * dpr, area.y + 14 * dpr);
+  const areaLabel = margins.source === "driver" || margins.source === "cups-configured"
+    ? "área imprimível (mesmo recorte do envio)"
+    : "área imprimível aproximada";
+  ctx.fillText(areaLabel, area.x + 5 * dpr, area.y + 14 * dpr);
 
   ctx.fillStyle = "#6b7c8c";
   ctx.font = `${Math.max(11, 11 * dpr)}px 'IBM Plex Sans', sans-serif`;

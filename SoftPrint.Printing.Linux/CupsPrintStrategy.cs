@@ -54,11 +54,20 @@ public sealed class CupsPrintStrategy(IExternalCommandRunner? runner = null) : I
             }
             else
             {
+                var scaling = settings.ImageFit switch
+                {
+                    ImageFitMode.Cover => "fill",
+                    ImageFitMode.Stretch => "fill",
+                    ImageFitMode.Center => "none",
+                    _ => "fit"
+                };
                 args.AddRange([
-                    "-o", $"media=Custom.{width:0.##}x{height:0.##}mm",
-                    "-o", settings.ImageFit == ImageFitMode.Cover ? "print-scaling=fill" : "print-scaling=fit",
-                    "-o", $"scaling={settings.ImageScalePercent}"
+                    "-o", $"media=Custom.{width.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)}x{height.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)}mm",
+                    "-o", $"PageSize=Custom.{width.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)}x{height.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)}mm",
+                    "-o", $"print-scaling={scaling}"
                 ]);
+                if (settings.ImageScalePercent != 100)
+                    args.AddRange(["-o", $"scaling={settings.ImageScalePercent}"]);
             }
             args.Add(source);
             var exit = await _runner.RunAsync("lp", args, cancellationToken);

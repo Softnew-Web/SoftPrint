@@ -57,6 +57,21 @@ public sealed class PlatformTests
     }
 
     [Fact]
+    public void LinuxMetrics_UseConfiguredReceiptPaperNotDriverDefault()
+    {
+        var metrics = new LinuxPrinterPageMetrics().Read("Kitchen", new PrintOptions
+        {
+            PaperSize = PaperSizeKind.Receipt80,
+            PaperWidthMm = 80,
+            PaperHeightMm = 297
+        });
+        Assert.Equal("cups-configured", metrics.Source);
+        Assert.Equal(80, metrics.PageWidthMm);
+        Assert.Equal(297, metrics.PageHeightMm);
+        Assert.True(metrics.MatchesRequest);
+    }
+
+    [Fact]
     public void CupsCatalog_DoesNotCrashWhenCupsIsMissing()
     {
         var exception = Record.Exception(() => new CupsPrinterCatalog().ListDetailed());

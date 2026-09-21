@@ -44,14 +44,14 @@ public sealed class ImagePrintStrategy : IPrintStrategy
         document.PrintPage += (_, page) =>
         {
             var graphics = page.Graphics ?? throw new InvalidOperationException("Impressora sem área gráfica.");
-            var area = page.MarginBounds;
+            var area = PrintSurface.ContentBounds(page);
             var dest = ImageLayoutCalculator.ComputeDestination(
                 area.X, area.Y, area.Width, area.Height,
                 image.Width, image.Height,
                 settings.ImageFit,
                 settings.ImageScalePercent);
             var saved = graphics.Save();
-            graphics.SetClip(area);
+            graphics.SetClip(new RectangleF(area.X, area.Y, area.Width, area.Height));
             graphics.DrawImage(image, new RectangleF(dest.X, dest.Y, dest.Width, dest.Height));
             graphics.Restore(saved);
             page.HasMorePages = false;
@@ -97,13 +97,13 @@ public sealed class PdfPrintStrategy : IPrintStrategy
             cancellationToken.ThrowIfCancellationRequested();
             using var rendered = pages.Current;
             using var image = SkiaGdiBridge.ToBitmap(rendered);
-            var area = page.MarginBounds;
+            var area = PrintSurface.ContentBounds(page);
             var dest = ImageLayoutCalculator.ComputeDestination(
                 area.X, area.Y, area.Width, area.Height,
                 image.Width, image.Height, settings.ImageFit, settings.ImageScalePercent);
             var graphics = page.Graphics ?? throw new InvalidOperationException("Impressora sem área gráfica.");
             var saved = graphics.Save();
-            graphics.SetClip(area);
+            graphics.SetClip(new RectangleF(area.X, area.Y, area.Width, area.Height));
             graphics.DrawImage(image, new RectangleF(dest.X, dest.Y, dest.Width, dest.Height));
             graphics.Restore(saved);
             page.HasMorePages = pages.MoveNext();
@@ -155,18 +155,70 @@ internal static class PrintPageSetup
 {
     public static void Apply(PrintDocument document, PrintOptions settings)
     {
-        var (w, h) = PaperSizeCatalog.ToHundredthsInch(
-            settings.PaperSize,
-            settings.PaperWidthMm,
-            settings.PaperHeightMm,
-            settings.PaperLandscape);
+        var (reqW, reqH) = settings.EffectivePaperMm();
+        var candidates = new List<PrinterPaperCandidate>();
+        foreach (PaperSize paper in document.PrinterSettings.PaperSizes)
+        {
+            candidates.Add(new PrinterPaperCandidate(
+                paper.PaperName,
+                HiToMm(paper.Width),
+                HiToMm(paper.Height),
+                paper.RawKind));
+        }
 
-        var name = settings.PaperSize == PaperSizeKind.Custom
-            ? $"Custom {settings.PaperWidthMm:0.#}x{settings.PaperHeightMm:0.#}mm"
-            : settings.PaperSize.ToDisplay();
+        var choice = PrinterPaperMatcher.Resolve(candidates, reqW, reqH, settings.PaperSize);
+        document.OriginAtMargins = false;
+        document.DefaultPageSettings.Margins = new Margins(0, 0, 0, 0);
 
-        document.DefaultPageSettings.PaperSize = new PaperSize(name, w, h);
-        document.DefaultPageSettings.Landscape = false; // rotação já embutida em w×h
+        if (choice.ExactNativeMatch)
+        {
+            var native = FindNative(document.PrinterSettings, choice);
+            if (native is not null)
+            {
+                document.DefaultPageSettings.PaperSize = native;
+                document.DefaultPageSettings.Landscape = choice.UseDriverLandscape;
+                return;
+            }
+        }
+
+        var custom = new PaperSize(
+            choice.Name,
+            PaperSizeCatalog.MmToHundredthsInch(choice.WidthMm),
+            PaperSizeCatalog.MmToHundredthsInch(choice.HeightMm));
+        if (choice.RawKind is int rawKind and > 0)
+            custom.RawKind = rawKind;
+        document.DefaultPageSettings.PaperSize = custom;
+        document.DefaultPageSettings.Landscape = false;
+    }
+
+    private static PaperSize? FindNative(PrinterSettings printer, PrinterPaperChoice choice)
+    {
+        foreach (PaperSize paper in printer.PaperSizes)
+        {
+            if (!string.Equals(paper.PaperName, choice.Name, StringComparison.OrdinalIgnoreCase))
+                continue;
+            if (choice.RawKind is int raw && paper.RawKind != raw)
+                continue;
+            return paper;
+        }
+
+        return null;
+    }
+
+    private static double HiToMm(int value) => Math.Round(value * 25.4 / 100.0, 2);
+}
+
+internal static class PrintSurface
+{
+    public static LayoutRect ContentBounds(PrintPageEventArgs page)
+    {
+        var settings = page.PageSettings;
+        var printable = settings.PrintableArea;
+        var bounds = page.PageBounds;
+        return PrintSurfaceMapper.ContentBounds(
+            printable.X, printable.Y, printable.Width, printable.Height,
+            settings.HardMarginX, settings.HardMarginY,
+            bounds.Width, bounds.Height);
     }
 }
 
@@ -182,22 +234,31 @@ public sealed class WindowsPrinterPageMetrics : IPrinterPageMetrics
         if (!document.PrinterSettings.IsValid)
             return Fallback(settings);
 
-        PrintPageSetup.Apply(document, settings);
-        var page = document.DefaultPageSettings;
-        var bounds = page.Bounds;
-        var requested = new RectangleF(
-            page.Margins.Left,
-            page.Margins.Top,
-            Math.Max(1, bounds.Width - page.Margins.Left - page.Margins.Right),
-            Math.Max(1, bounds.Height - page.Margins.Top - page.Margins.Bottom));
-        var printable = RectangleF.Intersect(requested, page.PrintableArea);
-        if (printable.Width <= 0 || printable.Height <= 0)
-            return Fallback(settings);
+        try
+        {
+            PrintPageSetup.Apply(document, settings);
+            var page = document.DefaultPageSettings;
+            var bounds = page.Bounds;
+            var printable = page.PrintableArea;
+            if (printable.Width <= 0 || printable.Height <= 0)
+                return Fallback(settings);
 
-        return new PrinterPageMetricsInfo(
-            "driver", HiToMm(bounds.Width), HiToMm(bounds.Height),
-            HiToMm(printable.Left), HiToMm(printable.Top),
-            HiToMm(bounds.Width - printable.Right), HiToMm(bounds.Height - printable.Bottom));
+            var (reqW, reqH) = settings.EffectivePaperMm();
+            var actualW = HiToMm(bounds.Width);
+            var actualH = HiToMm(bounds.Height);
+            return new PrinterPageMetricsInfo(
+                "driver", actualW, actualH,
+                HiToMm(printable.Left), HiToMm(printable.Top),
+                HiToMm(Math.Max(0, bounds.Width - printable.Right)),
+                HiToMm(Math.Max(0, bounds.Height - printable.Bottom)),
+                reqW, reqH,
+                PrinterPaperMatcher.SizeMatches(actualW, actualH, reqW, reqH),
+                string.IsNullOrWhiteSpace(page.PaperSize.PaperName) ? null : page.PaperSize.PaperName.Trim());
+        }
+        catch
+        {
+            return Fallback(settings);
+        }
     }
 
     public PrinterDefaultPaperInfo? ReadDefaultPaper(string printerName)
@@ -241,7 +302,8 @@ public sealed class WindowsPrinterPageMetrics : IPrinterPageMetrics
         var (width, height) = settings.EffectivePaperMm();
         var margin = Math.Min(width, height) * 0.06;
         return new PrinterPageMetricsInfo(
-            "approximate", width, height, margin, margin, margin, margin);
+            "approximate", width, height, margin, margin, margin, margin,
+            width, height, true);
     }
 
     private static double HiToMm(float value) => Math.Round(value * 25.4 / 100.0, 2);
@@ -272,7 +334,8 @@ internal static class TextPrintEngine
             pageNumber++;
             var graphics = page.Graphics
                 ?? throw new InvalidOperationException("Impressora sem área gráfica (driver não retornou Graphics).");
-            var area = page.MarginBounds;
+            var content = PrintSurface.ContentBounds(page);
+            var area = new RectangleF(content.X, content.Y, content.Width, content.Height);
             if (area.Width <= 0 || area.Height <= 0)
                 throw new InvalidOperationException($"Área de impressão inválida na página {pageNumber}.");
             graphics.MeasureString(remaining, font, area.Size, format, out var count, out int _);

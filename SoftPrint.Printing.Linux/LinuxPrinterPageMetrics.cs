@@ -11,14 +11,10 @@ public sealed class LinuxPrinterPageMetrics(IExternalCommandRunner? runner = nul
     {
         var (width, height) = settings.EffectivePaperMm();
         var margin = Math.Min(width, height) * 0.06;
-        if (string.IsNullOrWhiteSpace(printerName))
-            return new("cups-approximate", width, height, margin, margin, margin, margin);
-
-        var defaults = ReadDefaultPaper(printerName);
-        if (defaults is not null)
-            return new("cups-lpoptions", defaults.WidthMm, defaults.HeightMm, margin, margin, margin, margin);
-
-        return new("cups-approximate", width, height, margin, margin, margin, margin);
+        var source = string.IsNullOrWhiteSpace(printerName) ? "cups-approximate" : "cups-configured";
+        return new PrinterPageMetricsInfo(
+            source, width, height, margin, margin, margin, margin,
+            width, height, true);
     }
 
     public PrinterDefaultPaperInfo? ReadDefaultPaper(string printerName)
