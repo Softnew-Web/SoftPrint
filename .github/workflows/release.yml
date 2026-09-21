@@ -96,23 +96,29 @@ jobs:
         shell: pwsh
         run: |
           $bump = "${{ github.event.inputs.bump || 'patch' }}"
-          $next = (& .\scripts\bump-version.ps1 -Bump $bump | Select-Object -Last 1).ToString().Trim()
+          & .\scripts\bump-version.ps1 -Bump $bump
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          if ($next -notmatch '^\d+\.\d+\.\d+$') { throw "Versão inválida: '$next'" }
-          # Evitar Out-File -Encoding utf8 (BOM) — quebra o parser do GITHUB_OUTPUT no Windows.
-          [System.IO.File]::AppendAllText($env:GITHUB_OUTPUT, "version=$next$([Environment]::NewLine)")
+          $next = [System.IO.File]::ReadAllText("$PWD\VERSION").Trim().TrimStart([char]0xFEFF)
+          if ($next -notmatch '^\d+\.\d+\.\d+$') { throw "Versão inválida após bump: '$next'" }
+          # GITHUB_ENV é mais confiável que GITHUB_OUTPUT no Windows/pwsh.
+          Add-Content -Path $env:GITHUB_ENV -Value "SOFTPRINT_VERSION=$next" -Encoding utf8NoBOM
           Write-Host "Nova versão: $next"
 
       - name: Commit version bump
         shell: pwsh
         run: |
+          $ver = $env:SOFTPRINT_VERSION
+          if ($ver -notmatch '^\d+\.\d+\.\d+$') {
+            $ver = [System.IO.File]::ReadAllText("$PWD\VERSION").Trim().TrimStart([char]0xFEFF)
+          }
+          if ($ver -notmatch '^\d+\.\d+\.\d+$') { throw "SOFTPRINT_VERSION inválida: '$ver'" }
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add VERSION SoftPrint.Domain/SoftPrintVersion.cs installer/SoftPrint.iss
-          git commit -m "chore(release): v${{ steps.version.outputs.version }}"
+          git commit -m "chore(release): v$ver"
           git push origin HEAD:main
-          git tag "v${{ steps.version.outputs.version }}"
-          git push origin "v${{ steps.version.outputs.version }}"
+          git tag "v$ver"
+          git push origin "v$ver"
 
       - name: Publish apps
         shell: pwsh
@@ -168,7 +174,11 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         shell: pwsh
         run: |
-          $ver = "${{ steps.version.outputs.version }}"
+          $ver = $env:SOFTPRINT_VERSION
+          if ($ver -notmatch '^\d+\.\d+\.\d+$') {
+            $ver = [System.IO.File]::ReadAllText("$PWD\VERSION").Trim().TrimStart([char]0xFEFF)
+          }
+          if ($ver -notmatch '^\d+\.\d+\.\d+$') { throw "Versão inválida para release: '$ver'" }
           $title = "SoftPrint $ver"
           $notes = @"
           Release automático gerado no push para ``main``.
@@ -193,5 +203,9 @@ jobs:
           }
 
           if ($assets.Count -lt 1) { throw "Nenhum asset para publicar." }
+
+          # Se uma tag vazia "v" ficou de runs antigos, remove antes.
+          git push origin :refs/tags/v 2>$null
+          gh release delete "v" -y 2>$null
 
           gh release create "v$ver" @assets --title $title --notes $notes
