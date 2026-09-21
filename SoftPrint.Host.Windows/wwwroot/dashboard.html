@@ -298,14 +298,35 @@
                 <p id="pipeline" class="text-sm text-mist mt-1 leading-relaxed">Aguardando…</p>
               </div>
               <div class="flex flex-wrap gap-2">
-                <select id="statusFilter" class="rounded-lg bg-ink border border-ink-line px-2 py-2 text-sm">
-                  <option value="">Todos</option>
-                  <option value="pending">Na fila</option>
-                  <option value="processing">Enviando</option>
-                  <option value="simulated">Simulado</option>
-                  <option value="sent">Enviado</option>
-                  <option value="uncertain">Conferir</option>
-                </select>
+                <div id="statusFilterWrap" class="relative">
+                  <button id="statusFilterBtn" type="button"
+                          class="rounded-lg bg-ink border border-ink-line px-2.5 py-2 text-sm min-w-[9.5rem] text-left flex items-center justify-between gap-2">
+                    <span id="statusFilterLabel">Todos</span>
+                    <span class="text-mist text-xs">▾</span>
+                  </button>
+                  <div id="statusFilterMenu"
+                       class="hidden absolute z-30 top-full left-0 mt-1 w-52 rounded-xl border border-ink-line bg-ink-soft shadow-xl p-2 space-y-0.5">
+                    <label class="flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm hover:bg-ink cursor-pointer">
+                      <input type="checkbox" class="status-filter-opt accent-sea" value="pending" /> Na fila
+                    </label>
+                    <label class="flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm hover:bg-ink cursor-pointer">
+                      <input type="checkbox" class="status-filter-opt accent-sea" value="processing" /> Enviando
+                    </label>
+                    <label class="flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm hover:bg-ink cursor-pointer">
+                      <input type="checkbox" class="status-filter-opt accent-sea" value="simulated" /> Simulado
+                    </label>
+                    <label class="flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm hover:bg-ink cursor-pointer">
+                      <input type="checkbox" class="status-filter-opt accent-sea" value="sent" /> Enviado
+                    </label>
+                    <label class="flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm hover:bg-ink cursor-pointer">
+                      <input type="checkbox" class="status-filter-opt accent-sea" value="uncertain" /> Conferir
+                    </label>
+                    <button id="statusFilterClear" type="button"
+                            class="w-full mt-1 rounded-lg bg-ink-line hover:bg-ink-line/80 px-2 py-1.5 text-xs text-mist">
+                      Limpar (mostrar todos)
+                    </button>
+                  </div>
+                </div>
                 <input id="refFilter" placeholder="Filtrar pedido…" class="rounded-lg bg-ink border border-ink-line px-3 py-2 text-sm w-44" />
                 <button id="btnExportJson" type="button" class="rounded-lg bg-ink-line px-3 py-2 text-sm">JSON</button>
                 <button id="btnExportCsv" type="button" class="rounded-lg bg-ink-line px-3 py-2 text-sm">CSV</button>

@@ -32451,12 +32451,59 @@ Digite o n\xFAmero para instalar no Windows (ou cancele):`,
   }
 
   // SoftPrint.Host.Windows/wwwroot/js/components/monitor-tab.js
+  var STATUS_OPTIONS = [
+    { value: "pending", label: "Na fila" },
+    { value: "processing", label: "Enviando" },
+    { value: "simulated", label: "Simulado" },
+    { value: "sent", label: "Enviado" },
+    { value: "uncertain", label: "Conferir" }
+  ];
   function bindMonitorTab({ api: api2, onChanged }) {
     const body = document.getElementById("jobsBody");
     const steps = document.getElementById("steps");
     const err = document.getElementById("errorBox");
     const pipeline = document.getElementById("pipeline");
-    document.getElementById("statusFilter").addEventListener("change", renderJobs);
+    const filterBtn = document.getElementById("statusFilterBtn");
+    const filterMenu = document.getElementById("statusFilterMenu");
+    const filterLabel = document.getElementById("statusFilterLabel");
+    const filterWrap = document.getElementById("statusFilterWrap");
+    const selectedStatuses = () => [...document.querySelectorAll(".status-filter-opt:checked")].map((el) => el.value);
+    const syncFilterLabel = () => {
+      if (!filterLabel) return;
+      const selected = selectedStatuses();
+      if (!selected.length) {
+        filterLabel.textContent = "Todos";
+        return;
+      }
+      if (selected.length === 1) {
+        const opt = STATUS_OPTIONS.find((o) => o.value === selected[0]);
+        filterLabel.textContent = opt?.label || selected[0];
+        return;
+      }
+      filterLabel.textContent = `${selected.length} situa\xE7\xF5es`;
+    };
+    filterBtn?.addEventListener("click", (e) => {
+      e.stopPropagation();
+      filterMenu?.classList.toggle("hidden");
+    });
+    filterMenu?.addEventListener("click", (e) => e.stopPropagation());
+    document.addEventListener("click", (e) => {
+      if (!filterWrap || filterWrap.contains(e.target)) return;
+      filterMenu?.classList.add("hidden");
+    });
+    document.querySelectorAll(".status-filter-opt").forEach((el) => {
+      el.addEventListener("change", () => {
+        syncFilterLabel();
+        renderJobs();
+      });
+    });
+    document.getElementById("statusFilterClear")?.addEventListener("click", () => {
+      document.querySelectorAll(".status-filter-opt").forEach((el) => {
+        el.checked = false;
+      });
+      syncFilterLabel();
+      renderJobs();
+    });
     document.getElementById("refFilter").addEventListener("input", renderJobs);
     document.getElementById("btnSendTest").addEventListener("click", sendTest);
     document.getElementById("btnReprint").addEventListener("click", reprintSelected);
@@ -32464,10 +32511,10 @@ Digite o n\xFAmero para instalar no Windows (ou cancele):`,
     document.getElementById("btnExportJson").addEventListener("click", () => exportJobs(false));
     document.getElementById("btnExportCsv").addEventListener("click", () => exportJobs(true));
     function renderJobs() {
-      const sf = document.getElementById("statusFilter").value;
+      const statuses = selectedStatuses();
       const rf = document.getElementById("refFilter").value.trim().toLowerCase();
       const filtered = state.jobs.filter(
-        (j) => (!sf || j.status === sf) && (!rf || (j.reference || "").toLowerCase().includes(rf))
+        (j) => (!statuses.length || statuses.includes(j.status)) && (!rf || (j.reference || "").toLowerCase().includes(rf))
       );
       body.innerHTML = filtered.slice().reverse().map(
         (j) => `
@@ -32488,6 +32535,7 @@ Digite o n\xFAmero para instalar no Windows (ou cancele):`,
       if (sel) state.selectedId = sel.id;
       showTrace(sel);
     }
+    syncFilterLabel();
     function showTrace(job) {
       if (!job) {
         steps.innerHTML = `<p class="text-mist">Selecione um pedido para ver o passo a passo.</p>`;
