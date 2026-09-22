@@ -9,6 +9,7 @@ public sealed class FileLogProvider : ILoggerProvider
     private readonly string _directory;
     private readonly bool _enabled;
     private readonly object _gate = new();
+    private const int KeepDays = 2;
 
     public FileLogProvider(IAppPaths paths, IOptions<SoftPrintFeatureOptions> options)
     {
@@ -49,8 +50,9 @@ public sealed class FileLogProvider : ILoggerProvider
 
         private static void Rotate(string directory)
         {
+            // 2 dias: ao gerar o 3º arquivo, apaga o mais antigo.
             foreach (var file in Directory.EnumerateFiles(directory, "softprint-*.log")
-                         .OrderByDescending(f => f).Skip(14))
+                         .OrderByDescending(f => f).Skip(KeepDays))
             {
                 try { File.Delete(file); } catch { /* ignore */ }
             }

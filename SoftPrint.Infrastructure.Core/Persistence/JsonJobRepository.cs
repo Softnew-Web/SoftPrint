@@ -9,7 +9,7 @@ public sealed class JsonJobRepository : IJobRepository
     private readonly object _gate = new();
     private readonly string _path;
     private readonly List<PrintJob> _jobs;
-    private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
+    private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = false };
 
     public JsonJobRepository(IAppPaths paths)
     {
@@ -29,6 +29,15 @@ public sealed class JsonJobRepository : IJobRepository
     public IReadOnlyList<PrintJob> Snapshot()
     {
         lock (_gate) return _jobs.Select(Clone).ToArray();
+    }
+
+    public PrintJob? PeekNextPending()
+    {
+        lock (_gate)
+        {
+            var job = _jobs.FirstOrDefault(j => j.Status == JobStatus.Pending);
+            return job is null ? null : Clone(job);
+        }
     }
 
     public PrintJob? FindByReference(string reference)
@@ -113,10 +122,17 @@ public sealed class JsonJobRepository : IJobRepository
 
     public void AppendStep(Guid id, string stage, string where, string message, string? detail = null, bool isError = false)
     {
+        AppendSteps(id, [new JobStepDraft(stage, where, message, detail, isError)]);
+    }
+
+    public void AppendSteps(Guid id, IReadOnlyList<JobStepDraft> steps)
+    {
+        if (steps.Count == 0) return;
         lock (_gate)
         {
             var job = _jobs.First(j => j.Id == id);
-            job.AddStep(stage, where, message, detail, isError);
+            foreach (var step in steps)
+                job.AddStep(step.Stage, step.Where, step.Message, step.Detail, step.IsError);
             Save();
         }
     }

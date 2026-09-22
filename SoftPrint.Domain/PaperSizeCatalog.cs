@@ -9,7 +9,8 @@ public enum PaperSizeKind
     Photo4x6 = 4,
     Custom = 5,
     Receipt58 = 6,
-    Receipt80 = 7
+    Receipt80 = 7,
+    Padrao = 8
 }
 
 public static class PaperSizeCatalog
@@ -24,6 +25,7 @@ public static class PaperSizeCatalog
             PaperSizeKind.Photo4x6 => (101.6, 152.4),
             PaperSizeKind.Receipt58 => (58, 200),
             PaperSizeKind.Receipt80 => (80, 297),
+            PaperSizeKind.Padrao => (200, 70),
             PaperSizeKind.Custom => (
                 Math.Clamp(customW ?? 210, 20, 1200),
                 Math.Clamp(customH ?? 297, 20, 1200)),
@@ -38,6 +40,7 @@ public static class PaperSizeCatalog
         PaperSizeKind.Photo4x6 => "photo4x6",
         PaperSizeKind.Receipt58 => "receipt58",
         PaperSizeKind.Receipt80 => "receipt80",
+        PaperSizeKind.Padrao => "padrao",
         PaperSizeKind.Custom => "custom",
         _ => "a4"
     };
@@ -50,6 +53,7 @@ public static class PaperSizeCatalog
         "photo4x6" or "4x6" => PaperSizeKind.Photo4x6,
         "receipt58" or "cupom58" or "58mm" => PaperSizeKind.Receipt58,
         "receipt80" or "cupom80" or "80mm" => PaperSizeKind.Receipt80,
+        "padrao" or "standard" or "200x70" => PaperSizeKind.Padrao,
         "custom" => PaperSizeKind.Custom,
         _ => PaperSizeKind.A4
     };
@@ -62,6 +66,7 @@ public static class PaperSizeCatalog
         PaperSizeKind.Photo4x6 => "Foto 10×15 (4×6\")",
         PaperSizeKind.Receipt58 => "Cupom 58 mm",
         PaperSizeKind.Receipt80 => "Cupom 80 mm",
+        PaperSizeKind.Padrao => "Padrão (200×70 mm)",
         PaperSizeKind.Custom => "Personalizado",
         _ => "A4 (210×297 mm)"
     };
@@ -74,6 +79,12 @@ public static class PaperSizeCatalog
     {
         var w = Math.Min(widthMm, heightMm);
         var h = Math.Max(widthMm, heightMm);
+
+        // Padrão 200×70 (aceita invertido).
+        if ((Near(widthMm, 200, toleranceMm) && Near(heightMm, 70, toleranceMm)) ||
+            (Near(widthMm, 70, toleranceMm) && Near(heightMm, 200, toleranceMm)) ||
+            (Near(w, 70, toleranceMm) && Near(h, 200, toleranceMm)))
+            return PaperSizeKind.Padrao;
 
         // Cupom: prioriza a largura (altura do rolo varia muito).
         if (Near(w, 58, toleranceMm) || Near(widthMm, 58, toleranceMm) || Near(heightMm, 58, toleranceMm))

@@ -20,7 +20,7 @@ public sealed class SoftPrintFeatureOptions
     public int WebhookRetrySeconds { get; set; } = 15;
     public int WebhookMaxRetries { get; set; } = 8;
     public string EventLogFolder { get; set; } = "logs";
-    public int EventLogRetentionDays { get; set; } = 30;
+    public int EventLogRetentionDays { get; set; } = 2;
     public string InboxFolder { get; set; } = "";
     public bool InboxEnabled { get; set; }
     public bool DeleteInboxAfterPrint { get; set; }
@@ -39,8 +39,8 @@ public sealed class SoftPrintFeatureOptions
     public string UpdateAssetName { get; set; } = "SoftPrint-Setup.exe";
     /// <summary>Se true, qualquer versão mais nova é tratada como obrigatória.</summary>
     public bool UpdateAlwaysMandatory { get; set; }
-    /// <summary>No arranque, se houver versão nova, baixa e aplica automaticamente.</summary>
-    public bool AutoUpdateOnStartup { get; set; } = true;
+    /// <summary>No arranque, se houver versão nova obrigatória, baixa e aplica automaticamente.</summary>
+    public bool AutoUpdateOnStartup { get; set; }
 
     /// <summary>Opt-in: envia telemetria anônima de falhas de impressão (status uncertain).</summary>
     public bool TelemetryEnabled { get; set; }

@@ -70,7 +70,7 @@ public static class PrinterPaperMatcher
                 WidthOnlyNativeMatch: false);
         }
 
-        var isReceipt = kind is PaperSizeKind.Receipt58 or PaperSizeKind.Receipt80;
+        var isReceipt = kind is PaperSizeKind.Receipt58 or PaperSizeKind.Receipt80 or PaperSizeKind.Padrao;
         return new PrinterPaperChoice(
             $"SoftPrint {widthMm:0.#}x{heightMm:0.#}mm",
             widthMm,

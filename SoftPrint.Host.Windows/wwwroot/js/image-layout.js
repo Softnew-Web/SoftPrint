@@ -8,6 +8,7 @@ export const PAPER_PRESETS = {
   photo4x6: { w: 101.6, h: 152.4, label: "Foto 10×15" },
   receipt58: { w: 58, h: 200, label: "Cupom 58 mm" },
   receipt80: { w: 80, h: 297, label: "Cupom 80 mm" },
+  padrao: { w: 200, h: 70, label: "Padrão (200×70)" },
 };
 
 export function resolvePaperMm(kind, widthMm, heightMm, landscape) {

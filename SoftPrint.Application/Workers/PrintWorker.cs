@@ -29,7 +29,7 @@ public sealed class PrintWorker(
                 continue;
             }
 
-            var pending = jobs.Snapshot().FirstOrDefault(j => j.Status == JobStatus.Pending);
+            var pending = jobs.PeekNextPending();
             if (pending is null)
             {
                 await Task.Delay(pollInterval, stoppingToken);
@@ -37,13 +37,8 @@ public sealed class PrintWorker(
             }
 
             var printer = router.ResolvePrinter(pending.JobType, options.PrinterName);
-            if (!string.Equals(printer, options.PrinterName, StringComparison.OrdinalIgnoreCase)
-                && !string.IsNullOrWhiteSpace(printer))
-            {
-                jobs.AppendStep(pending.Id, "route", "PrinterRouter",
-                    $"Roteado pelo tipo '{pending.JobType}'.",
-                    $"Impressora padrão '{options.PrinterName}' → '{printer}'");
-            }
+            var routed = !string.Equals(printer, options.PrinterName, StringComparison.OrdinalIgnoreCase)
+                && !string.IsNullOrWhiteSpace(printer);
 
             var job = jobs.TakeNextPending(printer, options.Revision);
             if (job is null)
@@ -73,24 +68,37 @@ public sealed class PrintWorker(
                     PaperLandscape = options.PaperLandscape
                 };
 
-                jobs.AppendStep(job.Id, "layout", "PrintWorker",
-                    $"Layout capturado: {PrintSurfaceMapper.Describe(printOptions)}.",
-                    printOptions.Simulation
-                        ? "A simulação usa a mesma configuração de papel/encaixe do envio real."
-                        : "O spooler recebe este papel, encaixe e escala — os mesmos do preview.");
-
                 var strategy = strategies.Resolve(job, printOptions);
                 var strategyName = strategy.GetType().Name;
                 var mode = printOptions.Simulation ? "simulação (sem papel)" : $"conteúdo {job.ContentKind.ToWire()}";
-                jobs.AppendStep(job.Id, "strategy", $"PrintWorker → {strategyName}",
+
+                // Um único Save em disco para todos os passos pré-execução.
+                var steps = new List<JobStepDraft>(4);
+                if (routed)
+                {
+                    steps.Add(new JobStepDraft(
+                        "route", "PrinterRouter",
+                        $"Roteado pelo tipo '{job.JobType}'.",
+                        $"Impressora padrão '{options.PrinterName}' → '{printer}'"));
+                }
+
+                steps.Add(new JobStepDraft(
+                    "layout", "PrintWorker",
+                    $"Layout capturado: {PrintSurfaceMapper.Describe(printOptions)}.",
+                    printOptions.Simulation
+                        ? "A simulação usa a mesma configuração de papel/encaixe do envio real."
+                        : "O spooler recebe este papel, encaixe e escala — os mesmos do preview."));
+                steps.Add(new JobStepDraft(
+                    "strategy", $"PrintWorker → {strategyName}",
                     $"Estratégia selecionada: {mode}.",
                     printOptions.Simulation
                         ? "SimulationPrintStrategy marca como simulado."
-                        : $"Enviando via {strategyName} para '{printer}'.");
-
-                jobs.AppendStep(job.Id, "executing", strategyName,
+                        : $"Enviando via {strategyName} para '{printer}'."));
+                steps.Add(new JobStepDraft(
+                    "executing", strategyName,
                     printOptions.Simulation ? "Executando simulação…" : "Executando impressão…",
-                    $"Pedido {job.Reference} • tipo {job.JobType}");
+                    $"Pedido {job.Reference} • tipo {job.JobType}"));
+                jobs.AppendSteps(job.Id, steps);
 
                 status = await strategy.ExecuteAsync(job, printOptions, stoppingToken);
             }

@@ -41,12 +41,15 @@ public sealed class UpdateCheckHostedService : BackgroundService
                     "Atualização disponível: {Current} → {Latest} (obrigatória={Mandatory})",
                     result.CurrentVersion, result.LatestVersion, result.Mandatory);
 
-                // Splash já tenta aplicar no arranque com UI; aqui cobre modo bandeja/headless.
+                // Splash já aplica atualização no arranque com UI.
+                // Em modo bandeja/headless, só atualiza sozinho se for obrigatória —
+                // evita fechar o SoftPrint “do nada” por update opcional.
                 if (_options.CurrentValue.AutoUpdateOnStartup &&
-                    !string.IsNullOrWhiteSpace(result.DownloadUrl))
+                    !string.IsNullOrWhiteSpace(result.DownloadUrl) &&
+                    result.Mandatory)
                 {
                     if (_applier.TryStart(out var error))
-                        _logger.LogInformation("Atualização automática iniciada em background.");
+                        _logger.LogInformation("Atualização obrigatória iniciada em background.");
                     else if (!string.IsNullOrWhiteSpace(error))
                         _logger.LogDebug("Atualização automática não iniciada: {Error}", error);
                 }

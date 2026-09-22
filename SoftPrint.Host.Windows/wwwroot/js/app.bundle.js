@@ -106,7 +106,8 @@
     legal: { w: 215.9, h: 355.6, label: "Legal" },
     photo4x6: { w: 101.6, h: 152.4, label: "Foto 10\xD715" },
     receipt58: { w: 58, h: 200, label: "Cupom 58 mm" },
-    receipt80: { w: 80, h: 297, label: "Cupom 80 mm" }
+    receipt80: { w: 80, h: 297, label: "Cupom 80 mm" },
+    padrao: { w: 200, h: 70, label: "Padr\xE3o (200\xD770)" }
   };
   function resolvePaperMm(kind, widthMm, heightMm, landscape) {
     let w;

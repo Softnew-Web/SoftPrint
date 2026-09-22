@@ -112,13 +112,22 @@ public static class ApplicationComposer
                                     return;
                                 }
 
+                                // Update opcional: só avisa. Não baixa/reinicia sozinho (evita fechar o SoftPrint).
+                                if (!check.Mandatory)
+                                {
+                                    splash.SetLiveProgress(
+                                        null,
+                                        $"Nova versão {check.LatestVersion} disponível",
+                                        "Abra o painel e use Atualizar quando quiser instalar.");
+                                    return;
+                                }
+
                                 splash.SetLiveProgress(
                                     5,
-                                    $"Nova versão {check.LatestVersion} encontrada",
+                                    $"Atualização obrigatória {check.LatestVersion}",
                                     "Baixando atualização…");
                                 if (!applier.TryStart(out var err) && !string.IsNullOrWhiteSpace(err))
                                 {
-                                    // Já em andamento (ex.: hosted service) — só acompanhar.
                                     if (!err.Contains("andamento", StringComparison.OrdinalIgnoreCase))
                                         splash.SetLiveProgress(null, "Atualização adiada", err);
                                 }
@@ -143,28 +152,52 @@ public static class ApplicationComposer
                     BalloonTipTitle = "SoftPrint"
                 };
                 tray.Attach(notify);
-                using var panel = new Dashboard(address, apiKey, features, tray);
-                using var menu = new ContextMenuStrip();
-                menu.Items.Add("Abrir painel", null, (_, _) => panel.ShowFromTray());
-                menu.Items.Add($"Versão {SoftPrint.Domain.SoftPrintVersion.Current}", null, (_, _) => { });
-                menu.Items[^1].Enabled = false;
-                menu.Items.Add("Sair", null, (_, _) =>
+
+                var stopHostOnClose = false;
+                SoftPrint.UI.Dashboard? livePanel = null;
+
+                SoftPrint.UI.Dashboard CreatePanel()
                 {
-                    panel.RequestExit();
-                    app.Lifetime.StopApplication();
-                });
-                notify.ContextMenuStrip = menu;
-                notify.DoubleClick += (_, _) => panel.ShowFromTray();
-                notify.MouseClick += (_, e) =>
+                    var p = new SoftPrint.UI.Dashboard(address, apiKey, features, tray);
+                    var menu = new ContextMenuStrip();
+                    menu.Items.Add("Abrir painel", null, (_, _) => BringLiveToFront());
+                    menu.Items.Add($"Versão {SoftPrint.Domain.SoftPrintVersion.Current}", null, (_, _) => { });
+                    menu.Items[^1].Enabled = false;
+                    menu.Items.Add("Sair", null, (_, _) =>
+                    {
+                        stopHostOnClose = true;
+                        p.RequestExit();
+                        app.Lifetime.StopApplication();
+                    });
+                    notify.ContextMenuStrip = menu;
+                    p.FormClosed += (_, _) =>
+                    {
+                        if (p.ExitRequested || stopHostOnClose)
+                        {
+                            try { notify.Visible = false; } catch { /* ignore */ }
+                            app.Lifetime.StopApplication();
+                        }
+                    };
+                    livePanel = p;
+                    return p;
+                }
+
+                void BringLiveToFront()
                 {
-                    if (e.Button == MouseButtons.Left)
-                        panel.ShowFromTray();
-                };
-                panel.FormClosed += (_, _) =>
-                {
-                    notify.Visible = false;
-                    app.Lifetime.StopApplication();
-                };
+                    try
+                    {
+                        var p = livePanel;
+                        if (p is null || p.IsDisposed) return;
+                        if (p.InvokeRequired)
+                            p.BeginInvoke(BringLiveToFront);
+                        else
+                            p.ShowFromTray();
+                    }
+                    catch (ObjectDisposedException) { }
+                    catch (InvalidOperationException) { }
+                }
+
+                var panel = CreatePanel();
 
                 // Mínimo ~15s de splash; alonga se ainda estiver baixando atualização.
                 var skipDashboard = false;
@@ -222,19 +255,16 @@ public static class ApplicationComposer
 
                 using var registration = app.Lifetime.ApplicationStopping.Register(() =>
                 {
+                    stopHostOnClose = true;
                     splash?.CloseSafe();
-                    panel.RequestExit();
+                    try { livePanel?.RequestExit(); } catch { /* ignore */ }
                 });
                 RegisteredWaitHandle? wait = null;
                 if (showSignal is not null)
                 {
                     wait = ThreadPool.RegisterWaitForSingleObject(
                         showSignal,
-                        (_, _) =>
-                        {
-                            try { panel.BeginInvoke(new Action(panel.ShowFromTray)); }
-                            catch (InvalidOperationException) { }
-                        },
+                        (_, _) => BringLiveToFront(),
                         null,
                         -1,
                         false);
@@ -252,7 +282,7 @@ public static class ApplicationComposer
 
                 if (skipDashboard)
                 {
-                    // Atualização vai reiniciar o processo — não abre o painel.
+                    // Atualização obrigatória a reiniciar — espera; se falhar, abre o painel.
                     while (updateApplier is { Status: { Restarting: true } } ||
                            updateApplier is { Status: { InProgress: true } })
                     {
@@ -261,23 +291,66 @@ public static class ApplicationComposer
                         if (app.Lifetime.ApplicationStopping.IsCancellationRequested)
                             break;
                     }
-                    wait?.Unregister(null);
-                    return;
+
+                    if (updateApplier?.Status.Restarting == true ||
+                        app.Lifetime.ApplicationStopping.IsCancellationRequested)
+                    {
+                        wait?.Unregister(null);
+                        return;
+                    }
+
+                    // Download/aplicação falhou ou terminou sem reinício: mostra o painel.
+                    panel.ShowInTaskbar = true;
+                    panel.WindowState = FormWindowState.Maximized;
+                    panel.Opacity = 1;
                 }
 
                 try
                 {
-                    System.Windows.Forms.Application.Run(panel);
+                    System.Windows.Forms.Application.SetUnhandledExceptionMode(
+                        UnhandledExceptionMode.CatchException);
+                    System.Windows.Forms.Application.ThreadException += (_, args) =>
+                    {
+                        System.Diagnostics.Debug.WriteLine(args.Exception);
+                    };
+
+                    // Recria o painel se cair sem o usuário ter pedido Sair.
+                    while (!app.Lifetime.ApplicationStopping.IsCancellationRequested)
+                    {
+                        System.Windows.Forms.Application.Run(panel);
+                        if (panel.ExitRequested ||
+                            stopHostOnClose ||
+                            app.Lifetime.ApplicationStopping.IsCancellationRequested)
+                            break;
+
+                        try { panel.Dispose(); } catch { /* ignore */ }
+                        Thread.Sleep(750);
+                        if (app.Lifetime.ApplicationStopping.IsCancellationRequested)
+                            break;
+
+                        panel = CreatePanel();
+                        if (startInTray)
+                            panel.HideToTray(balloon: false);
+                        else
+                        {
+                            panel.ShowInTaskbar = true;
+                            panel.WindowState = FormWindowState.Maximized;
+                            panel.Show();
+                        }
+                    }
                 }
                 finally
                 {
                     wait?.Unregister(null);
                     splash?.CloseSafe();
                     splash?.Dispose();
+                    try { notify.Visible = false; } catch { /* ignore */ }
+                    try { livePanel?.Dispose(); } catch { /* ignore */ }
+                    app.Lifetime.StopApplication();
                 }
             });
             thread.SetApartmentState(ApartmentState.STA);
-            thread.IsBackground = true;
+            thread.IsBackground = false;
             thread.Start();
         });
     }
@@ -317,12 +390,15 @@ public static class SingleInstanceGuard
         if (currentAcquired && legacyAcquired)
             return new SoftPrintInstance(current, legacy, show);
 
+        // Named wait handle: não Dispose o kernel object aqui — só o handle local.
+        // Dispose total no processo secundário podia interferir no listener da 1ª instância.
         try { show.Set(); }
         finally
         {
             current.Dispose();
             legacy.Dispose();
-            show.Dispose();
+            // Mantém o evento nomeado vivo para a instância principal.
+            show.Close();
         }
         return null;
     }

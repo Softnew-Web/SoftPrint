@@ -165,6 +165,7 @@
                       <option value="letter">Letter</option>
                       <option value="legal">Legal</option>
                       <option value="photo4x6">Foto 10×15</option>
+                      <option value="padrao">Padrão (200×70)</option>
                       <option value="receipt58">Cupom 58 mm</option>
                       <option value="receipt80">Cupom 80 mm</option>
                       <option value="custom">Personalizado</option>
@@ -390,7 +391,7 @@ Teste de impressão de texto.</textarea>
               <label class="text-sm">Timeout webhook (ms)<input id="sysWebhookTimeout" type="number" min="500" max="120000" class="mt-1 w-full rounded-lg bg-ink border border-ink-line px-3 py-2" /></label>
               <label class="text-sm">Repetir webhook (segundos)<input id="sysWebhookRetry" type="number" min="1" max="3600" class="mt-1 w-full rounded-lg bg-ink border border-ink-line px-3 py-2" /></label>
               <label class="text-sm">Máximo de tentativas<input id="sysWebhookMax" type="number" min="0" max="100" class="mt-1 w-full rounded-lg bg-ink border border-ink-line px-3 py-2" /></label>
-              <label class="text-sm">Retenção de eventos (dias)<input id="sysEventRetention" type="number" min="1" max="3650" class="mt-1 w-full rounded-lg bg-ink border border-ink-line px-3 py-2" /></label>
+              <label class="text-sm">Retenção de logs (dias)<input id="sysEventRetention" type="number" min="1" max="3650" class="mt-1 w-full rounded-lg bg-ink border border-ink-line px-3 py-2" /></label>
               <label class="text-sm">Timeout de rede (ms)<input id="sysNetworkTimeout" type="number" min="50" max="30000" class="mt-1 w-full rounded-lg bg-ink border border-ink-line px-3 py-2" /></label>
             </div>
             <label class="block text-sm">URL do webhook<input id="sysWebhookUrl" type="url" class="mt-1 w-full rounded-lg bg-ink border border-ink-line px-3 py-2" /></label>
@@ -464,7 +465,8 @@ Teste de impressão de texto.</textarea>
         var landscape = !!(document.getElementById("paperLandscape") || {}).checked;
         var presets = {
           a4: [210, 297], a5: [148, 210], letter: [215.9, 279.4],
-          legal: [215.9, 355.6], photo4x6: [101.6, 152.4]
+          legal: [215.9, 355.6], photo4x6: [101.6, 152.4],
+          receipt58: [58, 200], receipt80: [80, 297], padrao: [200, 70]
         };
         var w, h;
         if (kind === "custom") {

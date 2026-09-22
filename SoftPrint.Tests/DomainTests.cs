@@ -33,6 +33,8 @@ public sealed class DomainTests
     [Theory]
     [InlineData(58, 200, PaperSizeKind.Receipt58)]
     [InlineData(80, 297, PaperSizeKind.Receipt80)]
+    [InlineData(200, 70, PaperSizeKind.Padrao)]
+    [InlineData(70, 200, PaperSizeKind.Padrao)]
     [InlineData(58.5, 400, PaperSizeKind.Receipt58)]
     [InlineData(100, 150, PaperSizeKind.Photo4x6)]
     [InlineData(90, 140, PaperSizeKind.Custom)]
@@ -44,7 +46,10 @@ public sealed class DomainTests
     {
         Assert.Equal((58, 200), PaperSizeCatalog.GetMillimeters(PaperSizeKind.Receipt58));
         Assert.Equal((80, 297), PaperSizeCatalog.GetMillimeters(PaperSizeKind.Receipt80));
+        Assert.Equal((200, 70), PaperSizeCatalog.GetMillimeters(PaperSizeKind.Padrao));
         Assert.Equal(PaperSizeKind.Receipt80, PaperSizeCatalog.FromWire("cupom80"));
+        Assert.Equal(PaperSizeKind.Padrao, PaperSizeCatalog.FromWire("padrao"));
+        Assert.Equal("Padrão (200×70 mm)", PaperSizeKind.Padrao.ToDisplay());
     }
 
     [Fact]

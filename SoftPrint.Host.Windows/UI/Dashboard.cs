@@ -54,6 +54,8 @@ public sealed class Dashboard : Form
         }
     }
 
+    public bool ExitRequested => _exitRequested;
+
     public void HideToTray(bool balloon = true)
     {
         ShowInTaskbar = false;
@@ -91,6 +93,7 @@ public sealed class Dashboard : Form
 
     protected override void OnFormClosing(FormClosingEventArgs e)
     {
+        // X / Alt+F4 → bandeja. Encerrar de verdade só com Sair (RequestExit).
         if (!_exitRequested && e.CloseReason == CloseReason.UserClosing)
         {
             e.Cancel = true;

@@ -22,19 +22,20 @@ if (!OperatingSystem.IsWindowsVersionAtLeast(10))
     return;
 }
 
+// Evita o processo sumir em silêncio por exceção não tratada.
+AppDomain.CurrentDomain.UnhandledException += (_, e) =>
+    System.Diagnostics.Debug.WriteLine(e.ExceptionObject);
+TaskScheduler.UnobservedTaskException += (_, e) =>
+{
+    System.Diagnostics.Debug.WriteLine(e.Exception);
+    e.SetObserved();
+};
+
 using var instance = SingleInstanceGuard.TryAcquire();
 if (instance is null)
 {
-    if (!args.Contains("--headless"))
-    {
-        MessageBox.Show(
-            $"O SoftPrint v{SoftPrintVersion.Current} já está em execução.\n\n" +
-            "Use o ícone na bandeja do sistema (canto da barra de tarefas) para abrir o painel.\n" +
-            "Não é preciso abrir o atalho de novo.",
-            "SoftPrint já aberto",
-            MessageBoxButtons.OK,
-            MessageBoxIcon.Information);
-    }
+    // Já sinalizou o SoftPrint em execução para abrir o painel (ShowRequested).
+    // Não mostra MessageBox nem inicia outra cópia — evita confundir e não mexe na instância ativa.
     return;
 }
 

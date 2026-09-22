@@ -1,4 +1,5 @@
 using System.Drawing;
+using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
 using System.Drawing.Printing;
 using System.Runtime.InteropServices;
@@ -43,17 +44,14 @@ public sealed class ImagePrintStrategy : IPrintStrategy
         document.PrintController = new StandardPrintController();
         document.PrintPage += (_, page) =>
         {
-            var graphics = page.Graphics ?? throw new InvalidOperationException("Impressora sem área gráfica.");
             var area = PrintSurface.ContentBounds(page);
             var dest = ImageLayoutCalculator.ComputeDestination(
                 area.X, area.Y, area.Width, area.Height,
                 image.Width, image.Height,
                 settings.ImageFit,
                 settings.ImageScalePercent);
-            var saved = graphics.Save();
-            graphics.SetClip(new RectangleF(area.X, area.Y, area.Width, area.Height));
-            graphics.DrawImage(image, new RectangleF(dest.X, dest.Y, dest.Width, dest.Height));
-            graphics.Restore(saved);
+            var graphics = page.Graphics ?? throw new InvalidOperationException("Impressora sem área gráfica.");
+            FastDraw.Image(graphics, image, area, dest, settings);
             page.HasMorePages = false;
         };
         document.Print();
@@ -63,9 +61,6 @@ public sealed class ImagePrintStrategy : IPrintStrategy
 
 public sealed class PdfPrintStrategy : IPrintStrategy
 {
-    /// <summary>Térmicas ~203 DPI; 180 cobre cupom sem o custo do 300.</summary>
-    private const int RenderDpi = 180;
-
     public bool CanHandle(PrintJob job, PrintOptions settings) =>
         !settings.Simulation && job.ContentKind == JobContentKind.Pdf;
 
@@ -75,10 +70,12 @@ public sealed class PdfPrintStrategy : IPrintStrategy
             throw new InvalidOperationException("Arquivo PDF não encontrado.");
 
         using var stream = File.OpenRead(job.SourcePath);
+        // Sem anotações/formulários: cupons comuns ficam bem mais rápidos.
+        // DPI sobe só quando o papel é grande (A4/foto).
         var renderOptions = new RenderOptions(
-            Dpi: RenderDpi,
-            WithAnnotations: true,
-            WithFormFill: true,
+            Dpi: ResolveRenderDpi(settings),
+            WithAnnotations: false,
+            WithFormFill: false,
             BackgroundColor: SKColors.White);
         using var pages = Conversion.ToImages(stream, leaveOpen: true, options: renderOptions).GetEnumerator();
 
@@ -105,15 +102,63 @@ public sealed class PdfPrintStrategy : IPrintStrategy
                 area.X, area.Y, area.Width, area.Height,
                 image.Width, image.Height, settings.ImageFit, settings.ImageScalePercent);
             var graphics = page.Graphics ?? throw new InvalidOperationException("Impressora sem área gráfica.");
-            var saved = graphics.Save();
-            graphics.SetClip(new RectangleF(area.X, area.Y, area.Width, area.Height));
-            graphics.DrawImage(image, new RectangleF(dest.X, dest.Y, dest.Width, dest.Height));
-            graphics.Restore(saved);
+            FastDraw.Image(graphics, image, area, dest, settings);
             page.HasMorePages = pages.MoveNext();
         };
         document.Print();
 
         return Task.FromResult(JobStatus.Sent);
+    }
+
+    /// <summary>
+    /// Térmicas ~203 DPI nativo; 150 cobre cupom/Padrão com bem menos pixels.
+    /// Papel grande mantém 180 para legibilidade.
+    /// </summary>
+    internal static int ResolveRenderDpi(PrintOptions settings)
+    {
+        var (w, h) = settings.EffectivePaperMm();
+        var shortSide = Math.Min(w, h);
+        if (shortSide <= 85) return 150;   // 58/80 mm, Padrão 70 mm
+        if (shortSide <= 120) return 160;  // foto 4x6 etc.
+        return 180;
+    }
+}
+
+internal static class FastDraw
+{
+    public static void Image(
+        Graphics graphics,
+        Image image,
+        LayoutRect area,
+        LayoutRect dest,
+        PrintOptions settings)
+    {
+        var saved = graphics.Save();
+        try
+        {
+            graphics.SetClip(new RectangleF(area.X, area.Y, area.Width, area.Height));
+            var (w, h) = settings.EffectivePaperMm();
+            // Cupom/etiqueta: nearest é bem mais rápido e suficiente em térmica.
+            if (Math.Min(w, h) <= 120)
+            {
+                graphics.CompositingMode = CompositingMode.SourceCopy;
+                graphics.CompositingQuality = CompositingQuality.HighSpeed;
+                graphics.InterpolationMode = InterpolationMode.NearestNeighbor;
+                graphics.PixelOffsetMode = PixelOffsetMode.Half;
+                graphics.SmoothingMode = SmoothingMode.None;
+            }
+            else
+            {
+                graphics.InterpolationMode = InterpolationMode.HighQualityBicubic;
+                graphics.PixelOffsetMode = PixelOffsetMode.HighQuality;
+            }
+
+            graphics.DrawImage(image, new RectangleF(dest.X, dest.Y, dest.Width, dest.Height));
+        }
+        finally
+        {
+            graphics.Restore(saved);
+        }
     }
 }
 
@@ -124,8 +169,11 @@ internal static class GdiImageLoader
         try
         {
             using var stream = File.OpenRead(path);
-            using var temporary = new Bitmap(stream);
-            return new Bitmap(temporary);
+            using var temporary = (Bitmap)Image.FromStream(stream, useEmbeddedColorManagement: false, validateImageData: false);
+            // Uma cópia e libera o arquivo; Format32bppPArgb alinha com o caminho PDF.
+            return (Bitmap)temporary.Clone(
+                new Rectangle(0, 0, temporary.Width, temporary.Height),
+                PixelFormat.Format32bppPArgb);
         }
         catch (Exception ex)
         {

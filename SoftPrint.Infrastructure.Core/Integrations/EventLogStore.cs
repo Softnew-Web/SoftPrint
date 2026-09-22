@@ -8,6 +8,7 @@ namespace SoftPrint.Infrastructure.Integrations;
 
 public sealed class EventLogStore(
     IAppPaths paths,
+    ISystemSettingsRepository systemSettings,
     IOptions<SoftPrintFeatureOptions> options) : IEventLogStore
 {
     private static readonly JsonSerializerOptions JsonOptions = new()
@@ -88,9 +89,9 @@ public sealed class EventLogStore(
 
     private void TrimOld()
     {
-        var keepDays = Math.Max(1, options.Value.EventLogRetentionDays);
-        var cutoff = DateOnly.FromDateTime(DateTime.Now.Date.AddDays(-keepDays));
-        foreach (var day in ListDays().Where(d => d < cutoff))
+        // Mantém os N dias mais recentes; ao gerar o (N+1), apaga o mais antigo.
+        var keepDays = Math.Max(1, systemSettings.Current.EventLogRetentionDays);
+        foreach (var day in ListDays().Skip(keepDays))
         {
             try { File.Delete(Path.Combine(FolderPath, $"events-{day:yyyy-MM-dd}.log")); }
             catch { /* ignore */ }
