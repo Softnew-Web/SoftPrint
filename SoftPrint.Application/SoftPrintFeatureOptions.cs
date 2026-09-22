@@ -7,7 +7,7 @@ public sealed class SoftPrintFeatureOptions
 
     public bool Simulation { get; set; } = true;
     public string PrinterName { get; set; } = "";
-    public int PollIntervalMs { get; set; } = 500;
+    public int PollIntervalMs { get; set; } = 100;
     public bool StartWithWindows { get; set; }
     public int RetentionDays { get; set; } = 30;
     public int BackupIntervalMinutes { get; set; } = 60;

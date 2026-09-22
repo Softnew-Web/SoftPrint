@@ -143,7 +143,7 @@ public static class ApplicationComposer
                     BalloonTipTitle = "SoftPrint"
                 };
                 tray.Attach(notify);
-                using var panel = new Dashboard(address, apiKey, features, notify);
+                using var panel = new Dashboard(address, apiKey, features, tray);
                 using var menu = new ContextMenuStrip();
                 menu.Items.Add("Abrir painel", null, (_, _) => panel.ShowFromTray());
                 menu.Items.Add($"Versão {SoftPrint.Domain.SoftPrintVersion.Current}", null, (_, _) => { });

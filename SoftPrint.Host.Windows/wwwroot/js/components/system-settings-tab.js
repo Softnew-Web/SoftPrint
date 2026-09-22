@@ -71,7 +71,7 @@ export function bindSystemSettingsTab({ api }) {
           telemetryUrl: byId("sysTelemetryUrl")?.value.trim() || "",
         }),
       });
-      message.textContent = "Configurações salvas. Reinicie o SoftPrint para aplicar tudo.";
+      message.textContent = "Configurações salvas. Notificações valem na hora; outras opções podem pedir reinício.";
       message.className = "text-sm text-sea-glow";
     } catch (err) {
       message.textContent = err.message;

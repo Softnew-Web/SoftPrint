@@ -32942,7 +32942,7 @@ Digite o n\xFAmero para instalar no Windows (ou cancele):`,
             telemetryUrl: byId("sysTelemetryUrl")?.value.trim() || ""
           })
         });
-        message.textContent = "Configura\xE7\xF5es salvas. Reinicie o SoftPrint para aplicar tudo.";
+        message.textContent = "Configura\xE7\xF5es salvas. Notifica\xE7\xF5es valem na hora; outras op\xE7\xF5es podem pedir rein\xEDcio.";
         message.className = "text-sm text-sea-glow";
       } catch (err) {
         message.textContent = err.message;

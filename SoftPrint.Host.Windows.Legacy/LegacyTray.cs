@@ -45,11 +45,18 @@ internal static class LegacyBackgroundHost
                 if (!startHidden)
                     OpenDashboard(address);
                 else
-                    notify.ShowBalloonTip(
-                        4000,
-                        "SoftPrint",
-                        "Impressão em segundo plano. Clique no ícone da bandeja para abrir o painel.",
-                        ToolTipIcon.Info);
+                {
+                    var alerts = app.Services.GetService<SoftPrint.Application.Abstractions.ISystemSettingsRepository>()
+                        ?.Current.SoundEnabled != false;
+                    if (alerts)
+                    {
+                        notify.ShowBalloonTip(
+                            4000,
+                            "SoftPrint",
+                            "Impressão em segundo plano. Clique no ícone da bandeja para abrir o painel.",
+                            ToolTipIcon.Info);
+                    }
+                }
                 System.Windows.Forms.Application.Run();
             });
             thread.SetApartmentState(ApartmentState.STA);

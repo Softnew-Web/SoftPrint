@@ -1,4 +1,5 @@
 using System.Drawing;
+using System.Drawing.Imaging;
 using System.Drawing.Printing;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -31,9 +32,8 @@ public sealed class ImagePrintStrategy : IPrintStrategy
         if (string.IsNullOrWhiteSpace(job.SourcePath) || !File.Exists(job.SourcePath))
             throw new InvalidOperationException("Arquivo de imagem não encontrado.");
 
-        using var skiaImage = SKBitmap.Decode(job.SourcePath)
-            ?? throw new InvalidOperationException("Formato de imagem inválido ou não suportado.");
-        using var image = SkiaGdiBridge.ToBitmap(skiaImage);
+        // GDI direto — evita decode Skia + encode PNG desnecessários.
+        using var image = GdiImageLoader.LoadUnlocked(job.SourcePath);
         using var document = new PrintDocument();
         document.PrinterSettings.PrinterName = settings.PrinterName;
         if (!document.PrinterSettings.IsValid)
@@ -63,6 +63,9 @@ public sealed class ImagePrintStrategy : IPrintStrategy
 
 public sealed class PdfPrintStrategy : IPrintStrategy
 {
+    /// <summary>Térmicas ~203 DPI; 180 cobre cupom sem o custo do 300.</summary>
+    private const int RenderDpi = 180;
+
     public bool CanHandle(PrintJob job, PrintOptions settings) =>
         !settings.Simulation && job.ContentKind == JobContentKind.Pdf;
 
@@ -73,7 +76,7 @@ public sealed class PdfPrintStrategy : IPrintStrategy
 
         using var stream = File.OpenRead(job.SourcePath);
         var renderOptions = new RenderOptions(
-            Dpi: 300,
+            Dpi: RenderDpi,
             WithAnnotations: true,
             WithFormFill: true,
             BackgroundColor: SKColors.White);
@@ -114,16 +117,84 @@ public sealed class PdfPrintStrategy : IPrintStrategy
     }
 }
 
+internal static class GdiImageLoader
+{
+    public static Bitmap LoadUnlocked(string path)
+    {
+        try
+        {
+            using var stream = File.OpenRead(path);
+            using var temporary = new Bitmap(stream);
+            return new Bitmap(temporary);
+        }
+        catch (Exception ex)
+        {
+            throw new InvalidOperationException("Formato de imagem inválido ou não suportado.", ex);
+        }
+    }
+}
+
 internal static class SkiaGdiBridge
 {
+    /// <summary>Cópia BGRA direta — sem encode/decode PNG.</summary>
     public static Bitmap ToBitmap(SKBitmap source)
     {
-        using var image = SKImage.FromBitmap(source);
-        using var encoded = image.Encode(SKEncodedImageFormat.Png, 100)
-            ?? throw new InvalidOperationException("Não foi possível converter a página renderizada.");
-        using var stream = encoded.AsStream();
-        using var temporary = new Bitmap(stream);
-        return new Bitmap(temporary);
+        SKBitmap? converted = null;
+        var src = source;
+        if (source.ColorType != SKColorType.Bgra8888)
+        {
+            converted = source.Copy(SKColorType.Bgra8888)
+                ?? throw new InvalidOperationException("Não foi possível converter a página renderizada.");
+            src = converted;
+        }
+
+        try
+        {
+            var bitmap = new Bitmap(src.Width, src.Height, PixelFormat.Format32bppPArgb);
+            var data = bitmap.LockBits(
+                new Rectangle(0, 0, src.Width, src.Height),
+                ImageLockMode.WriteOnly,
+                PixelFormat.Format32bppPArgb);
+            try
+            {
+                var srcPtr = src.GetPixels();
+                var srcStride = src.RowBytes;
+                var height = src.Height;
+
+                if (srcStride == data.Stride)
+                {
+                    var total = checked((long)srcStride * height);
+                    unsafe
+                    {
+                        Buffer.MemoryCopy(
+                            (void*)srcPtr,
+                            (void*)data.Scan0,
+                            total,
+                            total);
+                    }
+                }
+                else
+                {
+                    var rowBytes = Math.Min(srcStride, Math.Abs(data.Stride));
+                    var row = new byte[rowBytes];
+                    for (var y = 0; y < height; y++)
+                    {
+                        Marshal.Copy(IntPtr.Add(srcPtr, y * srcStride), row, 0, rowBytes);
+                        Marshal.Copy(row, 0, IntPtr.Add(data.Scan0, y * data.Stride), rowBytes);
+                    }
+                }
+            }
+            finally
+            {
+                bitmap.UnlockBits(data);
+            }
+
+            return bitmap;
+        }
+        finally
+        {
+            converted?.Dispose();
+        }
     }
 }
 

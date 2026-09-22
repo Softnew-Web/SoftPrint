@@ -3,37 +3,40 @@ using SoftPrint.Domain;
 
 namespace SoftPrint.Infrastructure.Integrations;
 
-public sealed class TrayAppNotifier : IAppNotifier
+public sealed class TrayAppNotifier(ISystemSettingsRepository settings) : IAppNotifier
 {
     private NotifyIcon? _icon;
 
     public void Attach(NotifyIcon icon) => _icon = icon;
 
-    public void NotifyUncertain(PrintJob job)
+    /// <summary>Balão da bandeja; respeita "Notificações na bandeja" em tempo real.</summary>
+    public void ShowBalloonTip(int timeoutMs, string title, string text, ToolTipIcon icon)
     {
+        if (!settings.Current.SoundEnabled) return;
         try
         {
-            _icon?.ShowBalloonTip(
-                8000,
-                "SoftPrint — conferir envio",
-                $"{job.Reference}: {job.ErrorReason ?? job.Error ?? "Falha no envio"}",
-                ToolTipIcon.Warning);
+            _icon?.ShowBalloonTip(timeoutMs, title, text, icon);
         }
         catch { /* ignore tray failures */ }
     }
 
+    public void NotifyUncertain(PrintJob job)
+    {
+        ShowBalloonTip(
+            8000,
+            "SoftPrint — conferir envio",
+            $"{job.Reference}: {job.ErrorReason ?? job.Error ?? "Falha no envio"}",
+            ToolTipIcon.Warning);
+    }
+
     public void NotifyCompleted(PrintJob job)
     {
-        try
-        {
-            if (job.Status == JobStatus.Uncertain) return;
-            _icon?.ShowBalloonTip(
-                4000,
-                "SoftPrint — concluído",
-                $"{job.Reference}: {job.Status.ToDisplay()}",
-                ToolTipIcon.Info);
-        }
-        catch { /* ignore */ }
+        if (job.Status == JobStatus.Uncertain) return;
+        ShowBalloonTip(
+            4000,
+            "SoftPrint — concluído",
+            $"{job.Reference}: {job.Status.ToDisplay()}",
+            ToolTipIcon.Info);
     }
 }
 

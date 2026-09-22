@@ -1,31 +1,27 @@
 using SoftPrint.Application.Abstractions;
 using SoftPrint.Application.Services;
 using SoftPrint.Domain;
-using Microsoft.Extensions.Options;
 
 namespace SoftPrint.Application.Workers;
 
 public sealed class PrintWorker(
     IJobRepository jobs,
     ISettingsRepository settings,
+    ISystemSettingsRepository systemSettings,
     IPrinterRouter router,
     PrintStrategyResolver strategies,
     IWebhookNotifier webhook,
     IAppNotifier notifier,
     ITelemetryService telemetry,
-    IOptions<SoftPrintFeatureOptions> features,
-    IConfiguration configuration,
     ILogger<PrintWorker> logger) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         await Task.Yield();
-        var pollInterval = Math.Clamp(
-            configuration.GetValue("SoftPrint:PollIntervalMs", features.Value.PollIntervalMs),
-            100, 60_000);
 
         while (!stoppingToken.IsCancellationRequested)
         {
+            var pollInterval = Math.Clamp(systemSettings.Current.PollIntervalMs, 100, 60_000);
             var options = settings.Current;
             if (options.Paused)
             {
@@ -117,7 +113,8 @@ public sealed class PrintWorker(
                 _ = telemetry.ReportPrintFailureAsync(finished, CancellationToken.None);
             }
             else notifier.NotifyCompleted(finished);
-            await webhook.NotifyFinishedAsync(finished, stoppingToken);
+            // Não bloqueia a fila se o webhook estiver lento.
+            _ = webhook.NotifyFinishedAsync(finished, CancellationToken.None);
         }
     }
 

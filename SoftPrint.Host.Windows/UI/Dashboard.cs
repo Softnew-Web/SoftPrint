@@ -1,6 +1,7 @@
 using Microsoft.Web.WebView2.Core;
 using Microsoft.Web.WebView2.WinForms;
 using SoftPrint.Domain;
+using SoftPrint.Infrastructure.Integrations;
 
 namespace SoftPrint.UI;
 
@@ -8,17 +9,21 @@ namespace SoftPrint.UI;
 public sealed class Dashboard : Form
 {
     private readonly string _address;
-    private readonly NotifyIcon? _tray;
+    private readonly TrayAppNotifier? _notifier;
     private readonly WebView2 _web = new() { Dock = DockStyle.Fill };
     private bool _exitRequested;
     private bool _hideBalloonShown;
 
-    public Dashboard(string address, string apiKey, Application.SoftPrintFeatureOptions features, NotifyIcon? tray = null)
+    public Dashboard(
+        string address,
+        string apiKey,
+        Application.SoftPrintFeatureOptions features,
+        TrayAppNotifier? notifier = null)
     {
         _ = apiKey;
         _ = features;
         _address = address.TrimEnd('/');
-        _tray = tray;
+        _notifier = notifier;
 
         Text = $"SoftPrint v{SoftPrintVersion.Current}";
         ClientSize = new Size(1400, 920);
@@ -53,9 +58,9 @@ public sealed class Dashboard : Form
     {
         ShowInTaskbar = false;
         Hide();
-        if (!balloon || _tray is null || _hideBalloonShown) return;
+        if (!balloon || _notifier is null || _hideBalloonShown) return;
         _hideBalloonShown = true;
-        _tray.ShowBalloonTip(
+        _notifier.ShowBalloonTip(
             4000,
             "SoftPrint",
             "Continua imprimindo em segundo plano. Clique duas vezes no ícone da bandeja para abrir o painel.",
@@ -168,7 +173,7 @@ public sealed class Dashboard : Form
             Font = new Font("Segoe UI", 12),
             Text = "Painel aberto no navegador.\nO SoftPrint continua em execução na bandeja.\n\n" + reason
         });
-        _tray?.ShowBalloonTip(6000, "SoftPrint", "Painel aberto no navegador. A impressão segue em segundo plano.", ToolTipIcon.Info);
+        _notifier?.ShowBalloonTip(6000, "SoftPrint", "Painel aberto no navegador. A impressão segue em segundo plano.", ToolTipIcon.Info);
     }
 
     private static void CopyDirectory(string source, string destination)
