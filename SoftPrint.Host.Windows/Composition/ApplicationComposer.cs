@@ -105,7 +105,8 @@ public static class ApplicationComposer
 
                 SoftPrint.UI.SplashForm? splash = null;
                 IUpdateApplier? updateApplier = null;
-                var autoUpdate = features.AutoUpdateOnStartup && features.UpdateCheckEnabled;
+                var checkUpdates = features.UpdateCheckEnabled;
+                var autoApplyMandatory = features.AutoUpdateOnStartup;
                 Task? startupUpdateTask = null;
 
                 if (!startInTray)
@@ -113,10 +114,13 @@ public static class ApplicationComposer
                     splash = new SoftPrint.UI.SplashForm(durationMs: 15_000);
                     splash.Show();
                     splash.StartProgress();
-                    splash.SetLiveProgress(null, "Buscando versões…", "Procurando se há uma versão nova…");
+                    splash.SetLiveProgress(
+                        null,
+                        checkUpdates ? "Buscando versões…" : "Abrindo SoftPrint…",
+                        checkUpdates ? "Procurando se há uma versão nova…" : "Carregando o painel…");
                     System.Windows.Forms.Application.DoEvents();
 
-                    if (autoUpdate)
+                    if (checkUpdates)
                     {
                         var checker = app.Services.GetRequiredService<IUpdateChecker>();
                         updateApplier = app.Services.GetRequiredService<IUpdateApplier>();
@@ -128,6 +132,12 @@ public static class ApplicationComposer
                                 checker.InvalidateCache();
                                 splash.SetLiveProgress(null, "Buscando versões…", "Consultando o servidor de atualizações…");
                                 var check = await checker.CheckAsync().ConfigureAwait(false);
+                                if (check.Error is not null)
+                                {
+                                    splash.SetLiveProgress(null, "Não foi possível buscar versões", check.Error);
+                                    return;
+                                }
+
                                 if (!check.UpdateAvailable || string.IsNullOrWhiteSpace(check.DownloadUrl))
                                 {
                                     splash.SetLiveProgress(
@@ -137,13 +147,16 @@ public static class ApplicationComposer
                                     return;
                                 }
 
-                                // Update opcional: só avisa. Não baixa/reinicia sozinho (evita fechar o SoftPrint).
-                                if (!check.Mandatory)
+                                // Opcional (ou obrigatória sem auto-aplicar): só avisa.
+                                // Evita fechar/reiniciar o SoftPrint sozinho.
+                                if (!check.Mandatory || !autoApplyMandatory)
                                 {
                                     splash.SetLiveProgress(
                                         null,
                                         $"Nova versão {check.LatestVersion} disponível",
-                                        "Abra o painel e use Atualizar quando quiser instalar.");
+                                        check.Mandatory
+                                            ? "Atualização recomendada — abra o painel e use Atualizar."
+                                            : "Abra o painel e use Atualizar quando quiser instalar.");
                                     return;
                                 }
 
@@ -162,10 +175,6 @@ public static class ApplicationComposer
                                 splash.SetLiveProgress(null, "Não foi possível buscar versões", ex.Message);
                             }
                         });
-                    }
-                    else
-                    {
-                        splash.SetLiveProgress(null, "Abrindo SoftPrint…", "Carregando o painel…");
                     }
                 }
 

@@ -39,7 +39,7 @@ public sealed class SoftPrintFeatureOptions
     public string UpdateAssetName { get; set; } = "SoftPrint-Setup.exe";
     /// <summary>Se true, qualquer versão mais nova é tratada como obrigatória.</summary>
     public bool UpdateAlwaysMandatory { get; set; }
-    /// <summary>No arranque, se houver versão nova obrigatória, baixa e aplica automaticamente.</summary>
+    /// <summary>No arranque, se houver versão nova *obrigatória*, baixa e aplica automaticamente. Aviso de versão nova continua mesmo com false.</summary>
     public bool AutoUpdateOnStartup { get; set; }
 
     /// <summary>Opt-in: envia telemetria anônima de falhas de impressão (status uncertain).</summary>
