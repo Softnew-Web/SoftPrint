@@ -13,6 +13,12 @@ public sealed class Dashboard : Form
     private readonly WebView2 _web = new() { Dock = DockStyle.Fill };
     private bool _exitRequested;
     private bool _hideBalloonShown;
+    /// <summary>
+    /// Só reage a minimizar→bandeja depois que a 1ª exibição estabilizou.
+    /// No arranque, maximizar dispara Resize com Minimized em alguns Windows —
+    /// e o painel sumia “após 100%” do splash.
+    /// </summary>
+    private bool _readyForTrayMinimize;
 
     public Dashboard(
         string address,
@@ -26,20 +32,32 @@ public sealed class Dashboard : Form
         _notifier = notifier;
 
         Text = $"SoftPrint v{SoftPrintVersion.Current}";
-        ClientSize = new Size(1400, 920);
-        MinimumSize = new Size(1200, 760);
+        ClientSize = new Size(1100, 720);
+        // Evita forçar tamanho maior que a tela (notebooks pequenos).
+        var work = Screen.PrimaryScreen?.WorkingArea ?? new Rectangle(0, 0, 1280, 720);
+        MinimumSize = new Size(
+            Math.Min(900, Math.Max(640, work.Width - 40)),
+            Math.Min(600, Math.Max(480, work.Height - 40)));
         StartPosition = FormStartPosition.CenterScreen;
         WindowState = FormWindowState.Maximized;
         BackColor = Color.FromArgb(15, 23, 32);
         Controls.Add(_web);
         UiHost.MainForm = this;
-        Shown += async (_, _) => await InitAsync();
+        Shown += OnFirstShown;
         FormClosed += (_, _) =>
         {
             if (ReferenceEquals(UiHost.MainForm, this))
                 UiHost.MainForm = null;
             try { _web.Dispose(); } catch { /* ignore */ }
         };
+    }
+
+    private async void OnFirstShown(object? sender, EventArgs e)
+    {
+        Shown -= OnFirstShown;
+        // Depois das mensagens de maximizar/resize do arranque.
+        BeginInvoke(() => _readyForTrayMinimize = true);
+        await InitAsync();
     }
 
     public static bool HasWebView2Runtime()
@@ -73,10 +91,14 @@ public sealed class Dashboard : Form
     {
         if (IsDisposed) return;
         ShowInTaskbar = true;
-        Show();
+        if (!Visible) Show();
+        if (WindowState == FormWindowState.Minimized)
+            WindowState = FormWindowState.Normal;
         WindowState = FormWindowState.Maximized;
+        Opacity = 1;
         Activate();
         BringToFront();
+        try { TopMost = true; TopMost = false; } catch { /* ignore */ }
     }
 
     public void RequestExit()
@@ -106,7 +128,7 @@ public sealed class Dashboard : Form
     protected override void OnResize(EventArgs e)
     {
         base.OnResize(e);
-        if (WindowState == FormWindowState.Minimized)
+        if (_readyForTrayMinimize && Visible && WindowState == FormWindowState.Minimized)
             HideToTray(balloon: false);
     }
 

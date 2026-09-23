@@ -34,8 +34,12 @@ TaskScheduler.UnobservedTaskException += (_, e) =>
 using var instance = SingleInstanceGuard.TryAcquire();
 if (instance is null)
 {
-    // Já sinalizou o SoftPrint em execução para abrir o painel (ShowRequested).
-    // Não mostra MessageBox nem inicia outra cópia — evita confundir e não mexe na instância ativa.
+    // Já sinalizou a 1ª instância (ShowRequested). Avisa para o usuário não achar que “não abriu”.
+    MessageBox.Show(
+        "O SoftPrint já está em execução.\n\nSe o painel não aparecer, clique duas vezes no ícone da bandeja (perto do relógio) ou use Abrir painel no menu.",
+        "SoftPrint",
+        MessageBoxButtons.OK,
+        MessageBoxIcon.Information);
     return;
 }
 

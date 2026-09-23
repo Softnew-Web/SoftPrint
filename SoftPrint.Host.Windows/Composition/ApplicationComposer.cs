@@ -74,6 +74,31 @@ public static class ApplicationComposer
             var address = app.Urls.First();
             var thread = new Thread(() =>
             {
+                try
+                {
+                    // Tem de vir ANTES de qualquer Form (splash incluso).
+                    // Depois do splash isso lançava e o SoftPrint sumia nos 100%.
+                    System.Windows.Forms.Application.SetUnhandledExceptionMode(
+                        UnhandledExceptionMode.CatchException);
+                }
+                catch (InvalidOperationException)
+                {
+                    /* já definido — seguir */
+                }
+
+                System.Windows.Forms.Application.ThreadException += (_, args) =>
+                {
+                    try
+                    {
+                        MessageBox.Show(
+                            "Erro no painel SoftPrint:\n\n" + args.Exception.Message,
+                            "SoftPrint",
+                            MessageBoxButtons.OK,
+                            MessageBoxIcon.Error);
+                    }
+                    catch { /* ignore */ }
+                };
+
                 System.Windows.Forms.Application.SetHighDpiMode(HighDpiMode.PerMonitorV2);
                 System.Windows.Forms.Application.EnableVisualStyles();
                 System.Windows.Forms.Application.SetCompatibleTextRenderingDefault(false);
@@ -197,14 +222,17 @@ public static class ApplicationComposer
                     catch (InvalidOperationException) { }
                 }
 
+                notify.DoubleClick += (_, _) => BringLiveToFront();
+                notify.MouseDoubleClick += (_, _) => BringLiveToFront();
+
                 var panel = CreatePanel();
 
                 // Mínimo ~15s de splash; alonga se ainda estiver baixando atualização.
+                // Não mostrar/ocultar o painel com Opacity durante o splash — isso criava
+                // janela layered e, em alguns PCs, o painel nunca aparecia depois dos 100%.
                 var skipDashboard = false;
                 if (splash is not null)
                 {
-                    panel.Opacity = 0;
-                    panel.ShowInTaskbar = false;
                     splash.WaitUntilReady(
                         keepWaiting: () =>
                         {
@@ -240,17 +268,6 @@ public static class ApplicationComposer
                     splash.CloseSafe();
                     splash.Dispose();
                     splash = null;
-
-                    if (!skipDashboard)
-                    {
-                        panel.ShowInTaskbar = true;
-                        panel.WindowState = FormWindowState.Maximized;
-                        panel.Opacity = 1;
-                    }
-                }
-                else
-                {
-                    panel.WindowState = FormWindowState.Maximized;
                 }
 
                 using var registration = app.Lifetime.ApplicationStopping.Register(() =>
@@ -271,12 +288,21 @@ public static class ApplicationComposer
                 }
                 if (startInTray)
                 {
-                    panel.Opacity = 0;
                     panel.ShowInTaskbar = false;
+                    panel.Shown += (_, _) => panel.HideToTray(balloon: true);
+                }
+                else
+                {
+                    panel.ShowInTaskbar = true;
+                    panel.WindowState = FormWindowState.Maximized;
                     panel.Shown += (_, _) =>
                     {
-                        panel.HideToTray(balloon: true);
-                        panel.Opacity = 1;
+                        try
+                        {
+                            panel.Activate();
+                            panel.BringToFront();
+                        }
+                        catch { /* ignore */ }
                     };
                 }
 
@@ -298,25 +324,34 @@ public static class ApplicationComposer
                         wait?.Unregister(null);
                         return;
                     }
-
-                    // Download/aplicação falhou ou terminou sem reinício: mostra o painel.
-                    panel.ShowInTaskbar = true;
-                    panel.WindowState = FormWindowState.Maximized;
-                    panel.Opacity = 1;
                 }
 
                 try
                 {
-                    System.Windows.Forms.Application.SetUnhandledExceptionMode(
-                        UnhandledExceptionMode.CatchException);
-                    System.Windows.Forms.Application.ThreadException += (_, args) =>
-                    {
-                        System.Diagnostics.Debug.WriteLine(args.Exception);
-                    };
-
                     // Recria o painel se cair sem o usuário ter pedido Sair.
                     while (!app.Lifetime.ApplicationStopping.IsCancellationRequested)
                     {
+                        if (!startInTray)
+                        {
+                            try
+                            {
+                                panel.ShowInTaskbar = true;
+                                panel.WindowState = FormWindowState.Maximized;
+                                if (!panel.Visible)
+                                    panel.Show();
+                                panel.Activate();
+                                panel.BringToFront();
+                            }
+                            catch (Exception ex)
+                            {
+                                MessageBox.Show(
+                                    "Não foi possível exibir o painel.\n\n" + ex.Message,
+                                    "SoftPrint",
+                                    MessageBoxButtons.OK,
+                                    MessageBoxIcon.Error);
+                            }
+                        }
+
                         System.Windows.Forms.Application.Run(panel);
                         if (panel.ExitRequested ||
                             stopHostOnClose ||
@@ -338,6 +373,18 @@ public static class ApplicationComposer
                             panel.Show();
                         }
                     }
+                }
+                catch (Exception ex)
+                {
+                    try
+                    {
+                        MessageBox.Show(
+                            "O SoftPrint encerrou após o carregamento.\n\n" + ex.Message,
+                            "SoftPrint",
+                            MessageBoxButtons.OK,
+                            MessageBoxIcon.Error);
+                    }
+                    catch { /* ignore */ }
                 }
                 finally
                 {
