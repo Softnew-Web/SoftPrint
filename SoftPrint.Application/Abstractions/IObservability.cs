@@ -11,6 +11,25 @@ public interface IEventLogStore
     void OpenFolder();
 }
 
+/// <summary>Registra início/fim do SoftPrint, fechamento, desligamento do Windows e crashes.</summary>
+public interface IAppLifecycleLogger
+{
+    /// <summary>Chamado no arranque: detecta saída suja anterior e grava "iniciado".</summary>
+    void OnApplicationStarted();
+
+    /// <summary>Marca o motivo do encerramento (usado no Stop).</summary>
+    void NoteExitReason(string reason, string? detail = null);
+
+    /// <summary>Grava encerramento limpo e limpa o marcador de sessão.</summary>
+    void OnApplicationStopping();
+
+    /// <summary>Melhor esforço: grava crash (pode ser chamado fora do DI em handlers estáticos).</summary>
+    void OnCrash(string message, string? detail = null);
+
+    /// <summary>Registra crash a partir da exceção (tipo, mensagem, stack e internas).</summary>
+    void OnCrash(Exception exception, string? context = null);
+}
+
 public interface IWebhookRetryQueue
 {
     void Enqueue(JobFinishedEventLog entry, string reason);
@@ -65,3 +84,15 @@ public sealed record MetricsSnapshot(
     int Pending,
     int Processing,
     string? BusiestJobType);
+
+/// <summary>Motivos conhecidos de saída do SoftPrint.</summary>
+public static class AppExitReasons
+{
+    public const string UserClosed = "user-closed";
+    public const string WindowsShutdown = "windows-shutdown";
+    public const string WindowsLogoff = "windows-logoff";
+    public const string HostStop = "host-stop";
+    public const string Crashed = "crashed";
+    public const string UncleanExit = "unclean-exit";
+    public const string UpdateRestart = "update-restart";
+}

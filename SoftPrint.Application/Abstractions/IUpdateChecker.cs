@@ -20,4 +20,5 @@ public sealed record UpdateCheckResult(
     string? ReleaseNotes,
     string? Error,
     DateTimeOffset CheckedAt,
-    string? AssetName = null);
+    string? AssetName = null,
+    string? Sha256 = null);

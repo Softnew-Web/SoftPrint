@@ -72,7 +72,9 @@ public sealed class PrintWorker(
                 var strategyName = strategy.GetType().Name;
                 var mode = printOptions.Simulation ? "simulação (sem papel)" : $"conteúdo {job.ContentKind.ToWire()}";
 
-                // Um único Save em disco para todos os passos pré-execução.
+                // Imprime primeiro; grava os passos depois — evita I/O de jobs.json antes do spooler.
+                status = await strategy.ExecuteAsync(job, printOptions, stoppingToken);
+
                 var steps = new List<JobStepDraft>(4);
                 if (routed)
                 {
@@ -95,12 +97,10 @@ public sealed class PrintWorker(
                         ? "SimulationPrintStrategy marca como simulado."
                         : $"Enviando via {strategyName} para '{printer}'."));
                 steps.Add(new JobStepDraft(
-                    "executing", strategyName,
-                    printOptions.Simulation ? "Executando simulação…" : "Executando impressão…",
+                    "executed", strategyName,
+                    printOptions.Simulation ? "Simulação concluída." : "Impressão enviada ao spooler.",
                     $"Pedido {job.Reference} • tipo {job.JobType}"));
                 jobs.AppendSteps(job.Id, steps);
-
-                status = await strategy.ExecuteAsync(job, printOptions, stoppingToken);
             }
             catch (Exception exception)
             {

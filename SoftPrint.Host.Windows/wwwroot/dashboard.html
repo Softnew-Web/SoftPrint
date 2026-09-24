@@ -24,6 +24,7 @@
             sea: { DEFAULT: "#0d9488", deep: "#0f766e", glow: "#14b8a6" },
             warn: "#c2410c",
             bad: "#b91c1c",
+            good: "#059669",
           },
         },
       },
@@ -71,6 +72,7 @@
           <h1 id="pageTitle" class="font-display text-xl font-bold text-white">Configure a impressora</h1>
           <p id="pageSubtitle" class="text-xs text-mist mt-0.5">01 · Impressora, simulação e Windows</p>
           <p id="healthLine" class="text-xs text-mist/80 mt-0.5 truncate">Conectando…</p>
+          <p id="headerPrinterStatus" class="text-xs mt-0.5 truncate text-mist">Impressora: —</p>
         </div>
         <div class="flex items-center gap-3 shrink-0">
           <span id="headerVersion" class="hidden sm:inline-flex items-center rounded-lg border border-ink-line bg-ink px-2.5 py-1 text-xs text-mist">
@@ -81,8 +83,33 @@
             Conectando…
           </span>
           <button id="btnRefresh" type="button" class="px-3 py-1.5 rounded-lg bg-ink-line hover:bg-ink-line/80 text-sm">Atualizar</button>
+          <button id="btnSetupWizard" type="button" title="Assistente de configuração" class="px-3 py-1.5 rounded-lg bg-ink-line hover:bg-ink-line/80 text-sm hidden sm:inline-flex">Assistente</button>
         </div>
       </header>
+
+      <div id="setupWizard" class="hidden fixed inset-0 z-[60] bg-ink/85 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="w-full max-w-lg rounded-2xl border border-sea/40 bg-ink-soft p-6 shadow-2xl space-y-4">
+          <div class="flex items-start justify-between gap-3">
+            <div>
+              <p class="text-xs uppercase tracking-wider text-sea-glow font-semibold">Primeiro uso</p>
+              <h2 id="setupWizardTitle" class="font-display text-xl font-bold text-white mt-1">Configure em 3 passos</h2>
+              <p id="setupWizardHint" class="text-sm text-mist mt-1">Impressora → papel → teste.</p>
+            </div>
+            <button id="setupWizardSkip" type="button" class="text-mist hover:text-white text-sm shrink-0">Pular</button>
+          </div>
+          <ol class="flex gap-2 text-xs">
+            <li id="setupStepDot1" class="flex-1 rounded-full h-1.5 bg-sea"></li>
+            <li id="setupStepDot2" class="flex-1 rounded-full h-1.5 bg-ink-line"></li>
+            <li id="setupStepDot3" class="flex-1 rounded-full h-1.5 bg-ink-line"></li>
+          </ol>
+          <div id="setupWizardBody" class="rounded-xl border border-ink-line bg-ink/50 p-4 text-sm space-y-3 min-h-[8rem]"></div>
+          <p id="setupWizardMsg" class="text-sm text-mist min-h-[1.25rem]"></p>
+          <div class="flex flex-wrap gap-2 justify-end">
+            <button id="setupWizardBack" type="button" class="rounded-xl bg-ink-line px-4 py-2.5 text-sm hidden">Voltar</button>
+            <button id="setupWizardNext" type="button" class="rounded-xl bg-sea hover:bg-sea-deep text-white font-semibold px-5 py-2.5">Continuar</button>
+          </div>
+        </div>
+      </div>
 
       <div id="updateBanner" class="hidden px-5 py-2.5 border-b border-warn/40 bg-warn/15 text-sm shrink-0">
         <div class="flex flex-wrap items-center justify-between gap-2">
@@ -142,13 +169,24 @@
                 <p id="printerSummary" class="text-[11px] text-mist text-right max-w-[45%] leading-snug"></p>
               </div>
               <div class="flex gap-2">
-                <select id="printers" class="field flex-1 min-w-0 rounded-lg bg-ink border border-ink-line px-2.5 py-1.5 text-sm text-paper">
+                <select id="printers" aria-label="Impressora" class="field flex-1 min-w-0 rounded-lg bg-ink border border-ink-line px-2.5 py-1.5 text-sm text-paper">
                   <option value="">Selecionar impressora…</option>
                 </select>
                 <button id="btnLoadPrinters" type="button" class="shrink-0 rounded-lg bg-ink-line hover:bg-ink-line/70 px-2.5 py-1.5 text-sm">Atualizar</button>
                 <button id="btnFindNetworkPrinters" type="button" title="Procurar impressoras na rede e instalar" class="shrink-0 rounded-lg bg-ink-line hover:bg-ink-line/70 px-2.5 py-1.5 text-sm">Rede</button>
               </div>
               <p id="networkPrinterHint" class="text-[11px] text-mist leading-snug hidden"></p>
+              <div id="networkPrinterPanel" class="hidden rounded-xl border border-ink-line bg-ink/50 p-3 space-y-2">
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                  <p class="text-xs text-mist">Marque uma ou mais e instale de uma vez.</p>
+                  <div class="flex gap-2">
+                    <button id="btnNetworkSelectAll" type="button" class="rounded-lg bg-ink-line px-2 py-1 text-xs">Todas</button>
+                    <button id="btnInstallNetworkSelected" type="button" class="rounded-lg bg-sea/90 hover:bg-sea text-white px-2.5 py-1 text-xs font-medium">Instalar selecionadas</button>
+                    <button id="btnCloseNetworkPanel" type="button" class="rounded-lg bg-ink-line hover:bg-ink-line/70 px-2 py-1 text-xs">Fechar</button>
+                  </div>
+                </div>
+                <div id="networkPrinterList" class="max-h-40 overflow-auto scroll-thin space-y-1 text-sm"></div>
+              </div>
               <div class="flex flex-wrap gap-x-4 gap-y-1.5 text-sm">
                 <label class="inline-flex items-center gap-1.5"><input id="simulation" type="checkbox" class="accent-sea" checked /> Simular</label>
                 <label class="inline-flex items-center gap-1.5"><input id="paused" type="checkbox" class="accent-sea" /> Pausar fila</label>
@@ -221,7 +259,7 @@
               </div>
               <div class="flex gap-2 shrink-0">
                 <button id="btnPickPreview" type="button" class="rounded-lg bg-ink-line hover:bg-ink-line/70 px-2.5 py-1.5 text-sm">Escolher arquivo</button>
-                <input id="previewFile" type="file" accept="image/*,application/pdf,.pdf" class="sr-only" tabindex="-1" />
+                <input id="previewFile" type="file" accept="image/*,application/pdf,.pdf" class="sr-only" tabindex="-1" aria-label="Arquivo de preview" />
                 <button id="btnClearPreview" type="button" class="rounded-lg bg-ink-line hover:bg-ink-line/70 px-2.5 py-1.5 text-sm">Limpar</button>
               </div>
             </div>
@@ -238,8 +276,8 @@
                 </select>
               </label>
             </div>
-            <div class="flex-1 min-h-[280px] rounded-xl border border-ink-line bg-ink overflow-hidden flex items-center justify-center p-1">
-              <canvas id="printPreview" width="640" height="560" class="block max-h-full max-w-full bg-[#121a22]"></canvas>
+            <div class="flex-1 min-h-[280px] rounded-xl border border-ink-line bg-ink overflow-hidden relative p-2">
+              <canvas id="printPreview" width="640" height="560" class="absolute inset-0 w-full h-full block bg-[#121a22]"></canvas>
             </div>
             <p id="previewMeta" class="text-[11px] text-mist shrink-0 truncate">Sem imagem — o dimensionamento vale para PDF e imagem (senha, receita, etiqueta).</p>
           </div>
@@ -252,7 +290,7 @@
               <h2 class="font-display text-xl font-bold">Conectar seu sistema</h2>
               <p class="text-sm text-mist mt-1 leading-relaxed">Use o endereço e a chave no sistema que enviará os pedidos. Sem webhook, os eventos vão para a pasta logs.</p>
             </div>
-            <input id="endpoint" readonly class="w-full rounded-xl bg-ink border border-ink-line px-3 py-2.5 text-sm" />
+            <input id="endpoint" readonly aria-label="Endereço da API" class="w-full rounded-xl bg-ink border border-ink-line px-3 py-2.5 text-sm" />
             <div class="flex flex-wrap gap-2">
               <button id="btnCopyEndpoint" type="button" class="rounded-xl bg-ink-line px-4 py-2.5 text-sm">Copiar endereço</button>
               <button id="btnCopyKey" type="button" class="rounded-xl bg-ink-line px-4 py-2.5 text-sm">Copiar chave</button>
@@ -261,6 +299,27 @@
               <button id="btnDiscover" type="button" class="rounded-xl bg-ink-line px-4 py-2.5 text-sm">Buscar rede</button>
             </div>
             <p class="text-xs text-mist leading-relaxed">Webhook vazio → <code class="text-paper/80">logs/events-yyyy-MM-dd.log</code>. Busca de rede varre portas 9100 / 515 / 631.</p>
+            <div class="rounded-xl border border-ink-line bg-ink/50 overflow-hidden">
+              <div class="px-3 py-2.5 border-b border-ink-line flex flex-wrap gap-2 items-end bg-ink-soft/80">
+                <label class="text-xs text-mist">Dia
+                  <input id="eventsDay" type="date" class="mt-1 block rounded-lg bg-ink border border-ink-line px-2.5 py-1.5 text-sm text-paper" />
+                </label>
+                <label class="text-xs text-mist flex-1 min-w-[10rem]">Buscar
+                  <input id="eventsFilter" type="search" placeholder="pedido, impressora, erro…" class="mt-1 w-full rounded-lg bg-ink border border-ink-line px-2.5 py-1.5 text-sm text-paper" />
+                </label>
+                <fieldset class="flex gap-1.5 flex-wrap border-0 p-0 m-0 min-w-0" id="eventsStatusChips">
+                  <legend class="sr-only">Filtrar por situação</legend>
+                  <button type="button" data-status="" class="events-chip active rounded-lg px-2.5 py-1.5 text-xs border border-sea/50 bg-sea/15 text-sea-glow">Todos</button>
+                  <button type="button" data-status="ok" class="events-chip rounded-lg px-2.5 py-1.5 text-xs border border-ink-line text-mist hover:border-sea/40">OK</button>
+                  <button type="button" data-status="uncertain" class="events-chip rounded-lg px-2.5 py-1.5 text-xs border border-ink-line text-mist hover:border-bad/40">Conferir</button>
+                </fieldset>
+                <button id="btnLoadEventsPanel" type="button" class="rounded-lg bg-sea/90 hover:bg-sea text-white px-3 py-2 text-sm font-medium">Atualizar</button>
+              </div>
+              <div id="eventsPanelSummary" class="hidden px-3 py-2 border-b border-ink-line/80 flex flex-wrap gap-2 text-[11px]"></div>
+              <div id="eventsPanelList" class="max-h-[22rem] overflow-auto scroll-thin p-2 space-y-1.5 text-xs text-mist">
+                <p class="px-2 py-6 text-center text-mist">Carregando eventos…</p>
+              </div>
+            </div>
           </div>
 
           <div class="rounded-2xl bg-ink-soft border border-ink-line p-6 space-y-4">
@@ -297,8 +356,12 @@
               <div class="min-w-0">
                 <h2 class="font-display text-xl font-bold">Fila, passo a passo e erros</h2>
                 <p id="pipeline" class="text-sm text-mist mt-1 leading-relaxed">Aguardando…</p>
+                <p id="printerHealthLine" class="text-xs text-mist mt-1"></p>
               </div>
-              <div class="flex flex-wrap gap-2">
+              <div class="flex flex-wrap gap-2 items-center">
+                <button id="btnQueuePause" type="button" class="rounded-lg bg-ink-line px-3 py-2 text-sm">Pausar fila</button>
+                <button id="btnQueueResume" type="button" class="rounded-lg bg-sea/80 hover:bg-sea text-white px-3 py-2 text-sm">Retomar</button>
+                <button id="btnReprintBulk" type="button" class="rounded-lg bg-ink-line px-3 py-2 text-sm">Reimprimir marcados</button>
                 <div id="statusFilterWrap" class="relative">
                   <button id="statusFilterBtn" type="button"
                           class="rounded-lg bg-ink border border-ink-line px-2.5 py-2 text-sm min-w-[9.5rem] text-left flex items-center justify-between gap-2">
@@ -328,7 +391,7 @@
                     </button>
                   </div>
                 </div>
-                <input id="refFilter" placeholder="Filtrar pedido…" class="rounded-lg bg-ink border border-ink-line px-3 py-2 text-sm w-44" />
+                <input id="refFilter" placeholder="Filtrar pedido…" aria-label="Filtrar pedido" class="rounded-lg bg-ink border border-ink-line px-3 py-2 text-sm w-44" />
                 <button id="btnExportJson" type="button" class="rounded-lg bg-ink-line px-3 py-2 text-sm">JSON</button>
                 <button id="btnExportCsv" type="button" class="rounded-lg bg-ink-line px-3 py-2 text-sm">CSV</button>
               </div>
@@ -340,6 +403,9 @@
                   <table class="w-full text-sm">
                     <thead class="sticky top-0 bg-ink text-mist text-xs uppercase tracking-wide">
                       <tr>
+                        <th class="text-left px-3 py-2 font-medium w-8">
+                          <input id="jobsSelectAll" type="checkbox" class="accent-sea" aria-label="Selecionar todos" />
+                        </th>
                         <th class="text-left px-3 py-2 font-medium">Pedido</th>
                         <th class="text-left px-3 py-2 font-medium">Tipo</th>
                         <th class="text-left px-3 py-2 font-medium">Situação</th>
@@ -358,14 +424,24 @@
             </div>
 
             <div class="grid md:grid-cols-[1fr_140px_140px] gap-2">
-              <textarea id="sample" rows="3" class="rounded-xl bg-ink border border-ink-line px-3 py-2 text-sm resize-y min-h-[88px]">TESTE SOFTPRINT
+              <label class="block min-w-0 space-y-1">
+                <span class="text-mist text-[11px]">Texto de teste</span>
+                <textarea id="sample" rows="3" class="w-full rounded-xl bg-ink border border-ink-line px-3 py-2 text-sm resize-y min-h-[88px]">TESTE SOFTPRINT
 Conexão funcionando.
 Teste de impressão de texto.</textarea>
-              <input id="jobType" value="default" class="rounded-xl bg-ink border border-ink-line px-3 py-2 text-sm" placeholder="Tipo" />
-              <input id="template" class="rounded-xl bg-ink border border-ink-line px-3 py-2 text-sm" placeholder="Template" />
+              </label>
+              <label class="block space-y-1">
+                <span class="text-mist text-[11px]">Tipo</span>
+                <input id="jobType" value="default" class="w-full rounded-xl bg-ink border border-ink-line px-3 py-2 text-sm" placeholder="Tipo" />
+              </label>
+              <label class="block space-y-1">
+                <span class="text-mist text-[11px]">Template</span>
+                <input id="template" class="w-full rounded-xl bg-ink border border-ink-line px-3 py-2 text-sm" placeholder="Template" />
+              </label>
             </div>
             <div class="flex flex-wrap gap-2 items-center">
-              <button id="btnSendTest" type="button" class="rounded-xl bg-sea hover:bg-sea-deep text-white font-semibold px-5 py-3">Enviar teste</button>
+              <button id="btnGuidedTest" type="button" class="rounded-xl bg-sea hover:bg-sea-deep text-white font-semibold px-5 py-3">Teste guiado (papel atual)</button>
+              <button id="btnSendTest" type="button" class="rounded-xl bg-ink-line px-4 py-3 text-sm">Enviar texto livre</button>
               <button id="btnReprint" type="button" class="rounded-xl bg-ink-line px-4 py-3 text-sm">Reimprimir</button>
               <button id="btnExplain" type="button" class="rounded-xl bg-ink-line px-4 py-3 text-sm">Explicação completa</button>
               <p id="feedback" class="text-sm text-sea-glow min-h-[1.25rem]"></p>
@@ -378,6 +454,20 @@ Teste de impressão de texto.</textarea>
             <p class="text-xs uppercase tracking-wider text-sea-glow font-semibold">Sobre</p>
             <p class="font-display text-2xl font-bold text-white mt-1">SoftPrint <span id="settingsVersion" class="text-sea-glow">v{{APP_VERSION}}</span></p>
             <p class="text-sm text-mist mt-2">Versão instalada neste computador. Se houver atualização, o aviso aparece no topo do painel.</p>
+            <div id="updateHistoryBox" class="mt-4 rounded-xl border border-ink-line bg-ink/60 p-4 space-y-1.5 text-sm">
+              <p class="text-xs uppercase tracking-wider text-mist">Histórico de atualização</p>
+              <p id="updateHistoryCheck" class="text-mist">Última verificação: —</p>
+              <p id="updateHistoryApply" class="text-mist">Última instalação: —</p>
+            </div>
+            <div id="rollbackBox" class="mt-4 hidden rounded-xl border border-warn/50 bg-warn/10 p-4 space-y-2">
+              <p class="text-sm text-paper/95 font-medium">Versão anterior disponível neste PC</p>
+              <p class="text-sm text-paper/90">Se a atualização der problema, volte à instalação anterior (só a última — não acumula várias).</p>
+              <p id="rollbackHint" class="text-xs text-mist"></p>
+              <button id="btnRollback" type="button"
+                      class="px-4 py-2 rounded-lg bg-warn/90 hover:bg-warn text-ink font-semibold text-sm">
+                Retroceder para versão anterior
+              </button>
+            </div>
           </div>
           <div class="rounded-2xl bg-ink-soft border border-ink-line p-5 space-y-4 max-w-4xl">
             <div>
@@ -403,17 +493,25 @@ Teste de impressão de texto.</textarea>
             </div>
             <label class="block text-sm">URL de telemetria<input id="sysTelemetryUrl" type="url" placeholder="https://…" class="mt-1 w-full rounded-lg bg-ink border border-ink-line px-3 py-2" /></label>
             <p class="text-xs text-mist">Quando ativo, envia só metadados de falha (versão, SO, tipo, erro) — sem texto do pedido, caminhos ou chaves.</p>
-            <div class="flex items-center gap-3">
+            <label class="block text-sm">Rotas tipo → impressora
+              <input id="sysPrinterRoutes" type="text" placeholder="farmacia=Imp Farmácia;caixa=Imp Caixa" class="mt-1 w-full rounded-lg bg-ink border border-ink-line px-3 py-2 font-mono text-xs" />
+            </label>
+            <p class="text-xs text-mist -mt-2">Formato: <code class="text-paper/80">tipo=nome da impressora</code>, separados por ponto e vírgula. O tipo do pedido (API/inbox) escolhe a impressora.</p>
+            <div class="flex flex-wrap gap-2 items-center">
               <button id="btnSaveSystem" type="button" class="rounded-xl bg-sea hover:bg-sea-deep text-white font-semibold px-5 py-2.5">Salvar configurações</button>
+              <button id="btnExportBackup" type="button" class="rounded-xl bg-ink-line px-4 py-2.5 text-sm">Exportar backup</button>
+              <button id="btnImportBackup" type="button" class="rounded-xl bg-ink-line px-4 py-2.5 text-sm">Importar backup</button>
+              <input id="backupFile" type="file" accept="application/json,.json" class="sr-only" aria-label="Arquivo de backup" />
               <p id="systemSettingsMsg" class="text-sm text-mist"></p>
             </div>
           </div>
           <div class="rounded-2xl bg-ink-soft border border-ink-line p-5 space-y-3 max-w-4xl">
             <div>
-              <h2 class="font-display text-xl font-bold">Diagnóstico de compatibilidade</h2>
-              <p class="text-sm text-mist mt-1">Sistema, runtime, backend de impressão e recursos disponíveis neste computador.</p>
+              <h2 class="font-display text-xl font-bold">Diagnóstico</h2>
+              <p class="text-sm text-mist mt-1">WebView2, pasta, API, impressora e atualizações — verde/vermelho neste computador.</p>
             </div>
-            <pre id="diagnoseReport" class="rounded-xl bg-ink border border-ink-line p-4 text-xs leading-relaxed overflow-auto scroll-thin min-h-[8rem] text-mist">Carregando diagnóstico…</pre>
+            <div id="diagnoseChecks" class="grid sm:grid-cols-2 gap-2 text-sm"></div>
+            <pre id="diagnoseReport" class="rounded-xl bg-ink border border-ink-line p-4 text-xs leading-relaxed overflow-auto scroll-thin min-h-[6rem] text-mist">Carregando diagnóstico…</pre>
             <button id="btnDiagnose" type="button" class="rounded-xl bg-ink-line px-4 py-2.5 text-sm">Atualizar diagnóstico</button>
           </div>
         </section>
@@ -426,236 +524,12 @@ Teste de impressão de texto.</textarea>
       <h3 id="dlgTitle" class="font-display font-bold text-lg">Detalhes</h3>
       <button id="dlgClose" type="button" class="text-mist hover:text-white">Fechar</button>
     </div>
-    <pre id="dlgBody" class="p-5 text-sm whitespace-pre-wrap overflow-auto max-h-[70vh] scroll-thin leading-relaxed"></pre>
+    <div id="dlgBody" class="p-5 text-sm whitespace-pre-wrap overflow-auto max-h-[70vh] scroll-thin leading-relaxed"></div>
   </dialog>
 
   <script>
     window.SOFTPRINT_KEY = "{{API_KEY}}";
-    // Bootstrap sem módulo: abas, impressoras e preview (WebView2 costuma falhar com ES modules em cache).
-    (function () {
-      // Código legado mantido temporariamente como referência; o bundle abaixo é a fonte única.
-      return;
-      var previewImage = null;
-      var previewUrl = null;
-
-      function setTab(id) {
-        ["config", "connect", "monitor"].forEach(function (t) {
-          var panel = document.getElementById("panel-" + t);
-          var btn = document.getElementById("tab-" + t);
-          if (!panel || !btn) return;
-          var active = t === id;
-          panel.classList.toggle("panel-hidden", !active);
-          btn.classList.toggle("active", active);
-        });
-      }
-      ["config", "connect", "monitor"].forEach(function (t) {
-        var btn = document.getElementById("tab-" + t);
-        if (btn) btn.addEventListener("click", function () { setTab(t); });
-      });
-
-      function esc(s) {
-        return String(s == null ? "" : s)
-          .replace(/&/g, "&amp;")
-          .replace(/</g, "&lt;")
-          .replace(/"/g, "&quot;");
-      }
-
-      function paperMm() {
-        var kind = (document.getElementById("paperSize") || {}).value || "a4";
-        var landscape = !!(document.getElementById("paperLandscape") || {}).checked;
-        var presets = {
-          a4: [210, 297], a5: [148, 210], letter: [215.9, 279.4],
-          legal: [215.9, 355.6], photo4x6: [101.6, 152.4],
-          receipt58: [58, 200], receipt80: [80, 297], padrao: [200, 70]
-        };
-        var w, h;
-        if (kind === "custom") {
-          w = Number((document.getElementById("paperWidthMm") || {}).value) || 210;
-          h = Number((document.getElementById("paperHeightMm") || {}).value) || 297;
-        } else {
-          var p = presets[kind] || presets.a4;
-          w = p[0]; h = p[1];
-        }
-        return landscape ? { w: h, h: w } : { w: w, h: h };
-      }
-
-      function destRect(px, py, pw, ph, iw, ih, fit, scalePercent) {
-        var scale = Math.min(200, Math.max(10, scalePercent)) / 100;
-        fit = (fit || "contain").toLowerCase();
-        if (fit === "stretch") return { x: px, y: py, w: pw, h: ph };
-        if (fit === "center") {
-          var cw = iw * scale, ch = ih * scale;
-          return { x: px + (pw - cw) / 2, y: py + (ph - ch) / 2, w: cw, h: ch };
-        }
-        var ratio = fit === "cover"
-          ? Math.max(pw / iw, ph / ih) * scale
-          : Math.min(pw / iw, ph / ih) * scale;
-        var dw = iw * ratio, dh = ih * ratio;
-        return { x: px + (pw - dw) / 2, y: py + (ph - dh) / 2, w: dw, h: dh };
-      }
-
-      function drawPreview() {
-        var canvas = document.getElementById("printPreview");
-        var meta = document.getElementById("previewMeta");
-        if (!canvas) return;
-        var ctx = canvas.getContext("2d");
-        if (!ctx) {
-          if (meta) meta.textContent = "Canvas sem contexto 2D.";
-          return;
-        }
-
-        var paper = paperMm();
-        var ratio = paper.w / Math.max(0.001, paper.h);
-        var parent = canvas.parentElement;
-        var maxW = Math.max(180, (parent && parent.clientWidth) || 520);
-        var maxH = Math.max(180, (parent && parent.clientHeight) || 680);
-        var dpr = Math.min(window.devicePixelRatio || 1, 2);
-        var cssW = maxW - 10;
-        var cssH = cssW / ratio;
-        if (cssH > maxH - 10) { cssH = maxH - 10; cssW = cssH * ratio; }
-        cssW = Math.max(120, Math.floor(cssW));
-        cssH = Math.max(120, Math.floor(cssH));
-        canvas.style.width = cssW + "px";
-        canvas.style.height = cssH + "px";
-        var W = Math.round(cssW * dpr), H = Math.round(cssH * dpr);
-        if (canvas.width !== W) canvas.width = W;
-        if (canvas.height !== H) canvas.height = H;
-
-        ctx.clearRect(0, 0, W, H);
-        ctx.fillStyle = "#121a22";
-        ctx.fillRect(0, 0, W, H);
-
-        var edge = Math.max(4 * dpr, Math.min(W, H) * 0.015);
-        var labelRoom = 16 * dpr;
-        var paperW = W - edge * 2, paperH = paperW / ratio;
-        if (paperH > H - edge * 2 - labelRoom) { paperH = H - edge * 2 - labelRoom; paperW = paperH * ratio; }
-        var paperX = (W - paperW) / 2, paperY = (H - paperH - labelRoom) / 2;
-        var margin = Math.min(paperW, paperH) * 0.04;
-        var area = { x: paperX + margin, y: paperY + margin, w: paperW - margin * 2, h: paperH - margin * 2 };
-
-        ctx.fillStyle = "#f4f7fa";
-        ctx.fillRect(paperX, paperY, paperW, paperH);
-        ctx.strokeStyle = "#2a3644";
-        ctx.lineWidth = Math.max(1, dpr);
-        ctx.strokeRect(paperX, paperY, paperW, paperH);
-        ctx.setLineDash([8 * dpr, 5 * dpr]);
-        ctx.strokeStyle = "#0f766e";
-        ctx.lineWidth = Math.max(2, 2.25 * dpr);
-        ctx.strokeRect(area.x, area.y, area.w, area.h);
-        ctx.setLineDash([]);
-        ctx.fillStyle = "#0f766e";
-        ctx.font = "600 " + Math.max(11, 11 * dpr) + "px sans-serif";
-        ctx.textAlign = "left";
-        ctx.fillText("área imprimível aproximada", area.x + 5 * dpr, area.y + 14 * dpr);
-
-        ctx.fillStyle = "#6b7c8c";
-        ctx.font = Math.max(12, 12 * dpr) + "px sans-serif";
-        ctx.textAlign = "center";
-        ctx.fillText(paper.w + "×" + paper.h + " mm", W / 2, Math.min(paperY + paperH + 14 * dpr, H - 4 * dpr));
-
-        var fit = (document.getElementById("imageFit") || {}).value || "contain";
-        var scale = Number((document.getElementById("imageScale") || {}).value) || 100;
-
-        if (!previewImage) {
-          ctx.fillText("Escolha uma imagem para pré-visualizar", W / 2, paperY + paperH / 2);
-          if (meta) meta.textContent = "Sem imagem — clique em Escolher imagem.";
-          return;
-        }
-
-        var d = destRect(area.x, area.y, area.w, area.h, previewImage.width, previewImage.height, fit, scale);
-        ctx.save();
-        ctx.beginPath();
-        ctx.rect(area.x, area.y, area.w, area.h);
-        ctx.clip();
-        ctx.drawImage(previewImage, d.x, d.y, d.w, d.h);
-        ctx.restore();
-        ctx.strokeStyle = "#0d9488";
-        ctx.lineWidth = Math.max(1.5, 1.5 * dpr);
-        ctx.strokeRect(Math.max(d.x, area.x), Math.max(d.y, area.y), Math.min(d.w, area.w), Math.min(d.h, area.h));
-        if (meta) {
-          meta.textContent = paper.w + "×" + paper.h + " mm · " +
-            previewImage.naturalWidth + "×" + previewImage.naturalHeight + "px · " + fit + " · " + scale + "%";
-        }
-      }
-
-      function clearPreview() {
-        if (previewUrl) URL.revokeObjectURL(previewUrl);
-        previewUrl = null;
-        previewImage = null;
-        var file = document.getElementById("previewFile");
-        if (file) file.value = "";
-        drawPreview();
-      }
-
-      function bindPreview() {
-        var pick = document.getElementById("btnPickPreview");
-        var file = document.getElementById("previewFile");
-        var clear = document.getElementById("btnClearPreview");
-        if (pick && file) {
-          pick.addEventListener("click", function () { file.click(); });
-        }
-        if (file) {
-          file.addEventListener("change", function () {
-            var f = file.files && file.files[0];
-            if (!f) return;
-            if (previewUrl) URL.revokeObjectURL(previewUrl);
-            previewUrl = URL.createObjectURL(f);
-            var img = new Image();
-            img.onload = function () {
-              previewImage = img;
-              drawPreview();
-            };
-            img.onerror = function () {
-              var meta = document.getElementById("previewMeta");
-              if (meta) meta.textContent = "Não foi possível carregar a imagem.";
-            };
-            img.src = previewUrl;
-          });
-        }
-        if (clear) clear.addEventListener("click", clearPreview);
-        ["imageFit", "imageScale", "paperSize", "paperLandscape", "paperWidthMm", "paperHeightMm"].forEach(function (id) {
-          var el = document.getElementById(id);
-          if (!el) return;
-          el.addEventListener("change", drawPreview);
-          el.addEventListener("input", drawPreview);
-        });
-        drawPreview();
-      }
-
-      async function loadPrinters() {
-        var sel = document.getElementById("printers");
-        var summary = document.getElementById("printerSummary");
-        if (!sel) return;
-        try {
-          var res = await fetch("/api/printers", {
-            headers: { "X-SoftPrint-Key": window.SOFTPRINT_KEY || "" }
-          });
-          if (!res.ok) throw new Error("HTTP " + res.status);
-          var list = await res.json();
-          var current = sel.value;
-          sel.innerHTML = '<option value="">Selecionar impressora…</option>' +
-            (list || []).map(function (p) {
-              return '<option value="' + esc(p.name) + '">' + esc(p.displayLabel || p.name) + "</option>";
-            }).join("");
-          if (current) sel.value = current;
-          if (summary) summary.textContent = (list || []).length + " impressoras encontradas";
-          var health = document.getElementById("healthLine");
-          if (health && /Conectando/i.test(health.textContent || "")) {
-            health.textContent = (list || []).length + " impressoras no Windows";
-          }
-        } catch (e) {
-          if (summary) summary.textContent = "Erro ao listar impressoras: " + (e.message || e);
-        }
-      }
-
-      var btn = document.getElementById("btnLoadPrinters");
-      if (btn) btn.addEventListener("click", function () { loadPrinters(); });
-      loadPrinters();
-      bindPreview();
-
-      window.__softprintLoadPrinters = loadPrinters;
-      window.__softprintDrawPreview = drawPreview;
-    })();
+    // Bootstrap legado removido — a fonte única do painel é app.bundle.js.
   </script>
   <script>
     setTimeout(function () {
@@ -669,7 +543,7 @@ Teste de impressão de texto.</textarea>
       }
     }, 4000);
   </script>
-  <script defer src="/js/app.bundle.js?v=20260921b"
+  <script defer src="/js/app.bundle.js?v=20260924e"
           onerror="document.getElementById('healthLine').textContent='Falha ao carregar o painel.'"></script>
 </body>
 </html>

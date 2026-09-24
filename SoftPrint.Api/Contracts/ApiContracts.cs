@@ -39,7 +39,8 @@ public record SystemSettingsRequest(
     int EventLogRetentionDays,
     int NetworkScanTimeoutMs,
     bool TelemetryEnabled = false,
-    string? TelemetryUrl = null);
+    string? TelemetryUrl = null,
+    string? PrinterRoutes = null);
 
 public record PrinterOptionsDto(
     string PrinterName,
@@ -102,6 +103,8 @@ public record InstallNetworkPrinterRequest(
     int? Port = 9100,
     string? Name = null);
 
+public record InstallNetworkPrinterBulkRequest(InstallNetworkPrinterRequest[]? Items = null);
+
 public record FeatureFlagsDto(bool SoundEnabled, bool DarkTheme, bool LogToFile, bool StartWithWindows);
 
 public record MetricsDto(
@@ -148,6 +151,10 @@ public record UpdateInfoDto(
     string? DownloadUrl,
     string? ReleaseUrl,
     string? Error);
+
+public record ApplyUpdateRequest(bool Rollback = false, string? Version = null);
+
+public record ReprintBulkRequest(Guid[]? Ids = null);
 
 public record PlatformCapabilitiesDto(
     string Platform,

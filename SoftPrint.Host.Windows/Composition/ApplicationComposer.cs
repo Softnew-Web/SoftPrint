@@ -72,343 +72,117 @@ public static class ApplicationComposer
         app.Lifetime.ApplicationStarted.Register(() =>
         {
             var address = app.Urls.First();
-            var thread = new Thread(() =>
-            {
-                try
-                {
-                    // Tem de vir ANTES de qualquer Form (splash incluso).
-                    // Depois do splash isso lançava e o SoftPrint sumia nos 100%.
-                    System.Windows.Forms.Application.SetUnhandledExceptionMode(
-                        UnhandledExceptionMode.CatchException);
-                }
-                catch (InvalidOperationException)
-                {
-                    /* já definido — seguir */
-                }
-
-                System.Windows.Forms.Application.ThreadException += (_, args) =>
-                {
-                    try
-                    {
-                        MessageBox.Show(
-                            "Erro no painel SoftPrint:\n\n" + args.Exception.Message,
-                            "SoftPrint",
-                            MessageBoxButtons.OK,
-                            MessageBoxIcon.Error);
-                    }
-                    catch { /* ignore */ }
-                };
-
-                System.Windows.Forms.Application.SetHighDpiMode(HighDpiMode.PerMonitorV2);
-                System.Windows.Forms.Application.EnableVisualStyles();
-                System.Windows.Forms.Application.SetCompatibleTextRenderingDefault(false);
-
-                SoftPrint.UI.SplashForm? splash = null;
-                IUpdateApplier? updateApplier = null;
-                var checkUpdates = features.UpdateCheckEnabled;
-                var autoApplyMandatory = features.AutoUpdateOnStartup;
-                Task? startupUpdateTask = null;
-
-                if (!startInTray)
-                {
-                    splash = new SoftPrint.UI.SplashForm(durationMs: 15_000);
-                    splash.Show();
-                    splash.StartProgress();
-                    splash.SetLiveProgress(
-                        null,
-                        checkUpdates ? "Buscando versões…" : "Abrindo SoftPrint…",
-                        checkUpdates ? "Procurando se há uma versão nova…" : "Carregando o painel…");
-                    System.Windows.Forms.Application.DoEvents();
-
-                    if (checkUpdates)
-                    {
-                        var checker = app.Services.GetRequiredService<IUpdateChecker>();
-                        updateApplier = app.Services.GetRequiredService<IUpdateApplier>();
-                        var applier = updateApplier;
-                        startupUpdateTask = Task.Run(async () =>
-                        {
-                            try
-                            {
-                                checker.InvalidateCache();
-                                splash.SetLiveProgress(null, "Buscando versões…", "Consultando o servidor de atualizações…");
-                                var check = await checker.CheckAsync().ConfigureAwait(false);
-                                if (check.Error is not null)
-                                {
-                                    splash.SetLiveProgress(null, "Não foi possível buscar versões", check.Error);
-                                    return;
-                                }
-
-                                if (!check.UpdateAvailable || string.IsNullOrWhiteSpace(check.DownloadUrl))
-                                {
-                                    splash.SetLiveProgress(
-                                        null,
-                                        "Nenhuma versão nova",
-                                        $"Você já está na {check.CurrentVersion}.");
-                                    return;
-                                }
-
-                                // Opcional (ou obrigatória sem auto-aplicar): só avisa.
-                                // Evita fechar/reiniciar o SoftPrint sozinho.
-                                if (!check.Mandatory || !autoApplyMandatory)
-                                {
-                                    splash.SetLiveProgress(
-                                        null,
-                                        $"Nova versão {check.LatestVersion} disponível",
-                                        check.Mandatory
-                                            ? "Atualização recomendada — abra o painel e use Atualizar."
-                                            : "Abra o painel e use Atualizar quando quiser instalar.");
-                                    return;
-                                }
-
-                                splash.SetLiveProgress(
-                                    5,
-                                    $"Atualização obrigatória {check.LatestVersion}",
-                                    "Baixando atualização…");
-                                if (!applier.TryStart(out var err) && !string.IsNullOrWhiteSpace(err))
-                                {
-                                    if (!err.Contains("andamento", StringComparison.OrdinalIgnoreCase))
-                                        splash.SetLiveProgress(null, "Atualização adiada", err);
-                                }
-                            }
-                            catch (Exception ex)
-                            {
-                                splash.SetLiveProgress(null, "Não foi possível buscar versões", ex.Message);
-                            }
-                        });
-                    }
-                }
-
-                using var notify = new NotifyIcon
-                {
-                    Visible = true,
-                    Text = $"SoftPrint v{SoftPrint.Domain.SoftPrintVersion.Current}",
-                    Icon = SystemIcons.Application,
-                    BalloonTipTitle = "SoftPrint"
-                };
-                tray.Attach(notify);
-
-                var stopHostOnClose = false;
-                SoftPrint.UI.Dashboard? livePanel = null;
-
-                SoftPrint.UI.Dashboard CreatePanel()
-                {
-                    var p = new SoftPrint.UI.Dashboard(address, apiKey, features, tray);
-                    var menu = new ContextMenuStrip();
-                    menu.Items.Add("Abrir painel", null, (_, _) => BringLiveToFront());
-                    menu.Items.Add($"Versão {SoftPrint.Domain.SoftPrintVersion.Current}", null, (_, _) => { });
-                    menu.Items[^1].Enabled = false;
-                    menu.Items.Add("Sair", null, (_, _) =>
-                    {
-                        stopHostOnClose = true;
-                        p.RequestExit();
-                        app.Lifetime.StopApplication();
-                    });
-                    notify.ContextMenuStrip = menu;
-                    p.FormClosed += (_, _) =>
-                    {
-                        if (p.ExitRequested || stopHostOnClose)
-                        {
-                            try { notify.Visible = false; } catch { /* ignore */ }
-                            app.Lifetime.StopApplication();
-                        }
-                    };
-                    livePanel = p;
-                    return p;
-                }
-
-                void BringLiveToFront()
-                {
-                    try
-                    {
-                        var p = livePanel;
-                        if (p is null || p.IsDisposed) return;
-                        if (p.InvokeRequired)
-                            p.BeginInvoke(BringLiveToFront);
-                        else
-                            p.ShowFromTray();
-                    }
-                    catch (ObjectDisposedException) { }
-                    catch (InvalidOperationException) { }
-                }
-
-                notify.DoubleClick += (_, _) => BringLiveToFront();
-                notify.MouseDoubleClick += (_, _) => BringLiveToFront();
-
-                var panel = CreatePanel();
-
-                // Mínimo ~15s de splash; alonga se ainda estiver baixando atualização.
-                // Não mostrar/ocultar o painel com Opacity durante o splash — isso criava
-                // janela layered e, em alguns PCs, o painel nunca aparecia depois dos 100%.
-                var skipDashboard = false;
-                if (splash is not null)
-                {
-                    splash.WaitUntilReady(
-                        keepWaiting: () =>
-                        {
-                            if (startupUpdateTask is { IsCompleted: false })
-                                return true;
-                            var status = updateApplier?.Status;
-                            if (status is null) return false;
-                            if (status.Restarting) return true;
-                            return status.InProgress;
-                        },
-                        onTick: () =>
-                        {
-                            var status = updateApplier?.Status;
-                            if (status is null || (!status.InProgress && !status.Restarting && !status.Failed))
-                                return;
-                            if (status.Failed)
-                            {
-                                splash.SetLiveProgress(
-                                    status.Percent,
-                                    "Falha na atualização",
-                                    status.Error ?? status.Message);
-                                return;
-                            }
-                            splash.SetLiveProgress(
-                                status.Percent,
-                                status.Restarting ? "Reiniciando SoftPrint…" : "Baixando nova versão…",
-                                status.Message);
-                        });
-
-                    skipDashboard = updateApplier?.Status.Restarting == true
-                        || updateApplier?.Status.InProgress == true;
-
-                    splash.CloseSafe();
-                    splash.Dispose();
-                    splash = null;
-                }
-
-                using var registration = app.Lifetime.ApplicationStopping.Register(() =>
-                {
-                    stopHostOnClose = true;
-                    splash?.CloseSafe();
-                    try { livePanel?.RequestExit(); } catch { /* ignore */ }
-                });
-                RegisteredWaitHandle? wait = null;
-                if (showSignal is not null)
-                {
-                    wait = ThreadPool.RegisterWaitForSingleObject(
-                        showSignal,
-                        (_, _) => BringLiveToFront(),
-                        null,
-                        -1,
-                        false);
-                }
-                if (startInTray)
-                {
-                    panel.ShowInTaskbar = false;
-                    panel.Shown += (_, _) => panel.HideToTray(balloon: true);
-                }
-                else
-                {
-                    panel.ShowInTaskbar = true;
-                    panel.WindowState = FormWindowState.Maximized;
-                    panel.Shown += (_, _) =>
-                    {
-                        try
-                        {
-                            panel.Activate();
-                            panel.BringToFront();
-                        }
-                        catch { /* ignore */ }
-                    };
-                }
-
-                if (skipDashboard)
-                {
-                    // Atualização obrigatória a reiniciar — espera; se falhar, abre o painel.
-                    while (updateApplier is { Status: { Restarting: true } } ||
-                           updateApplier is { Status: { InProgress: true } })
-                    {
-                        System.Windows.Forms.Application.DoEvents();
-                        Thread.Sleep(50);
-                        if (app.Lifetime.ApplicationStopping.IsCancellationRequested)
-                            break;
-                    }
-
-                    if (updateApplier?.Status.Restarting == true ||
-                        app.Lifetime.ApplicationStopping.IsCancellationRequested)
-                    {
-                        wait?.Unregister(null);
-                        return;
-                    }
-                }
-
-                try
-                {
-                    // Recria o painel se cair sem o usuário ter pedido Sair.
-                    while (!app.Lifetime.ApplicationStopping.IsCancellationRequested)
-                    {
-                        if (!startInTray)
-                        {
-                            try
-                            {
-                                panel.ShowInTaskbar = true;
-                                panel.WindowState = FormWindowState.Maximized;
-                                if (!panel.Visible)
-                                    panel.Show();
-                                panel.Activate();
-                                panel.BringToFront();
-                            }
-                            catch (Exception ex)
-                            {
-                                MessageBox.Show(
-                                    "Não foi possível exibir o painel.\n\n" + ex.Message,
-                                    "SoftPrint",
-                                    MessageBoxButtons.OK,
-                                    MessageBoxIcon.Error);
-                            }
-                        }
-
-                        System.Windows.Forms.Application.Run(panel);
-                        if (panel.ExitRequested ||
-                            stopHostOnClose ||
-                            app.Lifetime.ApplicationStopping.IsCancellationRequested)
-                            break;
-
-                        try { panel.Dispose(); } catch { /* ignore */ }
-                        Thread.Sleep(750);
-                        if (app.Lifetime.ApplicationStopping.IsCancellationRequested)
-                            break;
-
-                        panel = CreatePanel();
-                        if (startInTray)
-                            panel.HideToTray(balloon: false);
-                        else
-                        {
-                            panel.ShowInTaskbar = true;
-                            panel.WindowState = FormWindowState.Maximized;
-                            panel.Show();
-                        }
-                    }
-                }
-                catch (Exception ex)
-                {
-                    try
-                    {
-                        MessageBox.Show(
-                            "O SoftPrint encerrou após o carregamento.\n\n" + ex.Message,
-                            "SoftPrint",
-                            MessageBoxButtons.OK,
-                            MessageBoxIcon.Error);
-                    }
-                    catch { /* ignore */ }
-                }
-                finally
-                {
-                    wait?.Unregister(null);
-                    splash?.CloseSafe();
-                    splash?.Dispose();
-                    try { notify.Visible = false; } catch { /* ignore */ }
-                    try { livePanel?.Dispose(); } catch { /* ignore */ }
-                    app.Lifetime.StopApplication();
-                }
-            });
+            var host = new DashboardUiHost(app, address, apiKey, features, tray, startInTray, showSignal);
+            var thread = new Thread(host.Run);
             thread.SetApartmentState(ApartmentState.STA);
             thread.IsBackground = false;
             thread.Start();
         });
+    }
+
+    internal static Task RunStartupUpdateCheck(
+        SoftPrint.UI.SplashForm splash,
+        IUpdateChecker checker,
+        IUpdateApplier applier,
+        bool autoApplyMandatory)
+    {
+        return Task.Run(async () =>
+        {
+            try
+            {
+                checker.InvalidateCache();
+                splash.SetLiveProgress(
+                    null,
+                    "Buscando versões…",
+                    "Consultando o servidor de atualizações…");
+                var check = await checker.CheckAsync().ConfigureAwait(false);
+                ApplyUpdateCheckToSplash(splash, applier, check, autoApplyMandatory);
+            }
+            catch (Exception ex)
+            {
+                splash.SetLiveProgress(
+                    null,
+                    "Não foi possível buscar versões",
+                    ex.Message,
+                    resumeAfterMs: 2_500);
+            }
+        });
+    }
+
+    private static void ApplyUpdateCheckToSplash(
+        SoftPrint.UI.SplashForm splash,
+        IUpdateApplier applier,
+        UpdateCheckResult check,
+        bool autoApplyMandatory)
+    {
+        if (check.Error is not null)
+        {
+            splash.SetLiveProgress(null, "Não foi possível buscar versões", check.Error, resumeAfterMs: 2_500);
+            return;
+        }
+
+        if (!check.UpdateAvailable || string.IsNullOrWhiteSpace(check.DownloadUrl))
+        {
+            splash.SetLiveProgress(
+                null,
+                "Versão em dia",
+                $"Você já está na {check.CurrentVersion}.",
+                resumeAfterMs: 2_200);
+            return;
+        }
+
+        if (!check.Mandatory || !autoApplyMandatory)
+        {
+            splash.SetLiveProgress(
+                null,
+                $"Nova versão {check.LatestVersion} disponível",
+                check.Mandatory
+                    ? "Atualização recomendada — use Atualizar no painel."
+                    : "Use Atualizar no painel quando quiser instalar.",
+                resumeAfterMs: 2_800);
+            return;
+        }
+
+        splash.SetLiveProgress(
+            5,
+            $"Instalando SoftPrint {check.LatestVersion}",
+            "Preparando download…",
+            lockProgress: true);
+        if (!applier.TryStart(out var err)
+            && !string.IsNullOrWhiteSpace(err)
+            && !err.Contains("andamento", StringComparison.OrdinalIgnoreCase))
+        {
+            splash.SetLiveProgress(null, "Atualização adiada", err, resumeAfterMs: 2_500);
+        }
+    }
+
+    internal static void SyncSplashWithUpdate(SoftPrint.UI.SplashForm splash, IUpdateApplier? updateApplier)
+    {
+        var status = updateApplier?.Status;
+        if (status is null || (!status.InProgress && !status.Restarting && !status.Failed))
+            return;
+
+        if (status.Failed)
+        {
+            splash.SetLiveProgress(
+                status.Percent,
+                "Falha na atualização",
+                status.Error ?? status.Message,
+                lockProgress: true);
+            return;
+        }
+
+        var title = status.Phase switch
+        {
+            "checking" => "Preparando atualização…",
+            "downloading" => "Baixando nova versão…",
+            "verifying" => "Verificando integridade…",
+            "installing" => "Instalando arquivos…",
+            "restarting" => "Reiniciando SoftPrint…",
+            "starting" => "Iniciando atualização…",
+            _ => status.Restarting ? "Reiniciando SoftPrint…" : "Atualizando SoftPrint…"
+        };
+        splash.SetLiveProgress(status.Percent, title, status.Message, lockProgress: true);
     }
 }
 

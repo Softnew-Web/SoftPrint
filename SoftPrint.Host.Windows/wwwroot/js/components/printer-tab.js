@@ -211,8 +211,51 @@ export function bindPrinterTab({ api, onSaved }) {
 
   const btnFindNet = document.getElementById("btnFindNetworkPrinters");
   const netHint = document.getElementById("networkPrinterHint");
+  const netPanel = document.getElementById("networkPrinterPanel");
+  const netList = document.getElementById("networkPrinterList");
+  let discoveredHosts = [];
+
+  function closeNetworkPanel({ keepHint = false } = {}) {
+    discoveredHosts = [];
+    if (netList) netList.innerHTML = "";
+    netPanel?.classList.add("hidden");
+    if (!keepHint && netHint) {
+      netHint.textContent = "";
+      netHint.classList.add("hidden");
+    }
+  }
+
+  function renderNetworkHosts(hosts) {
+    discoveredHosts = hosts;
+    if (!netList || !netPanel) return;
+    if (!hosts.length) {
+      netPanel.classList.add("hidden");
+      netList.innerHTML = "";
+      return;
+    }
+    netPanel.classList.remove("hidden");
+    netList.innerHTML = hosts
+      .map(
+        (h, i) => `<label class="flex items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-ink cursor-pointer">
+          <input type="checkbox" class="net-host-check accent-sea" data-idx="${i}" checked />
+          <span class="truncate">${h.address}:${h.port} <span class="text-mist">— ${h.hint || "rede"}</span></span>
+        </label>`
+      )
+      .join("");
+  }
+
+  document.getElementById("btnCloseNetworkPanel")?.addEventListener("click", () => {
+    closeNetworkPanel();
+    feedback("Busca de rede fechada.");
+  });
+
   if (btnFindNet) {
     btnFindNet.addEventListener("click", async () => {
+      // Já aberto → fecha (não fica preso na tela).
+      if (netPanel && !netPanel.classList.contains("hidden")) {
+        closeNetworkPanel();
+        return;
+      }
       try {
         btnFindNet.disabled = true;
         if (netHint) {
@@ -221,55 +264,18 @@ export function bindPrinterTab({ api, onSaved }) {
         }
         feedback("Procurando impressoras na rede…");
         const found = await api("/api/printers/discover", { method: "POST", body: "{}" });
-        const byHost = new Map();
-        for (const item of found || []) {
-          if (!item?.reachable || !item.address) continue;
-          const prev = byHost.get(item.address);
-          // Preferir 9100 (JetDirect/RAW), depois 631 (IPP), depois 515.
-          const rank = item.port === 9100 ? 3 : item.port === 631 ? 2 : 1;
-          if (!prev || rank > prev.rank) byHost.set(item.address, { ...item, rank });
-        }
-        const hosts = [...byHost.values()];
+        const hosts = preferNetworkHosts(found || []);
         if (!hosts.length) {
+          renderNetworkHosts([]);
           if (netHint) netHint.textContent = "Nenhuma impressora de rede encontrada. Confira se ela está ligada e na mesma rede.";
           return feedback("Nenhuma impressora de rede encontrada.", true);
         }
 
-        const lines = hosts.map((h, i) => `${i + 1}. ${h.address}:${h.port} — ${h.hint || "rede"}`);
-        const choice = window.prompt(
-          `Encontradas ${hosts.length} impressora(s) na rede.\n\n${lines.join("\n")}\n\nDigite o número para instalar no Windows (ou cancele):`,
-          "1"
-        );
-        if (choice == null) {
-          if (netHint) netHint.textContent = `${hosts.length} encontrada(s). Instalação cancelada.`;
-          return;
-        }
-        const idx = Number(choice) - 1;
-        if (!Number.isInteger(idx) || idx < 0 || idx >= hosts.length) {
-          return feedback("Número inválido.", true);
-        }
-        const selected = hosts[idx];
-        if (netHint) netHint.textContent = `Instalando ${selected.address}:${selected.port} no Windows…`;
-        const installed = await api("/api/printers/install-network", {
-          method: "POST",
-          body: JSON.stringify({
-            address: selected.address,
-            port: selected.port,
-            name: `Impressora rede ${selected.address}`,
-          }),
-        });
-        if (!installed?.ok) {
-          const err = installed?.error || "Falha ao instalar.";
-          if (netHint) netHint.textContent = err;
-          return feedback(err, true);
-        }
-        await loadPrinters(api);
-        if (printers && installed.printerName) printers.value = installed.printerName;
-        if (netHint) {
-          netHint.textContent = `Instalada: ${installed.printerName}. Selecione e clique em Salvar configurações.`;
-        }
-        feedback(`Impressora instalada: ${installed.printerName}`);
+        renderNetworkHosts(hosts);
+        if (netHint) netHint.textContent = `${hosts.length} encontrada(s). Marque as desejadas e clique em Instalar selecionadas.`;
+        feedback(`${hosts.length} impressora(s) na rede — selecione quais instalar.`);
       } catch (err) {
+        renderNetworkHosts([]);
         if (netHint) netHint.textContent = err.message || "Falha na busca.";
         feedback(err.message || "Falha na busca.", true);
       } finally {
@@ -277,6 +283,57 @@ export function bindPrinterTab({ api, onSaved }) {
       }
     });
   }
+
+  document.getElementById("btnNetworkSelectAll")?.addEventListener("click", () => {
+    netList?.querySelectorAll(".net-host-check").forEach((el) => {
+      el.checked = true;
+    });
+  });
+
+  document.getElementById("btnInstallNetworkSelected")?.addEventListener("click", async () => {
+    const idxs = [...(netList?.querySelectorAll(".net-host-check:checked") || [])]
+      .map((el) => Number(el.dataset.idx))
+      .filter((i) => Number.isInteger(i) && i >= 0 && i < discoveredHosts.length);
+    if (!idxs.length) return feedback("Marque ao menos uma impressora.", true);
+
+    const items = idxs.map((i) => {
+      const h = discoveredHosts[i];
+      return {
+        address: h.address,
+        port: h.port,
+        name: `Impressora rede ${h.address}`,
+      };
+    });
+
+    try {
+      if (netHint) netHint.textContent = `Instalando ${items.length} impressora(s)…`;
+      const result = await api("/api/printers/install-network-bulk", {
+        method: "POST",
+        body: JSON.stringify({ items }),
+      });
+      await loadPrinters(api);
+      const firstName = (result.installed || []).find((x) => x.printerName)?.printerName;
+      if (printers && firstName) printers.value = firstName;
+      const fail = (result.errors || []).length;
+      if (fail) {
+        if (netHint) {
+          netHint.textContent = `${result.count || 0} instalada(s), ${fail} falha(s). Selecione e salve.`;
+        }
+        feedback(`${result.count || 0} instalada(s), ${fail} com erro.`);
+      } else {
+        closeNetworkPanel({ keepHint: true });
+        if (netHint) {
+          netHint.classList.remove("hidden");
+          netHint.textContent = `${result.count || 0} instalada(s). Selecione e clique em Salvar configurações.`;
+        }
+        feedback(`${result.count || 0} impressora(s) instalada(s).`);
+      }
+    } catch (err) {
+      if (netHint) netHint.textContent = err.message || "Falha na instalação.";
+      feedback(err.message || "Falha na instalação.", true);
+    }
+  });
+
 
   const btnSave = document.getElementById("btnSaveSettings");
   if (btnSave) {
@@ -368,14 +425,18 @@ export function bindPrinterTab({ api, onSaved }) {
     const mismatch = paper.honored === false
       ? ` · atenção: o driver usará ${paperLabel} (configurado ${fmt(paper.requestedW)}×${fmt(paper.requestedH)} mm)`
       : "";
+    const tip =
+      paper.requestedW <= 90 && paper.requestedH >= 150
+        ? " · cupom estreito (faixa alta)"
+        : "";
     if (previewImage) {
       const fitLabel = imageFit?.options?.[imageFit.selectedIndex]?.text || fit;
       const dimensions = previewImage.naturalWidth
         ? `${previewImage.naturalWidth}×${previewImage.naturalHeight}px`
         : `PDF página ${pdfPage}/${pdfDocument?.pageCount || 1}`;
-      previewMeta.textContent = `${paperLabel} · ${dimensions} · ${fitLabel} · ${scale}%${mismatch}`;
+      previewMeta.textContent = `${paperLabel} · ${dimensions} · ${fitLabel} · ${scale}%${mismatch}${tip}`;
     } else {
-      previewMeta.textContent = `Papel da impressão: ${paperLabel}${paperLandscape?.checked ? " (paisagem)" : ""}${mismatch}`;
+      previewMeta.textContent = `Papel da impressão: ${paperLabel}${paperLandscape?.checked ? " (paisagem)" : ""}${mismatch}${tip}`;
     }
   }
 
@@ -441,11 +502,6 @@ export function bindPrinterTab({ api, onSaved }) {
     redrawPreview();
   }
 
-  function fmt(n) {
-    const v = Number(n);
-    return Number.isInteger(v) ? String(v) : v.toFixed(1);
-  }
-
   syncCustomRow();
   redrawPreview();
   window.addEventListener("resize", () => {
@@ -454,4 +510,26 @@ export function bindPrinterTab({ api, onSaved }) {
   });
 
   return { loadPrinters, applySettingsToForm, redrawPreview };
+}
+
+function fmt(n) {
+  const v = Number(n);
+  return Number.isInteger(v) ? String(v) : v.toFixed(1);
+}
+
+function networkPortRank(port) {
+  if (port === 9100) return 3;
+  if (port === 631) return 2;
+  return 1;
+}
+
+function preferNetworkHosts(found) {
+  const byHost = new Map();
+  for (const item of found) {
+    if (!item?.reachable || !item.address) continue;
+    const prev = byHost.get(item.address);
+    const rank = networkPortRank(item.port);
+    if (!prev || rank > prev.rank) byHost.set(item.address, { ...item, rank });
+  }
+  return [...byHost.values()];
 }

@@ -111,16 +111,16 @@ public sealed class PdfPrintStrategy : IPrintStrategy
     }
 
     /// <summary>
-    /// Térmicas ~203 DPI nativo; 150 cobre cupom/Padrão com bem menos pixels.
-    /// Papel grande mantém 180 para legibilidade.
+    /// Térmicas ~203 DPI nativo; 120 cobre cupom/Padrão com bem menos pixels
+    /// (bitmap menor → spooler/driver mais rápido). Papel grande sobe um pouco.
     /// </summary>
     internal static int ResolveRenderDpi(PrintOptions settings)
     {
         var (w, h) = settings.EffectivePaperMm();
         var shortSide = Math.Min(w, h);
-        if (shortSide <= 85) return 150;   // 58/80 mm, Padrão 70 mm
-        if (shortSide <= 120) return 160;  // foto 4x6 etc.
-        return 180;
+        if (shortSide <= 85) return 120;   // 58/80 mm, Padrão 70 mm
+        if (shortSide <= 120) return 140;  // foto 4x6 etc.
+        return 160;
     }
 }
 
@@ -272,18 +272,15 @@ public sealed class EscPosPrintStrategy : IPrintStrategy
 
 internal static class PrintPageSetup
 {
+    private static readonly object CacheGate = new();
+    private static string? CachedPrinter;
+    private static List<PrinterPaperCandidate>? CachedCandidates;
+
     public static void Apply(PrintDocument document, PrintOptions settings)
     {
         var (reqW, reqH) = settings.EffectivePaperMm();
-        var candidates = new List<PrinterPaperCandidate>();
-        foreach (PaperSize paper in document.PrinterSettings.PaperSizes)
-        {
-            candidates.Add(new PrinterPaperCandidate(
-                paper.PaperName,
-                HiToMm(paper.Width),
-                HiToMm(paper.Height),
-                paper.RawKind));
-        }
+        var printerName = document.PrinterSettings.PrinterName ?? "";
+        var candidates = GetCandidates(document.PrinterSettings, printerName);
 
         var choice = PrinterPaperMatcher.Resolve(candidates, reqW, reqH, settings.PaperSize);
         document.OriginAtMargins = false;
@@ -308,6 +305,34 @@ internal static class PrintPageSetup
             custom.RawKind = rawKind;
         document.DefaultPageSettings.PaperSize = custom;
         document.DefaultPageSettings.Landscape = false;
+    }
+
+    private static List<PrinterPaperCandidate> GetCandidates(PrinterSettings printer, string printerName)
+    {
+        lock (CacheGate)
+        {
+            if (CachedCandidates is not null &&
+                string.Equals(CachedPrinter, printerName, StringComparison.OrdinalIgnoreCase))
+                return CachedCandidates;
+        }
+
+        var list = new List<PrinterPaperCandidate>();
+        foreach (PaperSize paper in printer.PaperSizes)
+        {
+            list.Add(new PrinterPaperCandidate(
+                paper.PaperName,
+                HiToMm(paper.Width),
+                HiToMm(paper.Height),
+                paper.RawKind));
+        }
+
+        lock (CacheGate)
+        {
+            CachedPrinter = printerName;
+            CachedCandidates = list;
+        }
+
+        return list;
     }
 
     private static PaperSize? FindNative(PrinterSettings printer, PrinterPaperChoice choice)

@@ -14,7 +14,8 @@ public sealed record SystemSettings(
     int EventLogRetentionDays,
     int NetworkScanTimeoutMs,
     bool TelemetryEnabled = false,
-    string TelemetryUrl = "");
+    string TelemetryUrl = "",
+    string PrinterRoutes = "");
 
 public interface ISystemSettingsRepository
 {

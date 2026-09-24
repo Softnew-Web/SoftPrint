@@ -1,11 +1,12 @@
 import { createApi } from "./api.js";
 import { state, feedback } from "./state.js";
-import { renderStats, setConnection, setApiHint, modeLabel } from "./components/stats.js";
+import { renderStats, setConnection, setApiHint, modeLabel, refreshHeaderPrinterStatus } from "./components/stats.js";
 import { bindPrinterTab } from "./components/printer-tab.js";
 import { bindMonitorTab } from "./components/monitor-tab.js";
 import { bindConnectTab } from "./components/connect-tab.js";
 import { bindSystemSettingsTab } from "./components/system-settings-tab.js";
-import { applyUpdateInfo, applyVersion } from "./components/update-banner.js";
+import { bindSetupWizard } from "./components/setup-wizard.js";
+import { applyUpdateInfo, applyVersion, refreshRollback } from "./components/update-banner.js";
 
 const KEY = window.SOFTPRINT_KEY || "";
 const { api } = createApi(KEY);
@@ -84,6 +85,7 @@ let connect = {
   refreshInbox: async () => {},
 };
 let systemSettings = { load: async () => {} };
+let setupWizard = { maybeAutoOpen() {} };
 
 try {
   printer = bindPrinterTab({ api, onSaved: () => refreshAll() });
@@ -105,6 +107,17 @@ try {
 
 try {
   systemSettings = bindSystemSettingsTab({ api });
+} catch (err) {
+  showBootError(err);
+}
+
+try {
+  setupWizard = bindSetupWizard({
+    api,
+    setTab,
+    onRefresh: () => refreshAll(),
+    loadPrinters: (a) => printer.loadPrinters?.(a),
+  });
 } catch (err) {
   showBootError(err);
 }
@@ -152,6 +165,7 @@ async function refreshAll() {
       bad: metrics.uncertainTotal || 0,
       healthLine: `uptime • ${metrics.jobsPerHourLast24h}/h • incert ${metrics.uncertainRatePercent}% • fila ${metrics.pending}/${metrics.processing}`,
     });
+    await refreshHeaderPrinterStatus(api, state.applied);
 
     monitor.updatePipeline?.();
     monitor.renderJobs?.();
@@ -203,6 +217,7 @@ async function refreshUpdate({ force = false } = {}) {
   try {
     const update = await api(force ? "/api/update?refresh=1" : "/api/update");
     applyUpdateInfo(update, { api });
+    await refreshRollback(api);
   } catch (err) {
     console.warn("Falha ao verificar atualização", err);
   }
@@ -216,7 +231,9 @@ Promise.resolve()
     if (summary) summary.textContent = e.message || "Falha ao listar impressoras.";
   })
   .finally(() => {
-    refreshAll();
+    refreshAll()
+      .then(() => setupWizard.maybeAutoOpen?.())
+      .catch(showBootError);
     setInterval(refreshAll, 2000);
     setTimeout(refreshUpdate, 4000);
     setInterval(refreshUpdate, 30 * 60 * 1000);

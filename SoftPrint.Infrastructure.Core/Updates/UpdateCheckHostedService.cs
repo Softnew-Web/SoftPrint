@@ -11,17 +11,21 @@ public sealed class UpdateCheckHostedService : BackgroundService
 {
     private readonly IUpdateChecker _checker;
     private readonly IUpdateApplier _applier;
+    private readonly IAppNotifier _notifier;
     private readonly IOptionsMonitor<SoftPrintFeatureOptions> _options;
     private readonly ILogger<UpdateCheckHostedService> _logger;
+    private string? _lastNotifiedLatest;
 
     public UpdateCheckHostedService(
         IUpdateChecker checker,
         IUpdateApplier applier,
+        IAppNotifier notifier,
         IOptionsMonitor<SoftPrintFeatureOptions> options,
         ILogger<UpdateCheckHostedService> logger)
     {
         _checker = checker;
         _applier = applier;
+        _notifier = notifier;
         _options = options;
         _logger = logger;
     }
@@ -33,6 +37,7 @@ public sealed class UpdateCheckHostedService : BackgroundService
             await Task.Delay(TimeSpan.FromSeconds(3), stoppingToken).ConfigureAwait(false);
             _checker.InvalidateCache();
             var result = await _checker.CheckAsync(stoppingToken).ConfigureAwait(false);
+            NotifyIfNeeded(result);
             if (result.Error is not null)
                 _logger.LogInformation("Verificação de atualização: {Error}", result.Error);
             else if (result.UpdateAvailable)
@@ -68,7 +73,8 @@ public sealed class UpdateCheckHostedService : BackgroundService
             try
             {
                 await Task.Delay(TimeSpan.FromHours(6), stoppingToken).ConfigureAwait(false);
-                await _checker.CheckAsync(stoppingToken).ConfigureAwait(false);
+                var result = await _checker.CheckAsync(stoppingToken).ConfigureAwait(false);
+                NotifyIfNeeded(result);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {
@@ -78,6 +84,23 @@ public sealed class UpdateCheckHostedService : BackgroundService
             {
                 _logger.LogWarning(ex, "Falha na verificação periódica de atualização");
             }
+        }
+    }
+
+    private void NotifyIfNeeded(UpdateCheckResult result)
+    {
+        if (!result.UpdateAvailable || string.IsNullOrWhiteSpace(result.LatestVersion))
+            return;
+        if (string.Equals(_lastNotifiedLatest, result.LatestVersion, StringComparison.OrdinalIgnoreCase))
+            return;
+        _lastNotifiedLatest = result.LatestVersion;
+        try
+        {
+            _notifier.NotifyUpdateAvailable(result.CurrentVersion, result.LatestVersion!, result.Mandatory);
+        }
+        catch
+        {
+            /* ignore */
         }
     }
 }

@@ -194,21 +194,30 @@ jobs:
           }
           if ($ver -notmatch '^\d+\.\d+\.\d+$') { throw "Versão inválida para release: '$ver'" }
           $title = "SoftPrint $ver"
-          $notes = @"
-          Release automático gerado no push para ``main``.
-
-          Clientes Windows preferem o zip **delta** (`*-from-<versão>.zip`) quando existir; senão o zip completo da arquitetura. O Setup completo continua disponível para instalação nova.
-          "@
-          if ("${{ github.event_name }}" -eq "workflow_dispatch" -and "${{ github.event.inputs.mandatory }}" -eq "true") {
-            $notes = "[mandatory]`n`n" + $notes
+          $mandatory = ("${{ github.event_name }}" -eq "workflow_dispatch" -and "${{ github.event.inputs.mandatory }}" -eq "true")
+          if ($mandatory) {
             $title = "$title (obrigatória)"
           }
+
+          $notesFile = "dist\RELEASE_NOTES.md"
+          $notesArgs = @{ Version = $ver; OutFile = $notesFile }
+          if ($mandatory) { $notesArgs.Mandatory = $true }
+          & .\scripts\write-release-notes.ps1 @notesArgs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if (-not (Test-Path $notesFile)) { throw "RELEASE_NOTES.md não foi gerado." }
+
+          # Checksums SHA256 dos zips + Setup (clientes verificam antes de instalar).
+          .\scripts\write-checksums.ps1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
           $assets = @(
             "installer/Output/SoftPrint-Setup.exe#SoftPrint-Setup.exe"
           )
           $assets += Get-ChildItem dist -Filter "*.zip" -File -ErrorAction SilentlyContinue |
             ForEach-Object { "$($_.FullName)#$($_.Name)" }
+          if (Test-Path "dist\checksums.sha256") {
+            $assets += "dist\checksums.sha256#checksums.sha256"
+          }
 
           $assets = $assets | Where-Object {
             $path = ($_ -split '#')[0]
@@ -221,4 +230,4 @@ jobs:
           git push origin :refs/tags/v 2>$null
           gh release delete "v" -y 2>$null
 
-          gh release create "v$ver" @assets --title $title --notes $notes
+          gh release create "v$ver" @assets --title $title --notes-file $notesFile

@@ -78,6 +78,61 @@ select option {
   display: none !important;
 }
 
+.events-chip.active[data-status=""] {
+  border-color: rgba(20, 184, 166, 0.5);
+  background: rgba(20, 184, 166, 0.15);
+  color: #14b8a6;
+}
+
+.events-chip.active[data-status="ok"] {
+  border-color: rgba(5, 150, 105, 0.45);
+  background: rgba(5, 150, 105, 0.15);
+  color: #34d399;
+}
+
+.events-chip.active[data-status="uncertain"] {
+  border-color: rgba(185, 28, 28, 0.45);
+  background: rgba(185, 28, 28, 0.15);
+  color: #f87171;
+}
+
+.log-entry {
+  display: grid;
+  grid-template-columns: 4px 1fr;
+  gap: 0;
+  border-radius: 0.75rem;
+  border: 1px solid #2a3644;
+  background: rgba(15, 23, 32, 0.65);
+  overflow: hidden;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.log-entry:hover {
+  border-color: #3a4a5a;
+  background: rgba(26, 36, 48, 0.9);
+}
+
+.log-entry.is-bad {
+  border-color: rgba(185, 28, 28, 0.35);
+}
+
+.log-entry.is-ok {
+  border-color: rgba(20, 184, 166, 0.25);
+}
+
+.log-meta-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  border-radius: 999px;
+  border: 1px solid #2a3644;
+  background: #0f1720;
+  padding: 0.125rem 0.5rem;
+  font-size: 10px;
+  color: #9aabbc;
+  max-width: 100%;
+}
+
 .sr-only {
   position: absolute;
   width: 1px;

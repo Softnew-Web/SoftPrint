@@ -1,4 +1,5 @@
 using SoftPrint.Api.Endpoints;
+using SoftPrint.Application.Abstractions;
 using SoftPrint.Composition;
 using SoftPrint.Application.Services;
 using SoftPrint.Domain;
@@ -22,12 +23,33 @@ if (!OperatingSystem.IsWindowsVersionAtLeast(10))
     return;
 }
 
-// Evita o processo sumir em silêncio por exceção não tratada.
+// Preenchido após o Build; handlers de crash usam este ponte.
+IAppLifecycleLogger? lifecycle = null;
+
 AppDomain.CurrentDomain.UnhandledException += (_, e) =>
+{
     System.Diagnostics.Debug.WriteLine(e.ExceptionObject);
+    try
+    {
+        if (e.ExceptionObject is Exception ex)
+            lifecycle?.OnCrash(ex, e.IsTerminating
+                ? "Exceção não tratada (processo encerrando)"
+                : "Exceção não tratada");
+        else
+            lifecycle?.OnCrash(
+                "SoftPrint crashou (exceção não tratada).",
+                e.ExceptionObject?.ToString());
+    }
+    catch
+    {
+        /* ignore */
+    }
+};
 TaskScheduler.UnobservedTaskException += (_, e) =>
 {
     System.Diagnostics.Debug.WriteLine(e.Exception);
+    try { lifecycle?.OnCrash(e.Exception, "Exceção em tarefa (unobserved)"); }
+    catch { /* ignore */ }
     e.SetObserved();
 };
 
@@ -45,6 +67,8 @@ if (instance is null)
 
 var builder = ApplicationComposer.CreateBuilder(args);
 var app = ApplicationComposer.BuildApplication(builder);
+lifecycle = app.Services.GetService<IAppLifecycleLogger>();
+
 var headless = builder.Configuration.GetValue<bool>("headless") || args.Contains("--headless");
 var startInTray = args.Contains("--tray") || builder.Configuration.GetValue("SoftPrint:StartInTray", false);
 
@@ -59,6 +83,7 @@ try
 }
 catch (Exception exception)
 {
+    try { lifecycle?.OnCrash(exception, "Falha ao iniciar o SoftPrint"); } catch { /* ignore */ }
     if (!headless)
         MessageBox.Show(
             "Não foi possível iniciar o SoftPrint. Verifique se ele já está aberto.\n\n" + exception.Message,

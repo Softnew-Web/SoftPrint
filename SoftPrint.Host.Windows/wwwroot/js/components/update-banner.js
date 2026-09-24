@@ -1,7 +1,9 @@
 const DISMISS_KEY = "softprint-update-dismissed";
 
 let applyBound = false;
+let rollbackBound = false;
 let pollTimer = null;
+let rollbackTarget = null;
 
 export function applyVersion(version) {
   const text = `v${version || "—"}`;
@@ -78,6 +80,96 @@ export function applyUpdateInfo(update, { api } = {}) {
   }
 }
 
+export async function refreshRollback(api) {
+  const box = document.getElementById("rollbackBox");
+  const hint = document.getElementById("rollbackHint");
+  const btn = document.getElementById("btnRollback");
+  if (!box || !btn) return;
+
+  try {
+    const info = await api("/api/update/rollback");
+    if (!info?.available || !info.targetVersion) {
+      box.classList.add("hidden");
+      rollbackTarget = null;
+      return;
+    }
+
+    rollbackTarget = info.targetVersion;
+    box.classList.remove("hidden");
+    if (hint) {
+      hint.textContent = `Versão anterior local: v${info.targetVersion} (atual: v${info.currentVersion}).`;
+    }
+    btn.textContent = `Retroceder agora para v${info.targetVersion}`;
+
+    if (api && !rollbackBound) {
+      rollbackBound = true;
+      btn.addEventListener("click", () => startRollback(api));
+      document.getElementById("updateProgressClose")?.addEventListener("click", hideOverlay);
+    }
+  } catch (err) {
+    box.classList.add("hidden");
+    console.warn("Falha ao consultar rollback", err);
+  }
+
+  await refreshUpdateHistory(api);
+}
+
+export async function refreshUpdateHistory(api) {
+  const checkEl = document.getElementById("updateHistoryCheck");
+  const applyEl = document.getElementById("updateHistoryApply");
+  if (!checkEl && !applyEl) return;
+
+  try {
+    const h = await api("/api/update/history");
+    if (checkEl) {
+      if (h.lastCheckError) {
+        checkEl.textContent = `Última verificação: falhou (${fmtWhen(h.lastCheckedAt)}) — ${h.lastCheckError}`;
+        checkEl.className = "text-bad";
+      } else if (h.lastCheckedAt) {
+        const avail =
+          h.lastUpdateAvailable === true
+            ? ` · nova: v${h.lastLatestVersion || "?"}`
+            : h.lastUpdateAvailable === false
+              ? " · em dia"
+              : "";
+        checkEl.textContent = `Última verificação: ${fmtWhen(h.lastCheckedAt)}${avail}`;
+        checkEl.className = "text-mist";
+      } else {
+        checkEl.textContent = "Última verificação: ainda não consultou o servidor.";
+        checkEl.className = "text-mist";
+      }
+    }
+
+    if (applyEl) {
+      if (!h.lastApplyAt) {
+        applyEl.textContent = "Última instalação: nenhuma neste PC.";
+        applyEl.className = "text-mist";
+      } else if (h.lastApplyOk === false) {
+        applyEl.textContent = `Última instalação: falhou (${fmtWhen(h.lastApplyAt)}) — v${h.lastApplyVersion || "?"} · ${h.lastApplyError || "erro"}`;
+        applyEl.className = "text-bad";
+      } else if (h.lastApplyOk === true) {
+        const kind = h.lastApplyKind === "rollback" ? "retrocesso" : "atualização";
+        applyEl.textContent = `Última instalação: OK (${fmtWhen(h.lastApplyAt)}) — ${kind} v${h.lastApplyVersion || "?"}`;
+        applyEl.className = "text-sea-glow";
+      } else {
+        applyEl.textContent = `Última instalação: em andamento (${fmtWhen(h.lastApplyAt)}) — v${h.lastApplyVersion || "?"}`;
+        applyEl.className = "text-warn";
+      }
+    }
+  } catch (err) {
+    console.warn("Falha ao ler histórico de update", err);
+  }
+}
+
+function fmtWhen(value) {
+  if (!value) return "—";
+  try {
+    return new Date(value).toLocaleString();
+  } catch {
+    return String(value);
+  }
+}
+
 function showOverlay() {
   const overlay = document.getElementById("updateOverlay");
   const err = document.getElementById("updateProgressError");
@@ -121,6 +213,30 @@ async function startAutoUpdate(api) {
   showOverlay();
   try {
     await api("/api/update/apply", { method: "POST", body: "{}" });
+  } catch (err) {
+    showError(err.message || String(err));
+    return;
+  }
+  if (pollTimer) clearInterval(pollTimer);
+  pollTimer = setInterval(() => pollProgress(api), 500);
+  pollProgress(api);
+}
+
+async function startRollback(api) {
+  const target = rollbackTarget;
+  if (!target) return;
+  const ok = window.confirm(
+    `Voltar o SoftPrint para a versão ${target}?\n\nSerá restaurada a cópia local salva antes da última atualização (só essa versão fica guardada).`
+  );
+  if (!ok) return;
+
+  showOverlay();
+  setProgress(1, `Preparando retorno para v${target}…`);
+  try {
+    await api("/api/update/apply", {
+      method: "POST",
+      body: JSON.stringify({ rollback: true, version: target })
+    });
   } catch (err) {
     showError(err.message || String(err));
     return;

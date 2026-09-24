@@ -54,12 +54,63 @@
     el.className = `text-sm min-h-[1.25rem] ${err ? "text-bad" : "text-sea-glow"}`;
   }
   function openDlg(title, body) {
+    const dlg = document.getElementById("dlg");
+    dlg.classList.remove("max-w-3xl");
+    dlg.classList.add("max-w-2xl");
     document.getElementById("dlgTitle").textContent = title;
-    document.getElementById("dlgBody").textContent = body;
-    document.getElementById("dlg").showModal();
+    const el = document.getElementById("dlgBody");
+    el.className = "p-5 text-sm whitespace-pre-wrap overflow-auto max-h-[70vh] scroll-thin leading-relaxed font-body";
+    el.textContent = body;
+    dlg.showModal();
+  }
+  function openDlgHtml(title, html, { wide = false } = {}) {
+    const dlg = document.getElementById("dlg");
+    dlg.classList.toggle("max-w-3xl", wide);
+    dlg.classList.toggle("max-w-2xl", !wide);
+    document.getElementById("dlgTitle").textContent = title;
+    const el = document.getElementById("dlgBody");
+    el.className = "p-5 text-sm overflow-auto max-h-[75vh] scroll-thin leading-relaxed font-body";
+    el.innerHTML = html;
+    dlg.showModal();
   }
 
   // SoftPrint.Host.Windows/wwwroot/js/components/stats.js
+  async function refreshHeaderPrinterStatus(api2, settings) {
+    const targets = [
+      document.getElementById("headerPrinterStatus"),
+      document.getElementById("printerHealthLine")
+    ].filter(Boolean);
+    const apply = (text, tone) => {
+      for (const el of targets) {
+        el.textContent = text;
+        const header = el.id === "headerPrinterStatus";
+        el.className = header ? `text-xs mt-0.5 truncate ${tone}` : `text-xs mt-1 ${tone}`;
+      }
+    };
+    const name = settings?.printerName;
+    if (!name) {
+      apply("Impressora: nenhuma selecionada", "text-bad");
+      return { ok: false, offline: false, missing: true };
+    }
+    try {
+      const list = await api2("/api/printers");
+      const found = (list || []).find((p) => p.name === name);
+      if (!found) {
+        apply(`Impressora: '${name}' n\xE3o encontrada`, "text-bad");
+        return { ok: false, offline: false, missing: true };
+      }
+      if (found.isOffline) {
+        apply(`Impressora: '${name}' offline / sem papel`, "text-bad");
+        return { ok: false, offline: true, missing: false };
+      }
+      const where = found.connection || found.port || "local";
+      apply(`Impressora: '${name}' pronta \xB7 ${where}`, "text-sea-glow");
+      return { ok: true, offline: false, missing: false };
+    } catch {
+      apply(`Impressora: '${name}' (status indispon\xEDvel)`, "text-mist");
+      return { ok: null, offline: false, missing: false };
+    }
+  }
   function modeLabel({ paused, simulation } = {}) {
     const base = simulation ? "Simula\xE7\xE3o" : "Real";
     return paused ? `${base} \xB7 pausa` : base;
@@ -122,7 +173,17 @@
     }
     return landscape ? { w: h, h: w } : { w, h };
   }
-  function computeDestination(pageX, pageY, pageW, pageH, imageW, imageH, fit, scalePercent) {
+  function computeDestination(opts) {
+    const {
+      pageX,
+      pageY,
+      pageW,
+      pageH,
+      imageW,
+      imageH,
+      fit,
+      scalePercent
+    } = opts;
     const scale = Math.min(200, Math.max(10, scalePercent)) / 100;
     const fitMode = (fit || "contain").toLowerCase();
     if (fitMode === "stretch") {
@@ -147,83 +208,180 @@
   function drawPaperPreview(canvas, image, fit, scalePercent, paper) {
     const ctx = canvas.getContext("2d");
     if (!ctx) return null;
+    const layout = layoutPaperOnCanvas(canvas, paper);
+    const { dpr, W, H, paperX, paperY, paperW, paperH, paperWmm, paperHmm, isNarrow, isWide } = layout;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = "#121a22";
+    ctx.fillRect(0, 0, W, H);
+    const area = resolvePrintableArea(layout, paper?.margins);
+    drawPaperSheet(ctx, dpr, paperX, paperY, paperW, paperH);
+    drawPrintableOutline(ctx, dpr, area, paper?.margins, isNarrow, isWide);
+    drawSizeCaption(ctx, {
+      dpr,
+      W,
+      H,
+      paperX,
+      paperY,
+      paperW,
+      paperH,
+      paperWmm,
+      paperHmm
+    });
+    if (!image) {
+      drawEmptyTip(ctx, dpr, paperX, paperY, paperW, paperH, isNarrow);
+      return { paperW, paperH, area, paperWmm, paperHmm };
+    }
+    const dest = computeDestination({
+      pageX: area.x,
+      pageY: area.y,
+      pageW: area.w,
+      pageH: area.h,
+      imageW: image.width,
+      imageH: image.height,
+      fit,
+      scalePercent
+    });
+    drawPreviewImage(ctx, dpr, image, dest, area, isNarrow || isWide);
+    return { paperW, paperH, area, dest, paperWmm, paperHmm };
+  }
+  function layoutPaperOnCanvas(canvas, paper) {
     const paperWmm = paper?.w || 210;
     const paperHmm = paper?.h || 297;
     const paperRatio = paperWmm / Math.max(1e-6, paperHmm);
+    const isNarrow = paperRatio < 0.45;
+    const isWide = paperRatio > 1.6;
     const parent = canvas.parentElement;
-    const maxW = Math.max(180, parent?.clientWidth || canvas.clientWidth || 520);
-    const maxH = Math.max(180, parent?.clientHeight || canvas.clientHeight || 680);
+    const cssW = Math.max(200, Math.floor(parent?.clientWidth || canvas.clientWidth || 520));
+    const cssH = Math.max(200, Math.floor(parent?.clientHeight || canvas.clientHeight || 360));
     const dpr = Math.min(typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1, 2);
-    const padCss = 10;
-    let cssW = maxW - padCss;
-    let cssH = cssW / paperRatio;
-    if (cssH > maxH - padCss) {
-      cssH = maxH - padCss;
-      cssW = cssH * paperRatio;
-    }
-    cssW = Math.max(120, Math.floor(cssW));
-    cssH = Math.max(120, Math.floor(cssH));
     canvas.style.width = `${cssW}px`;
     canvas.style.height = `${cssH}px`;
     const W = Math.round(cssW * dpr);
     const H = Math.round(cssH * dpr);
     if (canvas.width !== W) canvas.width = W;
     if (canvas.height !== H) canvas.height = H;
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.clearRect(0, 0, W, H);
-    ctx.fillStyle = "#121a22";
-    ctx.fillRect(0, 0, W, H);
-    const edge = Math.max(4 * dpr, Math.min(W, H) * 0.015);
-    const labelRoom = 16 * dpr;
-    let paperW = W - edge * 2;
+    const padX = Math.max(18 * dpr, W * 0.06);
+    const padTop = Math.max(18 * dpr, H * 0.06);
+    const labelRoom = 22 * dpr;
+    const padBottom = Math.max(14 * dpr, H * 0.04) + labelRoom;
+    const availW = Math.max(40 * dpr, W - padX * 2);
+    const availH = Math.max(40 * dpr, H - padTop - padBottom);
+    let paperW = availW;
     let paperH = paperW / paperRatio;
-    if (paperH > H - edge * 2 - labelRoom) {
-      paperH = H - edge * 2 - labelRoom;
+    if (paperH > availH) {
+      paperH = availH;
       paperW = paperH * paperRatio;
     }
-    const paperX = (W - paperW) / 2;
-    const paperY = (H - paperH - labelRoom) / 2;
-    const fallbackMargin = Math.min(paperW, paperH) * 0.04;
-    const margins = paper?.margins || {};
+    if (isWide) {
+      paperW = Math.min(paperW, availW * 0.92);
+      paperH = paperW / paperRatio;
+    }
+    if (isNarrow) {
+      paperH = Math.min(paperH, availH * 0.92);
+      paperW = paperH * paperRatio;
+    }
+    return {
+      dpr,
+      W,
+      H,
+      paperWmm,
+      paperHmm,
+      isNarrow,
+      isWide,
+      paperW,
+      paperH,
+      paperX: (W - paperW) / 2,
+      paperY: padTop + (availH - paperH) / 2
+    };
+  }
+  function resolvePrintableArea(layout, margins = {}) {
+    const { paperX, paperY, paperW, paperH, paperWmm, paperHmm } = layout;
+    const fallbackMargin = Math.min(paperW, paperH) * 0.045;
     const mmToX = paperW / paperWmm;
     const mmToY = paperH / paperHmm;
-    const marginLeft = Number.isFinite(margins.leftMm) ? margins.leftMm * mmToX : fallbackMargin;
-    const marginRight = Number.isFinite(margins.rightMm) ? margins.rightMm * mmToX : fallbackMargin;
-    const marginTop = Number.isFinite(margins.topMm) ? margins.topMm * mmToY : fallbackMargin;
-    const marginBottom = Number.isFinite(margins.bottomMm) ? margins.bottomMm * mmToY : fallbackMargin;
-    const area = {
-      x: paperX + marginLeft,
-      y: paperY + marginTop,
-      w: Math.max(1, paperW - marginLeft - marginRight),
-      h: Math.max(1, paperH - marginTop - marginBottom)
+    let marginLeft = Number.isFinite(margins.leftMm) ? margins.leftMm * mmToX : fallbackMargin;
+    let marginRight = Number.isFinite(margins.rightMm) ? margins.rightMm * mmToX : fallbackMargin;
+    let marginTop = Number.isFinite(margins.topMm) ? margins.topMm * mmToY : fallbackMargin;
+    let marginBottom = Number.isFinite(margins.bottomMm) ? margins.bottomMm * mmToY : fallbackMargin;
+    const balanced = balanceAsymmetricMargins(
+      { marginLeft, marginRight, marginTop, marginBottom },
+      paperW,
+      paperH
+    );
+    return {
+      x: paperX + balanced.marginLeft,
+      y: paperY + balanced.marginTop,
+      w: Math.max(1, paperW - balanced.marginLeft - balanced.marginRight),
+      h: Math.max(1, paperH - balanced.marginTop - balanced.marginBottom)
     };
+  }
+  function balanceAsymmetricMargins(m, paperW, paperH) {
+    const minVis = Math.min(paperW, paperH) * 0.012;
+    let { marginLeft, marginRight, marginTop, marginBottom } = m;
+    if (marginRight < minVis && marginLeft > minVis * 2) marginRight = Math.min(marginLeft, paperW * 0.08);
+    if (marginBottom < minVis && marginTop > minVis * 2) marginBottom = Math.min(marginTop, paperH * 0.08);
+    if (marginLeft < minVis && marginRight > minVis * 2) marginLeft = Math.min(marginRight, paperW * 0.08);
+    if (marginTop < minVis && marginBottom > minVis * 2) marginTop = Math.min(marginBottom, paperH * 0.08);
+    return { marginLeft, marginRight, marginTop, marginBottom };
+  }
+  function drawPaperSheet(ctx, dpr, paperX, paperY, paperW, paperH) {
+    ctx.fillStyle = "rgba(0,0,0,0.35)";
+    ctx.fillRect(paperX + 3 * dpr, paperY + 4 * dpr, paperW, paperH);
     ctx.fillStyle = "#f4f7fa";
-    ctx.strokeStyle = "#2a3644";
+    ctx.strokeStyle = "#3a4a5a";
     ctx.lineWidth = Math.max(1, dpr);
     ctx.fillRect(paperX, paperY, paperW, paperH);
     ctx.strokeRect(paperX, paperY, paperW, paperH);
+  }
+  function printableAreaLabel(margins, compact) {
+    const fromDriver = margins?.source === "driver" || margins?.source === "cups-configured";
+    if (!fromDriver) return "\xE1rea imprim\xEDvel aproximada";
+    return compact ? "\xE1rea imprim\xEDvel" : "\xE1rea imprim\xEDvel (mesmo recorte do envio)";
+  }
+  function drawPrintableOutline(ctx, dpr, area, margins, isNarrow, isWide) {
     ctx.strokeStyle = "#0f766e";
-    ctx.lineWidth = Math.max(2, 2.25 * dpr);
-    ctx.setLineDash([8 * dpr, 5 * dpr]);
+    ctx.lineWidth = Math.max(1.75, 2 * dpr);
+    ctx.setLineDash([7 * dpr, 5 * dpr]);
     ctx.strokeRect(area.x, area.y, area.w, area.h);
     ctx.setLineDash([]);
+    const areaFont = Math.max(9, Math.min(12, Math.min(area.w / 22, area.h / 4)) * dpr);
     ctx.fillStyle = "#0f766e";
-    ctx.font = `600 ${Math.max(11, 11 * dpr)}px 'IBM Plex Sans', sans-serif`;
+    ctx.font = `600 ${areaFont}px 'IBM Plex Sans', sans-serif`;
     ctx.textAlign = "left";
-    const areaLabel = margins.source === "driver" || margins.source === "cups-configured" ? "\xE1rea imprim\xEDvel (mesmo recorte do envio)" : "\xE1rea imprim\xEDvel aproximada";
-    ctx.fillText(areaLabel, area.x + 5 * dpr, area.y + 14 * dpr);
-    ctx.fillStyle = "#6b7c8c";
-    ctx.font = `${Math.max(11, 11 * dpr)}px 'IBM Plex Sans', sans-serif`;
+    if (area.w <= 36 * dpr || area.h <= 16 * dpr) return;
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(area.x + 1, area.y + 1, area.w - 2, Math.min(area.h - 2, areaFont + 8 * dpr));
+    ctx.clip();
+    ctx.fillText(printableAreaLabel(margins, isNarrow || isWide), area.x + 5 * dpr, area.y + areaFont + 3 * dpr);
+    ctx.restore();
+  }
+  function drawSizeCaption(ctx, box) {
+    const { dpr, W, H, paperY, paperH, paperWmm, paperHmm } = box;
+    ctx.fillStyle = "#8a9aab";
+    ctx.font = `${Math.max(10, 11 * dpr)}px 'IBM Plex Sans', sans-serif`;
     ctx.textAlign = "center";
-    const sizeLabel = `${fmtMm(paperWmm)}\xD7${fmtMm(paperHmm)} mm`;
-    ctx.fillText(sizeLabel, W / 2, Math.min(paperY + paperH + 14 * dpr, H - 4 * dpr));
-    if (!image) {
-      ctx.fillStyle = "#6b7c8c";
-      ctx.font = `${Math.max(13, 13 * dpr)}px 'IBM Plex Sans', sans-serif`;
-      ctx.fillText("Escolha uma imagem para pr\xE9-visualizar", W / 2, paperY + paperH / 2);
-      return { paperW, paperH, area, paperWmm, paperHmm };
-    }
-    const dest = computeDestination(area.x, area.y, area.w, area.h, image.width, image.height, fit, scalePercent);
+    ctx.fillText(
+      `${fmtMm(paperWmm)}\xD7${fmtMm(paperHmm)} mm`,
+      W / 2,
+      Math.min(paperY + paperH + 16 * dpr, H - 6 * dpr)
+    );
+  }
+  function drawEmptyTip(ctx, dpr, paperX, paperY, paperW, paperH, isNarrow) {
+    const tipFont = Math.max(11, Math.min(14, Math.min(paperW / 18, paperH / 5)) * dpr);
+    ctx.fillStyle = "#6b7c8c";
+    ctx.font = `${tipFont}px 'IBM Plex Sans', sans-serif`;
+    ctx.textAlign = "center";
+    const tip = isNarrow ? "Escolha um\narquivo" : "Escolha uma imagem para pr\xE9-visualizar";
+    const tipLines = tip.split("\n");
+    const lineH = tipFont * 1.35;
+    const startY = paperY + paperH / 2 - (tipLines.length - 1) * lineH / 2;
+    tipLines.forEach((line, i) => {
+      ctx.fillText(line, paperX + paperW / 2, startY + i * lineH);
+    });
+  }
+  function drawPreviewImage(ctx, dpr, image, dest, area, compact) {
     ctx.save();
     ctx.beginPath();
     ctx.rect(area.x, area.y, area.w, area.h);
@@ -240,8 +398,12 @@
       ctx.setLineDash([]);
       ctx.fillStyle = "#b91c1c";
       ctx.textAlign = "center";
-      ctx.font = `bold ${Math.max(11, 11 * dpr)}px 'IBM Plex Sans', sans-serif`;
-      ctx.fillText("partes fora da linha ser\xE3o cortadas", area.x + area.w / 2, area.y + area.h - 8 * dpr);
+      ctx.font = `bold ${Math.max(10, Math.min(11, area.w / 12) * dpr)}px 'IBM Plex Sans', sans-serif`;
+      ctx.fillText(
+        compact ? "ser\xE1 cortado" : "partes fora da linha ser\xE3o cortadas",
+        area.x + area.w / 2,
+        area.y + area.h - 8 * dpr
+      );
     }
     ctx.strokeStyle = "#0d9488";
     ctx.lineWidth = Math.max(1.5, 1.5 * dpr);
@@ -251,7 +413,6 @@
       Math.min(dest.w, area.w),
       Math.min(dest.h, area.h)
     );
-    return { paperW, paperH, area, dest, paperWmm, paperHmm };
   }
   function fmtMm(n) {
     const v = Number(n);
@@ -32235,8 +32396,44 @@ fn fs_main(in : VertexOutput) -> @location(0) vec4<f32> {
     if (btnLoad) btnLoad.addEventListener("click", () => loadPrinters(api2));
     const btnFindNet = document.getElementById("btnFindNetworkPrinters");
     const netHint = document.getElementById("networkPrinterHint");
+    const netPanel = document.getElementById("networkPrinterPanel");
+    const netList = document.getElementById("networkPrinterList");
+    let discoveredHosts = [];
+    function closeNetworkPanel({ keepHint = false } = {}) {
+      discoveredHosts = [];
+      if (netList) netList.innerHTML = "";
+      netPanel?.classList.add("hidden");
+      if (!keepHint && netHint) {
+        netHint.textContent = "";
+        netHint.classList.add("hidden");
+      }
+    }
+    function renderNetworkHosts(hosts) {
+      discoveredHosts = hosts;
+      if (!netList || !netPanel) return;
+      if (!hosts.length) {
+        netPanel.classList.add("hidden");
+        netList.innerHTML = "";
+        return;
+      }
+      netPanel.classList.remove("hidden");
+      netList.innerHTML = hosts.map(
+        (h, i) => `<label class="flex items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-ink cursor-pointer">
+          <input type="checkbox" class="net-host-check accent-sea" data-idx="${i}" checked />
+          <span class="truncate">${h.address}:${h.port} <span class="text-mist">\u2014 ${h.hint || "rede"}</span></span>
+        </label>`
+      ).join("");
+    }
+    document.getElementById("btnCloseNetworkPanel")?.addEventListener("click", () => {
+      closeNetworkPanel();
+      feedback("Busca de rede fechada.");
+    });
     if (btnFindNet) {
       btnFindNet.addEventListener("click", async () => {
+        if (netPanel && !netPanel.classList.contains("hidden")) {
+          closeNetworkPanel();
+          return;
+        }
         try {
           btnFindNet.disabled = true;
           if (netHint) {
@@ -32245,57 +32442,17 @@ fn fs_main(in : VertexOutput) -> @location(0) vec4<f32> {
           }
           feedback("Procurando impressoras na rede\u2026");
           const found = await api2("/api/printers/discover", { method: "POST", body: "{}" });
-          const byHost = /* @__PURE__ */ new Map();
-          for (const item of found || []) {
-            if (!item?.reachable || !item.address) continue;
-            const prev = byHost.get(item.address);
-            const rank = item.port === 9100 ? 3 : item.port === 631 ? 2 : 1;
-            if (!prev || rank > prev.rank) byHost.set(item.address, { ...item, rank });
-          }
-          const hosts = [...byHost.values()];
+          const hosts = preferNetworkHosts(found || []);
           if (!hosts.length) {
+            renderNetworkHosts([]);
             if (netHint) netHint.textContent = "Nenhuma impressora de rede encontrada. Confira se ela est\xE1 ligada e na mesma rede.";
             return feedback("Nenhuma impressora de rede encontrada.", true);
           }
-          const lines = hosts.map((h, i) => `${i + 1}. ${h.address}:${h.port} \u2014 ${h.hint || "rede"}`);
-          const choice = window.prompt(
-            `Encontradas ${hosts.length} impressora(s) na rede.
-
-${lines.join("\n")}
-
-Digite o n\xFAmero para instalar no Windows (ou cancele):`,
-            "1"
-          );
-          if (choice == null) {
-            if (netHint) netHint.textContent = `${hosts.length} encontrada(s). Instala\xE7\xE3o cancelada.`;
-            return;
-          }
-          const idx = Number(choice) - 1;
-          if (!Number.isInteger(idx) || idx < 0 || idx >= hosts.length) {
-            return feedback("N\xFAmero inv\xE1lido.", true);
-          }
-          const selected = hosts[idx];
-          if (netHint) netHint.textContent = `Instalando ${selected.address}:${selected.port} no Windows\u2026`;
-          const installed = await api2("/api/printers/install-network", {
-            method: "POST",
-            body: JSON.stringify({
-              address: selected.address,
-              port: selected.port,
-              name: `Impressora rede ${selected.address}`
-            })
-          });
-          if (!installed?.ok) {
-            const err = installed?.error || "Falha ao instalar.";
-            if (netHint) netHint.textContent = err;
-            return feedback(err, true);
-          }
-          await loadPrinters(api2);
-          if (printers && installed.printerName) printers.value = installed.printerName;
-          if (netHint) {
-            netHint.textContent = `Instalada: ${installed.printerName}. Selecione e clique em Salvar configura\xE7\xF5es.`;
-          }
-          feedback(`Impressora instalada: ${installed.printerName}`);
+          renderNetworkHosts(hosts);
+          if (netHint) netHint.textContent = `${hosts.length} encontrada(s). Marque as desejadas e clique em Instalar selecionadas.`;
+          feedback(`${hosts.length} impressora(s) na rede \u2014 selecione quais instalar.`);
         } catch (err) {
+          renderNetworkHosts([]);
           if (netHint) netHint.textContent = err.message || "Falha na busca.";
           feedback(err.message || "Falha na busca.", true);
         } finally {
@@ -32303,6 +32460,50 @@ Digite o n\xFAmero para instalar no Windows (ou cancele):`,
         }
       });
     }
+    document.getElementById("btnNetworkSelectAll")?.addEventListener("click", () => {
+      netList?.querySelectorAll(".net-host-check").forEach((el) => {
+        el.checked = true;
+      });
+    });
+    document.getElementById("btnInstallNetworkSelected")?.addEventListener("click", async () => {
+      const idxs = [...netList?.querySelectorAll(".net-host-check:checked") || []].map((el) => Number(el.dataset.idx)).filter((i) => Number.isInteger(i) && i >= 0 && i < discoveredHosts.length);
+      if (!idxs.length) return feedback("Marque ao menos uma impressora.", true);
+      const items = idxs.map((i) => {
+        const h = discoveredHosts[i];
+        return {
+          address: h.address,
+          port: h.port,
+          name: `Impressora rede ${h.address}`
+        };
+      });
+      try {
+        if (netHint) netHint.textContent = `Instalando ${items.length} impressora(s)\u2026`;
+        const result = await api2("/api/printers/install-network-bulk", {
+          method: "POST",
+          body: JSON.stringify({ items })
+        });
+        await loadPrinters(api2);
+        const firstName = (result.installed || []).find((x) => x.printerName)?.printerName;
+        if (printers && firstName) printers.value = firstName;
+        const fail = (result.errors || []).length;
+        if (fail) {
+          if (netHint) {
+            netHint.textContent = `${result.count || 0} instalada(s), ${fail} falha(s). Selecione e salve.`;
+          }
+          feedback(`${result.count || 0} instalada(s), ${fail} com erro.`);
+        } else {
+          closeNetworkPanel({ keepHint: true });
+          if (netHint) {
+            netHint.classList.remove("hidden");
+            netHint.textContent = `${result.count || 0} instalada(s). Selecione e clique em Salvar configura\xE7\xF5es.`;
+          }
+          feedback(`${result.count || 0} impressora(s) instalada(s).`);
+        }
+      } catch (err) {
+        if (netHint) netHint.textContent = err.message || "Falha na instala\xE7\xE3o.";
+        feedback(err.message || "Falha na instala\xE7\xE3o.", true);
+      }
+    });
     const btnSave = document.getElementById("btnSaveSettings");
     if (btnSave) {
       btnSave.addEventListener("click", async () => {
@@ -32388,12 +32589,13 @@ Digite o n\xFAmero para instalar no Windows (ou cancele):`,
       const paperLabel = `${fmt(paper.w)}\xD7${fmt(paper.h)} mm`;
       if (!previewMeta) return;
       const mismatch = paper.honored === false ? ` \xB7 aten\xE7\xE3o: o driver usar\xE1 ${paperLabel} (configurado ${fmt(paper.requestedW)}\xD7${fmt(paper.requestedH)} mm)` : "";
+      const tip = paper.requestedW <= 90 && paper.requestedH >= 150 ? " \xB7 cupom estreito (faixa alta)" : "";
       if (previewImage) {
         const fitLabel = imageFit?.options?.[imageFit.selectedIndex]?.text || fit;
         const dimensions = previewImage.naturalWidth ? `${previewImage.naturalWidth}\xD7${previewImage.naturalHeight}px` : `PDF p\xE1gina ${pdfPage}/${pdfDocument?.pageCount || 1}`;
-        previewMeta.textContent = `${paperLabel} \xB7 ${dimensions} \xB7 ${fitLabel} \xB7 ${scale}%${mismatch}`;
+        previewMeta.textContent = `${paperLabel} \xB7 ${dimensions} \xB7 ${fitLabel} \xB7 ${scale}%${mismatch}${tip}`;
       } else {
-        previewMeta.textContent = `Papel da impress\xE3o: ${paperLabel}${paperLandscape?.checked ? " (paisagem)" : ""}${mismatch}`;
+        previewMeta.textContent = `Papel da impress\xE3o: ${paperLabel}${paperLandscape?.checked ? " (paisagem)" : ""}${mismatch}${tip}`;
       }
     }
     async function renderPdfPage() {
@@ -32448,10 +32650,6 @@ Digite o n\xFAmero para instalar no Windows (ou cancele):`,
       }
       redrawPreview();
     }
-    function fmt(n) {
-      const v = Number(n);
-      return Number.isInteger(v) ? String(v) : v.toFixed(1);
-    }
     syncCustomRow();
     redrawPreview();
     window.addEventListener("resize", () => {
@@ -32459,6 +32657,25 @@ Digite o n\xFAmero para instalar no Windows (ou cancele):`,
       window.__softprintPreviewResize = setTimeout(() => redrawPreview(), 80);
     });
     return { loadPrinters, applySettingsToForm, redrawPreview };
+  }
+  function fmt(n) {
+    const v = Number(n);
+    return Number.isInteger(v) ? String(v) : v.toFixed(1);
+  }
+  function networkPortRank(port) {
+    if (port === 9100) return 3;
+    if (port === 631) return 2;
+    return 1;
+  }
+  function preferNetworkHosts(found) {
+    const byHost = /* @__PURE__ */ new Map();
+    for (const item of found) {
+      if (!item?.reachable || !item.address) continue;
+      const prev = byHost.get(item.address);
+      const rank = networkPortRank(item.port);
+      if (!prev || rank > prev.rank) byHost.set(item.address, { ...item, rank });
+    }
+    return [...byHost.values()];
   }
 
   // SoftPrint.Host.Windows/wwwroot/js/components/monitor-tab.js
@@ -32517,10 +32734,20 @@ Digite o n\xFAmero para instalar no Windows (ou cancele):`,
     });
     document.getElementById("refFilter").addEventListener("input", renderJobs);
     document.getElementById("btnSendTest").addEventListener("click", sendTest);
+    document.getElementById("btnGuidedTest")?.addEventListener("click", sendGuidedTest);
     document.getElementById("btnReprint").addEventListener("click", reprintSelected);
-    document.getElementById("btnExplain").addEventListener("click", showFull);
+    document.getElementById("btnReprintBulk")?.addEventListener("click", reprintBulk);
+    document.getElementById("btnExplain").addEventListener("click", showFullExplanation);
     document.getElementById("btnExportJson").addEventListener("click", () => exportJobs(false));
     document.getElementById("btnExportCsv").addEventListener("click", () => exportJobs(true));
+    document.getElementById("btnQueuePause")?.addEventListener("click", () => setPaused(true));
+    document.getElementById("btnQueueResume")?.addEventListener("click", () => setPaused(false));
+    document.getElementById("jobsSelectAll")?.addEventListener("change", (e) => {
+      const on = !!e.target.checked;
+      body.querySelectorAll(".job-check").forEach((el) => {
+        el.checked = on;
+      });
+    });
     function renderJobs() {
       const statuses = selectedStatuses();
       const rf = document.getElementById("refFilter").value.trim().toLowerCase();
@@ -32530,19 +32757,24 @@ Digite o n\xFAmero para instalar no Windows (ou cancele):`,
       body.innerHTML = filtered.slice().reverse().map(
         (j) => `
       <tr data-id="${j.id}" class="job-row border-t border-ink-line cursor-pointer hover:bg-ink/60 ${state.selectedId === j.id ? "bg-ink" : ""} ${j.status === "uncertain" ? "text-bad" : ""}">
+        <td class="px-3 py-2.5" onclick="event.stopPropagation()">
+          <input type="checkbox" class="job-check accent-sea" data-id="${j.id}" aria-label="Selecionar ${escapeHtml(
+          j.reference
+        )}" />
+        </td>
         <td class="px-3 py-2.5 font-medium">${escapeHtml(j.reference)}</td>
         <td class="px-3 py-2.5 text-mist">${escapeHtml(j.jobType || "default")}</td>
         <td class="px-3 py-2.5">${escapeHtml(statusLabel[j.status] || j.status)}</td>
         <td class="px-3 py-2.5 text-mist text-xs">${new Date(j.createdAt).toLocaleString()}</td>
       </tr>`
-      ).join("") || `<tr><td colspan="4" class="px-3 py-8 text-mist text-center">Nenhum pedido nesta aba.</td></tr>`;
+      ).join("") || `<tr><td colspan="5" class="px-3 py-8 text-mist text-center">Nenhum pedido nesta aba.</td></tr>`;
       body.querySelectorAll(".job-row").forEach((row) => {
         row.addEventListener("click", () => {
           state.selectedId = row.dataset.id;
           renderJobs();
         });
       });
-      const sel = state.jobs.find((j) => j.id === state.selectedId) || filtered[filtered.length - 1] || null;
+      const sel = state.jobs.find((j) => j.id === state.selectedId) || filtered.at(-1) || null;
       if (sel) state.selectedId = sel.id;
       showTrace(sel);
     }
@@ -32555,18 +32787,7 @@ Digite o n\xFAmero para instalar no Windows (ou cancele):`,
         return;
       }
       const list = job.steps || [];
-      steps.innerHTML = list.length ? list.map(
-        (s, i) => `
-      <div class="pl-4 timeline-line relative">
-        <span class="absolute -left-[5px] top-1.5 w-2 h-2 rounded-full ${s.isError ? "bg-bad" : "bg-sea-glow"}"></span>
-        <p class="font-medium ${s.isError ? "text-bad" : ""}">${i + 1}. ${escapeHtml(
-          s.message
-        )}</p>
-        <p class="text-xs text-mist mt-0.5">Onde: ${escapeHtml(s.where)}</p>
-        ${s.detail ? `<p class="text-xs text-mist/80 mt-0.5">${escapeHtml(s.detail)}</p>` : ""}
-        <p class="text-[11px] text-mist/60 mt-1">${new Date(s.at).toLocaleTimeString()}</p>
-      </div>`
-      ).join("") : `<p class="text-mist">Ainda sem passos.</p>`;
+      steps.innerHTML = list.length ? list.map((s, i) => renderTraceStep(s, i)).join("") : `<p class="text-mist">Ainda sem passos.</p>`;
       if (job.error || job.status === "uncertain") {
         err.innerHTML = `<p class="text-bad font-semibold mb-1">Erro / por que conferir</p>
         <p><span class="text-mist">O que:</span> ${escapeHtml(job.error || "uncertain")}</p>
@@ -32575,15 +32796,35 @@ Digite o n\xFAmero para instalar no Windows (ou cancele):`,
           job.errorReason || "Confira antes de reenviar."
         )}</p>`;
         err.className = "rounded-xl bg-bad/10 border border-bad/40 p-3 text-sm leading-relaxed";
-      } else {
-        err.textContent = job.status === "pending" ? "Aguardando o PrintWorker." : job.status === "processing" ? "Em processamento agora." : job.status === "simulated" ? "Conclu\xEDdo em simula\xE7\xE3o." : job.status === "sent" ? "Enviado ao spooler (n\xE3o garante papel)." : "Sem erro.";
-        err.className = "rounded-xl bg-ink border border-ink-line p-3 text-sm leading-relaxed text-mist";
+        return;
       }
+      err.textContent = idleTraceMessage(job.status);
+      err.className = "rounded-xl bg-ink border border-ink-line p-3 text-sm leading-relaxed text-mist";
     }
     function updatePipeline() {
       const processing = state.jobs.find((j) => j.status === "processing");
+      const pendingCount = state.jobs.filter((j) => j.status === "pending").length;
       const applied = state.applied;
-      pipeline.textContent = !applied ? "Aguardando\u2026" : applied.paused ? "Processamento: PAUSADO \u2014 novos pedidos ficam na fila." : processing ? `Processando agora: ${processing.reference}` : applied.simulation ? "Processamento: ocioso \u2022 modo simula\xE7\xE3o." : `Processamento: ocioso \u2022 modo real \u2192 '${applied.printerName || "\u2014"}'.`;
+      const pauseBtn = document.getElementById("btnQueuePause");
+      const resumeBtn = document.getElementById("btnQueueResume");
+      if (pauseBtn) pauseBtn.disabled = !!applied?.paused;
+      if (resumeBtn) resumeBtn.disabled = !applied?.paused;
+      pipeline.textContent = pipelineStatusText(applied, processing, pendingCount);
+      void refreshHeaderPrinterStatus(api2, state.applied);
+    }
+    async function setPaused(paused) {
+      if (state.dirty) return feedback("Salve as configura\xE7\xF5es antes de alterar a fila.", true);
+      if (!state.applied) return feedback("Configura\xE7\xF5es ainda n\xE3o carregadas.", true);
+      try {
+        await api2("/api/settings", {
+          method: "PUT",
+          body: JSON.stringify(buildSettingsPayload({ paused }))
+        });
+        feedback(paused ? "Fila pausada." : "Fila retomada.");
+        onChanged?.();
+      } catch (e) {
+        feedback(e.message, true);
+      }
     }
     async function sendTest() {
       if (state.dirty) return feedback("Salve as configura\xE7\xF5es antes de testar.", true);
@@ -32593,7 +32834,7 @@ Digite o n\xFAmero para instalar no Windows (ou cancele):`,
         await api2("/api/jobs", {
           method: "POST",
           body: JSON.stringify({
-            reference: "teste-" + Math.random().toString(16).slice(2, 12),
+            reference: "teste-" + randomToken(),
             text: document.getElementById("sample").value,
             jobType: document.getElementById("jobType").value || "default",
             template: document.getElementById("template").value || null
@@ -32604,6 +32845,67 @@ Digite o n\xFAmero para instalar no Windows (ou cancele):`,
       } catch (err2) {
         feedback(err2.message, true);
       }
+    }
+    async function sendGuidedTest() {
+      if (state.dirty) return feedback("Salve as configura\xE7\xF5es antes do teste guiado.", true);
+      if (!state.applied) return feedback("Configura\xE7\xF5es ainda n\xE3o carregadas.", true);
+      const paper = (state.applied.paperSize || "").toLowerCase();
+      if (paper !== "padrao") {
+        const ok = confirm(
+          "O teste guiado usa o papel configurado agora.\n\nRecomendado: Padr\xE3o (200\xD770). Deseja mudar para Padr\xE3o e salvar antes de imprimir?"
+        );
+        if (ok) {
+          try {
+            await api2("/api/settings", {
+              method: "PUT",
+              body: JSON.stringify(
+                buildSettingsPayload({
+                  paperSize: "padrao",
+                  paperWidthMm: 200,
+                  paperHeightMm: 70,
+                  paperLandscape: false
+                })
+              )
+            });
+            await onChanged?.();
+          } catch (e) {
+            return feedback(e.message, true);
+          }
+        }
+      }
+      if (!state.applied.simulation && !confirm(`Teste guiado para ${state.applied.printerName}?`))
+        return;
+      const started = Date.now();
+      feedback("Teste guiado enviado\u2026");
+      try {
+        const job = await api2("/api/jobs/guided-test", { method: "POST", body: "{}" });
+        await onChanged?.();
+        const done = await waitForJob(job.id, 45e3);
+        const sec = ((Date.now() - started) / 1e3).toFixed(1);
+        if (!done) {
+          feedback(`Teste ainda na fila ap\xF3s ${sec}s \u2014 acompanhe no hist\xF3rico.`);
+          return;
+        }
+        if (done.status === "uncertain") {
+          feedback(`Teste falhou em ${sec}s \u2014 veja o erro no pedido.`, true);
+          return;
+        }
+        feedback(
+          `Teste guiado OK em ${sec}s (${done.status === "simulated" ? "simula\xE7\xE3o" : "spooler"}). Confira o papel na impressora.`
+        );
+      } catch (err2) {
+        feedback(err2.message, true);
+      }
+    }
+    async function waitForJob(id, timeoutMs) {
+      const deadline = Date.now() + timeoutMs;
+      while (Date.now() < deadline) {
+        await onChanged?.();
+        const job = state.jobs.find((j) => j.id === id);
+        if (job && job.status !== "pending" && job.status !== "processing") return job;
+        await new Promise((r) => setTimeout(r, 700));
+      }
+      return null;
     }
     async function reprintSelected() {
       const job = state.jobs.find((j) => j.id === state.selectedId);
@@ -32617,30 +32919,24 @@ Digite o n\xFAmero para instalar no Windows (ou cancele):`,
         feedback(err2.message, true);
       }
     }
-    function showFull() {
-      const job = state.jobs.find((j) => j.id === state.selectedId);
-      if (!job) return feedback("Selecione um pedido.", true);
-      const lines = [
-        `Pedido: ${job.reference}`,
-        `Situa\xE7\xE3o: ${statusLabel[job.status] || job.status}`,
-        `Tipo: ${job.jobType}`,
-        `Impressora: ${job.printerName || "\u2014"}`,
-        "",
-        "PASSOS",
-        ...(job.steps || []).map(
-          (s, i) => `${i + 1}. [${new Date(s.at).toLocaleTimeString()}] ${s.message}
-   Onde: ${s.where}${s.detail ? "\n   " + s.detail : ""}`
-        ),
-        "",
-        job.error ? `ERRO
-  ${job.error}
-  ${job.errorWhere}
-  ${job.errorReason}` : "",
-        "",
-        "TEXTO",
-        job.text
-      ];
-      openDlg("Explica\xE7\xE3o do pedido", lines.filter(Boolean).join("\n"));
+    async function reprintBulk() {
+      const ids = [...body.querySelectorAll(".job-check:checked")].map((el) => el.dataset.id).filter(Boolean);
+      if (!ids.length) return feedback("Marque um ou mais pedidos na lista.", true);
+      if (!confirm(`Reimprimir ${ids.length} pedido(s)?`)) return;
+      try {
+        const result = await api2("/api/jobs/reprint-bulk", {
+          method: "POST",
+          body: JSON.stringify({ ids })
+        });
+        const n = result.count || 0;
+        const failed = (result.errors || []).length;
+        feedback(
+          failed ? `${n} reimpress\xE3o(\xF5es) ok, ${failed} falha(s).` : `${n} reimpress\xE3o(\xF5es) enfileirada(s).`
+        );
+        onChanged?.();
+      } catch (err2) {
+        feedback(err2.message, true);
+      }
     }
     function exportJobs(csv) {
       const data = state.jobs.slice().reverse();
@@ -32663,6 +32959,236 @@ Digite o n\xFAmero para instalar no Windows (ou cancele):`,
       a.click();
     }
     return { renderJobs, updatePipeline };
+  }
+  function showFullExplanation() {
+    const job = state.jobs.find((j) => j.id === state.selectedId);
+    if (!job) return feedback("Selecione um pedido.", true);
+    openDlgHtml("Explica\xE7\xE3o do pedido", renderJobExplanation(job), { wide: true });
+  }
+  function randomToken() {
+    const bytes = new Uint8Array(5);
+    crypto.getRandomValues(bytes);
+    return [...bytes].map((b) => b.toString(16).padStart(2, "0")).join("");
+  }
+  function idleTraceMessage(status) {
+    if (status === "pending") return "Aguardando o PrintWorker.";
+    if (status === "processing") return "Em processamento agora.";
+    if (status === "simulated") return "Conclu\xEDdo em simula\xE7\xE3o.";
+    if (status === "sent") return "Enviado ao spooler (n\xE3o garante papel).";
+    return "Sem erro.";
+  }
+  function pipelineStatusText(applied, processing, pendingCount) {
+    if (!applied) return "Aguardando\u2026";
+    if (applied.paused) return `Fila PAUSADA \u2014 ${pendingCount} aguardando. Use Retomar para continuar.`;
+    if (processing) return `Processando agora: ${processing.reference} \xB7 ${pendingCount} na fila`;
+    if (applied.simulation) return `Ocioso \xB7 simula\xE7\xE3o \xB7 ${pendingCount} na fila`;
+    return `Ocioso \xB7 real \u2192 '${applied.printerName || "\u2014"}' \xB7 ${pendingCount} na fila`;
+  }
+  function renderTraceStep(s, i) {
+    const detail = s.detail ? `<p class="text-xs text-mist/80 mt-0.5">${escapeHtml(s.detail)}</p>` : "";
+    return `
+      <div class="pl-4 timeline-line relative">
+        <span class="absolute -left-[5px] top-1.5 w-2 h-2 rounded-full ${s.isError ? "bg-bad" : "bg-sea-glow"}"></span>
+        <p class="font-medium ${s.isError ? "text-bad" : ""}">${i + 1}. ${escapeHtml(s.message)}</p>
+        <p class="text-xs text-mist mt-0.5">Onde: ${escapeHtml(s.where)}</p>
+        ${detail}
+        <p class="text-[11px] text-mist/60 mt-1">${new Date(s.at).toLocaleTimeString()}</p>
+      </div>`;
+  }
+  function jobStatusBadge(status) {
+    const s = (status || "").toLowerCase();
+    const label = statusLabel[s] || status || "\u2014";
+    if (s === "sent")
+      return { label, css: "bg-sea/20 text-sea-glow border-sea/30", tone: "ok" };
+    if (s === "simulated")
+      return { label, css: "bg-good/15 text-good border-good/30", tone: "ok" };
+    if (s === "uncertain")
+      return { label, css: "bg-bad/20 text-bad border-bad/30", tone: "bad" };
+    if (s === "processing")
+      return { label, css: "bg-sea/15 text-sea-glow border-sea/25", tone: "mid" };
+    if (s === "pending")
+      return { label, css: "bg-warn/15 text-warn border-warn/30", tone: "mid" };
+    return { label, css: "bg-ink-line text-mist border-ink-line", tone: "mid" };
+  }
+  function formatTime(at) {
+    try {
+      return new Date(at).toLocaleTimeString("pt-BR", {
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit"
+      });
+    } catch {
+      return "\u2014";
+    }
+  }
+  function formatDateTime(at) {
+    try {
+      return new Date(at).toLocaleString("pt-BR", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit"
+      });
+    } catch {
+      return "\u2014";
+    }
+  }
+  function renderJobExplanation(job) {
+    const badge = jobStatusBadge(job.status);
+    const steps = job.steps || [];
+    const meta = [
+      ["Tipo", job.jobType || "default"],
+      ["Impressora", job.printerName || "\u2014"],
+      ["Criado", formatDateTime(job.createdAt)],
+      job.finishedAt ? ["Conclu\xEDdo", formatDateTime(job.finishedAt)] : null,
+      job.contentKind ? ["Conte\xFAdo", job.contentKind] : null
+    ].filter(Boolean);
+    const stepsHtml = steps.length ? `<ol class="space-y-0">${steps.map((s, i) => renderExplanationStep(s, i, steps.length)).join("")}</ol>` : `<p class="text-mist text-sm px-1 py-4">Ainda sem passos registrados.</p>`;
+    return `
+    <div class="space-y-5">
+      <header class="rounded-2xl border border-ink-line bg-ink/60 p-4">
+        <div class="flex flex-wrap items-start justify-between gap-3">
+          <div class="min-w-0">
+            <p class="text-[11px] uppercase tracking-wider text-sea-glow font-semibold">Pedido</p>
+            <h4 class="font-display text-xl font-bold text-white mt-0.5 truncate" title="${escapeHtml(
+      job.reference
+    )}">${escapeHtml(job.reference || "\u2014")}</h4>
+          </div>
+          <span class="shrink-0 rounded-full border px-3 py-1 text-xs font-semibold ${badge.css}">${escapeHtml(
+      badge.label
+    )}</span>
+        </div>
+        <dl class="mt-3 grid sm:grid-cols-2 gap-x-4 gap-y-2 text-sm">
+          ${meta.map(
+      ([k, v]) => `<div class="min-w-0"><dt class="text-[11px] text-mist">${escapeHtml(
+        k
+      )}</dt><dd class="text-paper truncate" title="${escapeHtml(v)}">${escapeHtml(
+        v
+      )}</dd></div>`
+    ).join("")}
+        </dl>
+      </header>
+
+      <section>
+        <div class="flex items-center justify-between gap-2 mb-3">
+          <h4 class="text-[11px] uppercase tracking-wider text-mist font-semibold">Passo a passo</h4>
+          <span class="text-[11px] text-mist">${steps.length} etapa${steps.length === 1 ? "" : "s"}</span>
+        </div>
+        ${stepsHtml}
+      </section>
+
+      ${renderExplanationError(job)}
+
+      <section>
+        <h4 class="text-[11px] uppercase tracking-wider text-mist font-semibold mb-2">Conte\xFAdo enviado</h4>
+        ${renderJobTextPreview(job.text)}
+      </section>
+    </div>`;
+  }
+  function renderExplanationStep(s, i, total) {
+    const bad = !!s.isError;
+    const last = i === total - 1;
+    const connector = last ? "" : `<span class="mt-1 w-px flex-1 min-h-[1.25rem] bg-ink-line"></span>`;
+    const where = s.where ? `<p class="mt-1.5 text-[11px] text-mist"><span class="text-mist/60">Onde</span> \xB7 ${escapeHtml(
+      s.where
+    )}</p>` : "";
+    const detail = s.detail ? `<p class="mt-1 text-[11px] text-paper/75 leading-relaxed">${escapeHtml(s.detail)}</p>` : "";
+    return `<li class="grid grid-cols-[2rem_1fr] gap-3">
+            <div class="flex flex-col items-center">
+              <span class="mt-1 flex h-6 w-6 items-center justify-center rounded-full text-[11px] font-bold ${bad ? "bg-bad/20 text-bad" : "bg-sea/20 text-sea-glow"}">${i + 1}</span>
+              ${connector}
+            </div>
+            <div class="pb-4 min-w-0">
+              <div class="rounded-xl border ${bad ? "border-bad/35 bg-bad/5" : "border-ink-line bg-ink/50"} px-3 py-2.5">
+                <div class="flex items-start justify-between gap-2">
+                  <p class="text-paper font-medium text-sm leading-snug">${escapeHtml(s.message)}</p>
+                  <time class="shrink-0 text-[11px] text-mist tabular-nums">${escapeHtml(
+      formatTime(s.at)
+    )}</time>
+                </div>
+                ${where}
+                ${detail}
+              </div>
+            </div>
+          </li>`;
+  }
+  function renderExplanationError(job) {
+    if (!(job.error || job.status === "uncertain")) return "";
+    return `<section class="rounded-xl border border-bad/40 bg-bad/10 p-4 space-y-2">
+          <h4 class="text-bad font-semibold text-sm">Erro / por que conferir</h4>
+          <dl class="space-y-1.5 text-sm">
+            <div><dt class="text-mist text-[11px]">O qu\xEA</dt><dd class="text-paper">${escapeHtml(
+      job.error || "uncertain"
+    )}</dd></div>
+            <div><dt class="text-mist text-[11px]">Onde</dt><dd class="text-paper">${escapeHtml(
+      job.errorWhere || "\u2014"
+    )}</dd></div>
+            <div><dt class="text-mist text-[11px]">Por qu\xEA</dt><dd class="text-paper">${escapeHtml(
+      job.errorReason || "Confira antes de reenviar."
+    )}</dd></div>
+          </dl>
+        </section>`;
+  }
+  function renderJobTextPreview(text) {
+    const raw = String(text ?? "").trim();
+    if (!raw) {
+      return `<p class="rounded-xl border border-ink-line bg-ink/40 px-3 py-4 text-mist text-sm">Sem texto neste pedido.</p>`;
+    }
+    const lines = raw.split(/\r?\n/);
+    const title = lines[0] || "";
+    const guided = parseGuidedTestText(title, lines);
+    if (guided) return guided;
+    return `<pre class="rounded-xl border border-ink-line bg-ink/70 px-4 py-3 text-[13px] text-paper/90 whitespace-pre-wrap break-words font-body leading-relaxed max-h-56 overflow-auto scroll-thin">${escapeHtml(
+      raw
+    )}</pre>`;
+  }
+  function parseGuidedTestText(title, lines) {
+    if (!/^TESTE GUIADO/i.test(title)) return null;
+    const fields = [];
+    let note = "";
+    for (let i = 1; i < lines.length; i++) {
+      const line = lines[i];
+      if (/^-+$/.test(line.trim())) continue;
+      const field = parseGuidedFieldLine(line);
+      if (field) {
+        fields.push(field);
+        continue;
+      }
+      if (line.trim() === "") continue;
+      if (fields.length) {
+        note = lines.slice(i).join("\n").trim();
+        break;
+      }
+    }
+    if (!fields.length) return null;
+    const noteHtml = note ? `<p class="px-4 pb-3 text-[12px] text-mist leading-relaxed border-t border-ink-line/60 pt-3">${escapeHtml(
+      note
+    )}</p>` : "";
+    return `<div class="rounded-xl border border-sea/30 bg-gradient-to-b from-sea/10 to-ink/40 overflow-hidden">
+      <div class="px-4 py-3 border-b border-ink-line/80 flex items-center gap-2">
+        <span class="rounded-md bg-sea/20 text-sea-glow text-[10px] font-bold uppercase tracking-wider px-2 py-0.5">Teste</span>
+        <p class="text-paper font-semibold text-sm">${escapeHtml(title)}</p>
+      </div>
+      <dl class="px-4 py-3 grid sm:grid-cols-2 gap-3 text-sm">
+        ${fields.map(
+      ([k, v]) => `<div><dt class="text-[11px] text-mist">${escapeHtml(k)}</dt><dd class="text-paper">${escapeHtml(
+        v
+      )}</dd></div>`
+    ).join("")}
+      </dl>
+      ${noteHtml}
+    </div>`;
+  }
+  function parseGuidedFieldLine(line) {
+    const colon = line.indexOf(":");
+    if (colon <= 0) return null;
+    const key = line.slice(0, colon).trim();
+    const value = line.slice(colon + 1).trim();
+    if (!value) return null;
+    if (key !== "Papel" && key !== "Impressora" && key !== "Modo" && key !== "Quando") return null;
+    return [key, value];
   }
 
   // SoftPrint.Host.Windows/wwwroot/js/components/connect-tab.js
@@ -32701,21 +33227,108 @@ Digite o n\xFAmero para instalar no Windows (ou cancele):`,
     document.getElementById("btnEvents").addEventListener("click", async () => {
       try {
         const data = await api2("/api/events");
-        const lines = [`Eventos de ${data.day}`, "\u2500".repeat(40)];
-        const events = (data.events || []).slice().reverse().slice(0, 80);
-        if (!events.length) lines.push("Nenhum evento neste dia.");
-        else
-          events.forEach((e) => {
-            lines.push(
-              `${new Date(e.at).toLocaleTimeString()}  ${e.reference}  [${e.status}]  via ${e.delivery || "\u2014"}`
-            );
-            if (e.error) lines.push(`    erro: ${e.error}`);
-          });
-        openDlg("Eventos do dia", lines.join("\n"));
+        const events = (data.events || []).slice().reverse().slice(0, 100);
+        const dayLabel = formatDayLabel(data.day);
+        if (!events.length) {
+          openDlgHtml(
+            `Eventos \xB7 ${dayLabel}`,
+            `<p class="text-mist text-center py-8">Nenhum evento neste dia.</p>`
+          );
+          return;
+        }
+        const summary = buildEventsSummary(events);
+        openDlgHtml(
+          `Eventos \xB7 ${dayLabel}`,
+          `${renderSummaryBar(summary)}
+         <div class="mt-3 space-y-1.5">${events.map((e) => renderLogEntry(e)).join("")}</div>`
+        );
       } catch (err) {
         feedback(err.message, true);
       }
     });
+    const eventsDay = document.getElementById("eventsDay");
+    const eventsFilter = document.getElementById("eventsFilter");
+    const eventsPanelList = document.getElementById("eventsPanelList");
+    const eventsPanelSummary = document.getElementById("eventsPanelSummary");
+    let statusChip = "";
+    if (eventsDay && !eventsDay.value) {
+      eventsDay.value = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
+    }
+    document.querySelectorAll(".events-chip").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        statusChip = btn.dataset.status ?? "";
+        document.querySelectorAll(".events-chip").forEach((b) => b.classList.remove("active"));
+        btn.classList.add("active");
+        loadEventsPanel();
+      });
+    });
+    async function loadEventsPanel() {
+      if (!eventsPanelList) return;
+      eventsPanelList.innerHTML = `<p class="px-2 py-6 text-center text-mist animate-pulse">Carregando eventos\u2026</p>`;
+      if (eventsPanelSummary) {
+        eventsPanelSummary.classList.add("hidden");
+        eventsPanelSummary.innerHTML = "";
+      }
+      try {
+        const day = eventsDay?.value || "";
+        const q = (eventsFilter?.value || "").trim().toLowerCase();
+        const url = day ? `/api/events?day=${encodeURIComponent(day)}` : "/api/events";
+        const data = await api2(url);
+        let events = (data.events || []).slice().reverse();
+        if (q) {
+          events = events.filter((e) => {
+            const hay = [
+              e.reference,
+              e.status,
+              e.error,
+              e.errorReason,
+              e.errorWhere,
+              e.delivery,
+              e.deliveryDetail,
+              e.printerName,
+              e.jobType,
+              e.contentKind
+            ].filter(Boolean).join(" ").toLowerCase();
+            return hay.includes(q);
+          });
+        }
+        if (statusChip === "ok") {
+          events = events.filter((e) => isOkStatus(e.status));
+        } else if (statusChip === "uncertain") {
+          events = events.filter((e) => !isOkStatus(e.status));
+        }
+        const allForSummary = events;
+        events = events.slice(0, 150);
+        if (!events.length) {
+          eventsPanelList.innerHTML = `<p class="px-2 py-8 text-center text-mist">Nenhum evento com esse filtro.</p>`;
+          return;
+        }
+        const summary = buildEventsSummary(allForSummary);
+        if (eventsPanelSummary) {
+          eventsPanelSummary.classList.remove("hidden");
+          eventsPanelSummary.innerHTML = renderSummaryChips(summary, data.day);
+        }
+        eventsPanelList.innerHTML = events.map((e) => renderLogEntry(e)).join("");
+      } catch (err) {
+        eventsPanelList.innerHTML = `<p class="px-2 py-6 text-center text-bad">${escapeHtml(
+          err.message || "Falha ao ler logs."
+        )}</p>`;
+      }
+    }
+    document.getElementById("btnLoadEventsPanel")?.addEventListener("click", loadEventsPanel);
+    eventsDay?.addEventListener("change", loadEventsPanel);
+    let filterTimer = 0;
+    eventsFilter?.addEventListener("input", () => {
+      clearTimeout(filterTimer);
+      filterTimer = setTimeout(loadEventsPanel, 280);
+    });
+    eventsFilter?.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        clearTimeout(filterTimer);
+        loadEventsPanel();
+      }
+    });
+    setTimeout(loadEventsPanel, 600);
     document.getElementById("btnDiscover").addEventListener("click", async () => {
       try {
         feedback("Varrendo rede local\u2026");
@@ -32806,7 +33419,7 @@ Digite o n\xFAmero para instalar no Windows (ou cancele):`,
         applyInboxFromSettings();
         await refreshInbox();
         if (inboxStatus) {
-          inboxStatus.textContent = state.applied.inboxFolder ? state.applied.inboxEnabled ? "Pasta salva \u2014 vigil\xE2ncia ativa." : "Pasta salva \u2014 vigil\xE2ncia desativada." : "Pasta removida.";
+          inboxStatus.textContent = inboxSaveMessage(state.applied);
           inboxStatus.className = "text-sm text-sea-glow min-h-[1.25rem]";
         }
       } catch (err) {
@@ -32855,23 +33468,202 @@ Digite o n\xFAmero para instalar no Windows (ou cancele):`,
         }
       }
     }
-    function formatBytes(n) {
-      if (n < 1024) return `${n} B`;
-      if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
-      return `${(n / (1024 * 1024)).toFixed(1)} MB`;
-    }
-    function inboxStatusInfo(status) {
-      return {
-        queued: { label: "Na fila", css: "bg-warn/15 text-warn" },
-        printing: { label: "Imprimindo", css: "bg-sea/20 text-sea-glow" },
-        sent: { label: "Enviado", css: "bg-good/15 text-good" },
-        simulated: { label: "Simulado", css: "bg-good/15 text-good" },
-        failed: { label: "Falhou", css: "bg-bad/15 text-bad" },
-        copying: { label: "Copiando", css: "bg-ink-line text-mist" },
-        waiting: { label: "Aguardando", css: "bg-ink-line text-mist" }
-      }[status] || { label: status || "Aguardando", css: "bg-ink-line text-mist" };
-    }
     return { applyInboxFromSettings, refreshInbox };
+  }
+  function inboxSaveMessage(applied) {
+    if (!applied?.inboxFolder) return "Pasta removida.";
+    if (applied.inboxEnabled) return "Pasta salva \u2014 vigil\xE2ncia ativa.";
+    return "Pasta salva \u2014 vigil\xE2ncia desativada.";
+  }
+  function formatBytes(n) {
+    if (n < 1024) return `${n} B`;
+    if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+    return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+  }
+  function inboxStatusInfo(status) {
+    return {
+      queued: { label: "Na fila", css: "bg-warn/15 text-warn" },
+      printing: { label: "Imprimindo", css: "bg-sea/20 text-sea-glow" },
+      sent: { label: "Enviado", css: "bg-good/15 text-good" },
+      simulated: { label: "Simulado", css: "bg-good/15 text-good" },
+      failed: { label: "Falhou", css: "bg-bad/15 text-bad" },
+      copying: { label: "Copiando", css: "bg-ink-line text-mist" },
+      waiting: { label: "Aguardando", css: "bg-ink-line text-mist" }
+    }[status] || { label: status || "Aguardando", css: "bg-ink-line text-mist" };
+  }
+  function isOkStatus(status) {
+    const s = (status || "").toLowerCase();
+    return s === "sent" || s === "simulated" || s === "started" || s === "host-stop" || s === "user-closed" || s === "update-restart";
+  }
+  function isLifecycleEvent(e) {
+    return (e.contentKind || "").toLowerCase() === "lifecycle" || (e.eventType || "").toLowerCase() === "app.lifecycle" || (e.delivery || "").toLowerCase() === "lifecycle";
+  }
+  function eventStatusInfo(status) {
+    const s = (status || "").toLowerCase();
+    if (s === "sent")
+      return { label: statusLabel.sent || "Enviado", bar: "bg-sea-glow", badge: "bg-sea/20 text-sea-glow", tone: "ok" };
+    if (s === "simulated")
+      return { label: statusLabel.simulated || "Simulado", bar: "bg-good", badge: "bg-good/15 text-good", tone: "ok" };
+    if (s === "uncertain")
+      return { label: statusLabel.uncertain || "Conferir", bar: "bg-bad", badge: "bg-bad/20 text-bad", tone: "bad" };
+    if (s === "processing")
+      return { label: statusLabel.processing || "Enviando", bar: "bg-sea", badge: "bg-sea/15 text-sea-glow", tone: "mid" };
+    if (s === "pending")
+      return { label: statusLabel.pending || "Na fila", bar: "bg-warn", badge: "bg-warn/15 text-warn", tone: "mid" };
+    if (s === "started")
+      return { label: "Iniciado", bar: "bg-good", badge: "bg-good/15 text-good", tone: "ok" };
+    if (s === "user-closed")
+      return { label: "Fechado", bar: "bg-sea", badge: "bg-sea/15 text-sea-glow", tone: "ok" };
+    if (s === "windows-shutdown")
+      return { label: "Windows desligou", bar: "bg-warn", badge: "bg-warn/15 text-warn", tone: "mid" };
+    if (s === "windows-logoff")
+      return { label: "Logoff Windows", bar: "bg-warn", badge: "bg-warn/15 text-warn", tone: "mid" };
+    if (s === "crashed")
+      return { label: "Crash", bar: "bg-bad", badge: "bg-bad/20 text-bad", tone: "bad" };
+    if (s === "unclean-exit")
+      return { label: "Parou de s\xFAbito", bar: "bg-bad", badge: "bg-bad/20 text-bad", tone: "bad" };
+    if (s === "update-restart")
+      return { label: "Atualiza\xE7\xE3o", bar: "bg-sea", badge: "bg-sea/15 text-sea-glow", tone: "ok" };
+    if (s === "host-stop")
+      return { label: "Encerrado", bar: "bg-mist", badge: "bg-ink-line text-mist", tone: "mid" };
+    return {
+      label: statusLabel[s] || status || "\u2014",
+      bar: "bg-mist",
+      badge: "bg-ink-line text-mist",
+      tone: "mid"
+    };
+  }
+  function formatEventTime(at) {
+    try {
+      return new Date(at).toLocaleTimeString("pt-BR", {
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit"
+      });
+    } catch {
+      return "\u2014";
+    }
+  }
+  function formatDayLabel(day) {
+    if (!day) return "hoje";
+    try {
+      const [y, m, d] = String(day).split("-").map(Number);
+      return new Date(y, m - 1, d).toLocaleDateString("pt-BR", {
+        weekday: "short",
+        day: "2-digit",
+        month: "short",
+        year: "numeric"
+      });
+    } catch {
+      return String(day);
+    }
+  }
+  function buildEventsSummary(events) {
+    let ok = 0;
+    let bad = 0;
+    for (const e of events) {
+      if (isLifecycleEvent(e)) {
+        const s = (e.status || "").toLowerCase();
+        if (s === "crashed" || s === "unclean-exit") bad += 1;
+        else ok += 1;
+        continue;
+      }
+      if (isOkStatus(e.status)) ok += 1;
+      else bad += 1;
+    }
+    return { total: events.length, ok, bad };
+  }
+  function renderSummaryChips(summary, day) {
+    return `
+    <span class="rounded-full bg-ink border border-ink-line px-2.5 py-0.5 text-paper">${summary.total} evento${summary.total === 1 ? "" : "s"}</span>
+    <span class="rounded-full bg-good/10 border border-good/30 px-2.5 py-0.5 text-good">${summary.ok} OK</span>
+    <span class="rounded-full bg-bad/10 border border-bad/30 px-2.5 py-0.5 text-bad">${summary.bad} conferir</span>
+    <span class="text-mist ml-auto">${escapeHtml(formatDayLabel(day))}</span>`;
+  }
+  function renderSummaryBar(summary) {
+    return `<div class="flex flex-wrap gap-2 text-[11px] pb-2 border-b border-ink-line">${renderSummaryChips(summary)}</div>`;
+  }
+  function renderLogEntry(e) {
+    if (isLifecycleEvent(e))
+      return renderLifecycleEntry(e);
+    const info2 = eventStatusInfo(e.status);
+    const time = formatEventTime(e.at);
+    const ref = e.reference || "\u2014";
+    const chips = buildLogChips(e);
+    const errHtml = renderLogErrorDetails(e);
+    const toneClass = logToneClass(info2.tone);
+    return `<article class="log-entry ${toneClass}">
+    <div class="${info2.bar}" aria-hidden="true"></div>
+    <div class="px-3 py-2.5 min-w-0">
+      <div class="flex items-start justify-between gap-2">
+        <div class="min-w-0">
+          <p class="text-paper font-medium text-sm truncate" title="${escapeHtml(ref)}">${escapeHtml(ref)}</p>
+          <p class="text-[11px] text-mist mt-0.5 tabular-nums">${escapeHtml(time)}</p>
+        </div>
+        <span class="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold tracking-wide ${info2.badge}">${escapeHtml(info2.label)}</span>
+      </div>
+      ${chips.length ? `<div class="mt-2 flex flex-wrap gap-1">${chips.join("")}</div>` : ""}
+      ${errHtml}
+    </div>
+  </article>`;
+  }
+  function renderLifecycleEntry(e) {
+    const info2 = eventStatusInfo(e.status);
+    const time = formatEventTime(e.at);
+    const title = e.error || "Evento do SoftPrint";
+    const detail = e.errorReason || "";
+    const toneClass = logToneClass(info2.tone);
+    const detailHtml = detail ? `<p class="mt-1.5 text-[11px] text-paper/80 whitespace-pre-wrap break-words">${escapeHtml(detail)}</p>` : "";
+    return `<article class="log-entry ${toneClass}">
+    <div class="${info2.bar}" aria-hidden="true"></div>
+    <div class="px-3 py-2.5 min-w-0">
+      <div class="flex items-start justify-between gap-2">
+        <div class="min-w-0">
+          <p class="text-paper font-medium text-sm">${escapeHtml(title)}</p>
+          <p class="text-[11px] text-mist mt-0.5 tabular-nums">${escapeHtml(time)}</p>
+        </div>
+        <span class="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold tracking-wide ${info2.badge}">${escapeHtml(info2.label)}</span>
+      </div>
+      ${detailHtml}
+    </div>
+  </article>`;
+  }
+  function logToneClass(tone) {
+    if (tone === "bad") return "is-bad";
+    if (tone === "ok") return "is-ok";
+    return "";
+  }
+  function buildLogChips(e) {
+    const chips = [];
+    if (e.printerName) chips.push(metaChip("Impressora", e.printerName));
+    if (e.delivery) chips.push(metaChip("Entrega", e.delivery));
+    if (e.jobType && e.jobType !== "default") chips.push(metaChip("Tipo", e.jobType));
+    if (e.contentKind) chips.push(metaChip("Conte\xFAdo", e.contentKind));
+    if (e.deliveryDetail) chips.push(metaChip("Detalhe", e.deliveryDetail));
+    return chips;
+  }
+  function renderLogErrorDetails(e) {
+    if (!(e.error || e.errorReason || e.errorWhere)) return "";
+    const rows = [];
+    if (e.error) rows.push(errorDetailRow("O qu\xEA", e.error));
+    if (e.errorWhere) rows.push(errorDetailRow("Onde", e.errorWhere));
+    if (e.errorReason) rows.push(errorDetailRow("Por qu\xEA", e.errorReason));
+    return `<details class="mt-2 group">
+        <summary class="cursor-pointer text-bad/90 text-[11px] hover:text-bad list-none flex items-center gap-1">
+          <span class="opacity-70 group-open:rotate-90 transition-transform inline-block">\u25B8</span>
+          Detalhe do problema
+        </summary>
+        <div class="mt-1.5 rounded-lg bg-bad/10 border border-bad/25 px-2.5 py-2 text-[11px] text-paper/90 space-y-1">
+          ${rows.join("")}
+        </div>
+      </details>`;
+  }
+  function errorDetailRow(label, value) {
+    return `<p><span class="text-mist">${escapeHtml(label)}:</span> ${escapeHtml(value)}</p>`;
+  }
+  function metaChip(kind, text) {
+    const title = escapeHtml(kind + ": " + text);
+    return `<span class="log-meta-chip truncate" title="${title}"><span class="text-mist/70">${escapeHtml(kind)}</span> ${escapeHtml(text)}</span>`;
   }
 
   // SoftPrint.Host.Windows/wwwroot/js/components/system-settings-tab.js
@@ -32880,23 +33672,36 @@ Digite o n\xFAmero para instalar no Windows (ou cancele):`,
     const message = byId("systemSettingsMsg");
     async function loadDiagnose() {
       const target = byId("diagnoseReport");
+      const checksHost = byId("diagnoseChecks");
       if (!target) return;
       try {
         const report = await api2("/api/diagnose");
-        const checks = (report.checks || []).map((check) => `${check.available ? "ok" : "off"}  ${check.name}${check.detail ? ` \u2014 ${check.detail}` : ""}`).join("\n");
+        if (checksHost) {
+          checksHost.innerHTML = (report.checks || []).map((check) => {
+            const ok = !!check.available;
+            return `<div class="rounded-lg border px-3 py-2 ${ok ? "border-sea/40 bg-sea/10" : "border-bad/40 bg-bad/10"}">
+              <p class="font-medium ${ok ? "text-sea-glow" : "text-bad"}">${ok ? "OK" : "Aten\xE7\xE3o"} \xB7 ${escapeHtml3(
+              check.name
+            )}</p>
+              <p class="text-xs text-mist mt-0.5">${escapeHtml3(check.detail || (ok ? "dispon\xEDvel" : "indispon\xEDvel"))}</p>
+            </div>`;
+          }).join("");
+        }
         target.textContent = [
           `Edi\xE7\xE3o: ${report.edition}`,
           `SO: ${report.os}`,
           `Arquitetura: ${report.architecture}`,
           `Runtime: ${report.runtime}`,
           `Impress\xE3o: ${report.printingBackend}`,
-          `Impressoras: ${report.printerCount}`,
-          "",
-          checks
+          `Impressoras: ${report.printerCount}`
         ].join("\n");
       } catch (err) {
+        if (checksHost) checksHost.innerHTML = "";
         target.textContent = err.message || "Falha ao ler o diagn\xF3stico.";
       }
+    }
+    function escapeHtml3(value) {
+      return String(value ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll('"', "&quot;");
     }
     async function load() {
       try {
@@ -32915,6 +33720,7 @@ Digite o n\xFAmero para instalar no Windows (ou cancele):`,
         byId("sysNetworkTimeout").value = value.networkScanTimeoutMs;
         if (byId("sysTelemetry")) byId("sysTelemetry").checked = !!value.telemetryEnabled;
         if (byId("sysTelemetryUrl")) byId("sysTelemetryUrl").value = value.telemetryUrl || "";
+        if (byId("sysPrinterRoutes")) byId("sysPrinterRoutes").value = value.printerRoutes || "";
         message.textContent = "Configura\xE7\xF5es carregadas.";
       } catch (err) {
         message.textContent = err.message;
@@ -32940,10 +33746,11 @@ Digite o n\xFAmero para instalar no Windows (ou cancele):`,
             eventLogRetentionDays: Number(byId("sysEventRetention").value),
             networkScanTimeoutMs: Number(byId("sysNetworkTimeout").value),
             telemetryEnabled: !!byId("sysTelemetry")?.checked,
-            telemetryUrl: byId("sysTelemetryUrl")?.value.trim() || ""
+            telemetryUrl: byId("sysTelemetryUrl")?.value.trim() || "",
+            printerRoutes: byId("sysPrinterRoutes")?.value.trim() || ""
           })
         });
-        message.textContent = "Configura\xE7\xF5es salvas. Notifica\xE7\xF5es valem na hora; outras op\xE7\xF5es podem pedir rein\xEDcio.";
+        message.textContent = "Configura\xE7\xF5es salvas. Notifica\xE7\xF5es e rotas valem na hora; outras op\xE7\xF5es podem pedir rein\xEDcio.";
         message.className = "text-sm text-sea-glow";
       } catch (err) {
         message.textContent = err.message;
@@ -32951,13 +33758,257 @@ Digite o n\xFAmero para instalar no Windows (ou cancele):`,
       }
     });
     byId("btnDiagnose")?.addEventListener("click", () => loadDiagnose());
+    byId("btnExportBackup")?.addEventListener("click", async () => {
+      try {
+        const data = await api2("/api/backup/export");
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = `softprint-backup-${(/* @__PURE__ */ new Date()).toISOString().slice(0, 10)}.json`;
+        a.click();
+        message.textContent = "Backup exportado (sem a chave da API completa).";
+        message.className = "text-sm text-sea-glow";
+      } catch (err) {
+        message.textContent = err.message;
+        message.className = "text-sm text-bad";
+      }
+    });
+    byId("btnImportBackup")?.addEventListener("click", () => byId("backupFile")?.click());
+    byId("backupFile")?.addEventListener("change", async (e) => {
+      const file = e.target.files?.[0];
+      e.target.value = "";
+      if (!file) return;
+      if (!confirm("Importar este backup? Substitui configura\xE7\xF5es deste computador.")) return;
+      try {
+        const text = await file.text();
+        JSON.parse(text);
+        await api2("/api/backup/import", { method: "POST", body: text });
+        message.textContent = "Backup importado. Recarregando\u2026";
+        message.className = "text-sm text-sea-glow";
+        await load();
+      } catch (err) {
+        message.textContent = err.message || "Falha ao importar.";
+        message.className = "text-sm text-bad";
+      }
+    });
     return { load };
+  }
+
+  // SoftPrint.Host.Windows/wwwroot/js/components/setup-wizard.js
+  var DONE_KEY = "softprint-setup-done";
+  function bindSetupWizard({ api: api2, setTab: setTab2, onRefresh, loadPrinters }) {
+    const overlay = document.getElementById("setupWizard");
+    const title = document.getElementById("setupWizardTitle");
+    const hint = document.getElementById("setupWizardHint");
+    const body = document.getElementById("setupWizardBody");
+    const msg = document.getElementById("setupWizardMsg");
+    const btnNext = document.getElementById("setupWizardNext");
+    const btnBack = document.getElementById("setupWizardBack");
+    const btnSkip = document.getElementById("setupWizardSkip");
+    const openBtn = document.getElementById("btnSetupWizard");
+    let step = 1;
+    function setMsg(text, bad = false) {
+      if (!msg) return;
+      msg.textContent = text || "";
+      msg.className = bad ? "text-sm text-bad min-h-[1.25rem]" : "text-sm text-mist min-h-[1.25rem]";
+    }
+    function paintDots() {
+      for (let i = 1; i <= 3; i++) {
+        const el = document.getElementById(`setupStepDot${i}`);
+        if (!el) continue;
+        el.className = `flex-1 rounded-full h-1.5 ${i <= step ? "bg-sea" : "bg-ink-line"}`;
+      }
+      if (btnBack) btnBack.classList.toggle("hidden", step <= 1);
+      if (btnNext) btnNext.textContent = step >= 3 ? "Concluir" : "Continuar";
+    }
+    function renderStep() {
+      paintDots();
+      setMsg("");
+      if (!body) return;
+      if (step === 1) {
+        if (title) title.textContent = "1 \xB7 Escolha a impressora";
+        if (hint) hint.textContent = "Selecione a impressora do Windows (ou use Rede antes) e salve.";
+        const options = [...document.getElementById("printers")?.options || []].filter((o) => o.value).map((o) => `<option value="${escapeAttr(o.value)}">${escapeHtml2(o.text)}</option>`).join("");
+        const current = state.applied?.printerName || "";
+        body.innerHTML = `
+        <label class="block text-sm">Impressora
+          <select id="setupPrinter" class="mt-1 w-full rounded-lg bg-ink border border-ink-line px-3 py-2 text-sm">
+            <option value="">Selecionar\u2026</option>
+            ${options}
+          </select>
+        </label>
+        <label class="inline-flex items-center gap-2 text-sm">
+          <input id="setupSimulation" type="checkbox" class="accent-sea" ${state.applied?.simulation ? "checked" : ""} />
+          Come\xE7ar em simula\xE7\xE3o (sem papel)
+        </label>
+        <p class="text-xs text-mist">Dica: use o bot\xE3o Rede na aba Configurar se a impressora ainda n\xE3o aparece.</p>`;
+        const sel = document.getElementById("setupPrinter");
+        if (sel && current) sel.value = current;
+        return;
+      }
+      if (step === 2) {
+        if (title) title.textContent = "2 \xB7 Papel da etiqueta";
+        if (hint) hint.textContent = "Recomendado: Padr\xE3o 200\xD770 mm para cupom/etiqueta.";
+        const paper = state.applied?.paperSize || "padrao";
+        body.innerHTML = `
+        <label class="block text-sm">Tamanho
+          <select id="setupPaper" class="mt-1 w-full rounded-lg bg-ink border border-ink-line px-3 py-2 text-sm">
+            <option value="padrao">Padr\xE3o (200\xD770)</option>
+            <option value="receipt80">Cupom 80 mm</option>
+            <option value="receipt58">Cupom 58 mm</option>
+            <option value="a4">A4</option>
+          </select>
+        </label>
+        <p class="text-xs text-mist">Isso vale para o preview e para o envio real.</p>`;
+        const sel = document.getElementById("setupPaper");
+        if (sel) sel.value = ["padrao", "receipt80", "receipt58", "a4"].includes(paper) ? paper : "padrao";
+        return;
+      }
+      if (title) title.textContent = "3 \xB7 Teste guiado";
+      if (hint) hint.textContent = "Envia um pedido de teste com o papel atual e mede o tempo.";
+      body.innerHTML = `
+      <p>Impressora: <strong class="text-paper">${escapeHtml2(state.applied?.printerName || "\u2014")}</strong></p>
+      <p>Papel: <strong class="text-paper">${escapeHtml2(state.applied?.paperSize || "\u2014")}</strong>
+        \xB7 modo <strong class="text-paper">${state.applied?.simulation ? "simula\xE7\xE3o" : "real"}</strong></p>
+      <p class="text-xs text-mist">Ao concluir, o SoftPrint marca o assistente como feito neste navegador.</p>`;
+    }
+    async function saveStep1() {
+      const printer2 = document.getElementById("setupPrinter")?.value || "";
+      if (!printer2) {
+        setMsg("Selecione uma impressora.", true);
+        return false;
+      }
+      const simulation = !!document.getElementById("setupSimulation")?.checked;
+      state.applied = await api2("/api/settings", {
+        method: "PUT",
+        body: JSON.stringify(buildSettingsPayload({ printerName: printer2, simulation }))
+      });
+      const sel = document.getElementById("printers");
+      if (sel) sel.value = printer2;
+      await onRefresh?.();
+      return true;
+    }
+    async function saveStep2() {
+      const paperSize = document.getElementById("setupPaper")?.value || "padrao";
+      const presets = {
+        padrao: [200, 70],
+        receipt80: [80, 297],
+        receipt58: [58, 200],
+        a4: [210, 297]
+      };
+      const [w, h] = presets[paperSize] || presets.padrao;
+      state.applied = await api2("/api/settings", {
+        method: "PUT",
+        body: JSON.stringify(
+          buildSettingsPayload({
+            paperSize,
+            paperWidthMm: w,
+            paperHeightMm: h,
+            paperLandscape: false
+          })
+        )
+      });
+      const paperSel = document.getElementById("paperSize");
+      if (paperSel) paperSel.value = paperSize;
+      await onRefresh?.();
+      return true;
+    }
+    async function runStep3() {
+      setMsg("Enviando teste\u2026");
+      const started = Date.now();
+      const job = await api2("/api/jobs/guided-test", { method: "POST", body: "{}" });
+      await onRefresh?.();
+      const deadline = Date.now() + 45e3;
+      while (Date.now() < deadline) {
+        await onRefresh?.();
+        const found = (state.jobs || []).find((j) => j.id === job.id);
+        if (found && found.status !== "pending" && found.status !== "processing") {
+          const sec = ((Date.now() - started) / 1e3).toFixed(1);
+          if (found.status === "uncertain") {
+            setMsg(`Teste falhou em ${sec}s \u2014 veja o Monitor.`, true);
+            return false;
+          }
+          setMsg(`Teste OK em ${sec}s (${found.status}).`);
+          return true;
+        }
+        await new Promise((r) => setTimeout(r, 700));
+      }
+      setMsg("Teste ainda na fila \u2014 acompanhe no Monitor.", true);
+      return false;
+    }
+    async function next() {
+      try {
+        if (step === 1) {
+          if (!await saveStep1()) return;
+          step = 2;
+          renderStep();
+          return;
+        }
+        if (step === 2) {
+          if (!await saveStep2()) return;
+          step = 3;
+          renderStep();
+          return;
+        }
+        const ok = await runStep3();
+        if (!ok) return;
+        finish(true);
+      } catch (err) {
+        setMsg(err.message || String(err), true);
+      }
+    }
+    function finish(completed) {
+      try {
+        localStorage.setItem(DONE_KEY, completed ? "1" : "skipped");
+      } catch {
+      }
+      hide();
+      if (completed) setTab2?.("monitor");
+    }
+    function show() {
+      if (!overlay) return;
+      setTab2?.("config");
+      step = 1;
+      overlay.classList.remove("hidden");
+      loadPrinters?.(api2)?.finally?.(() => renderStep()) || renderStep();
+    }
+    function hide() {
+      overlay?.classList.add("hidden");
+    }
+    function maybeAutoOpen() {
+      try {
+        if (localStorage.getItem(DONE_KEY)) return;
+      } catch {
+        return;
+      }
+      const needs = !state.applied?.printerName || state.applied?.simulation === true;
+      if (needs) show();
+    }
+    btnNext?.addEventListener("click", next);
+    btnBack?.addEventListener("click", () => {
+      if (step > 1) {
+        step -= 1;
+        renderStep();
+      }
+    });
+    btnSkip?.addEventListener("click", () => finish(false));
+    openBtn?.addEventListener("click", show);
+    if (openBtn) openBtn.classList.remove("hidden");
+    return { show, maybeAutoOpen, hide };
+  }
+  function escapeHtml2(value) {
+    return String(value ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll('"', "&quot;");
+  }
+  function escapeAttr(value) {
+    return escapeHtml2(value).replaceAll("'", "&#39;");
   }
 
   // SoftPrint.Host.Windows/wwwroot/js/components/update-banner.js
   var DISMISS_KEY = "softprint-update-dismissed";
   var applyBound = false;
+  var rollbackBound = false;
   var pollTimer = null;
+  var rollbackTarget = null;
   function applyVersion(version2) {
     const text = `v${version2 || "\u2014"}`;
     for (const id of ["appVersionLabel", "headerVersion", "settingsVersion"]) {
@@ -33019,6 +34070,82 @@ Digite o n\xFAmero para instalar no Windows (ou cancele):`,
       document.getElementById("updateProgressClose")?.addEventListener("click", hideOverlay);
     }
   }
+  async function refreshRollback(api2) {
+    const box = document.getElementById("rollbackBox");
+    const hint = document.getElementById("rollbackHint");
+    const btn = document.getElementById("btnRollback");
+    if (!box || !btn) return;
+    try {
+      const info2 = await api2("/api/update/rollback");
+      if (!info2?.available || !info2.targetVersion) {
+        box.classList.add("hidden");
+        rollbackTarget = null;
+        return;
+      }
+      rollbackTarget = info2.targetVersion;
+      box.classList.remove("hidden");
+      if (hint) {
+        hint.textContent = `Vers\xE3o anterior local: v${info2.targetVersion} (atual: v${info2.currentVersion}).`;
+      }
+      btn.textContent = `Retroceder agora para v${info2.targetVersion}`;
+      if (api2 && !rollbackBound) {
+        rollbackBound = true;
+        btn.addEventListener("click", () => startRollback(api2));
+        document.getElementById("updateProgressClose")?.addEventListener("click", hideOverlay);
+      }
+    } catch (err) {
+      box.classList.add("hidden");
+      console.warn("Falha ao consultar rollback", err);
+    }
+    await refreshUpdateHistory(api2);
+  }
+  async function refreshUpdateHistory(api2) {
+    const checkEl = document.getElementById("updateHistoryCheck");
+    const applyEl = document.getElementById("updateHistoryApply");
+    if (!checkEl && !applyEl) return;
+    try {
+      const h = await api2("/api/update/history");
+      if (checkEl) {
+        if (h.lastCheckError) {
+          checkEl.textContent = `\xDAltima verifica\xE7\xE3o: falhou (${fmtWhen(h.lastCheckedAt)}) \u2014 ${h.lastCheckError}`;
+          checkEl.className = "text-bad";
+        } else if (h.lastCheckedAt) {
+          const avail = h.lastUpdateAvailable === true ? ` \xB7 nova: v${h.lastLatestVersion || "?"}` : h.lastUpdateAvailable === false ? " \xB7 em dia" : "";
+          checkEl.textContent = `\xDAltima verifica\xE7\xE3o: ${fmtWhen(h.lastCheckedAt)}${avail}`;
+          checkEl.className = "text-mist";
+        } else {
+          checkEl.textContent = "\xDAltima verifica\xE7\xE3o: ainda n\xE3o consultou o servidor.";
+          checkEl.className = "text-mist";
+        }
+      }
+      if (applyEl) {
+        if (!h.lastApplyAt) {
+          applyEl.textContent = "\xDAltima instala\xE7\xE3o: nenhuma neste PC.";
+          applyEl.className = "text-mist";
+        } else if (h.lastApplyOk === false) {
+          applyEl.textContent = `\xDAltima instala\xE7\xE3o: falhou (${fmtWhen(h.lastApplyAt)}) \u2014 v${h.lastApplyVersion || "?"} \xB7 ${h.lastApplyError || "erro"}`;
+          applyEl.className = "text-bad";
+        } else if (h.lastApplyOk === true) {
+          const kind = h.lastApplyKind === "rollback" ? "retrocesso" : "atualiza\xE7\xE3o";
+          applyEl.textContent = `\xDAltima instala\xE7\xE3o: OK (${fmtWhen(h.lastApplyAt)}) \u2014 ${kind} v${h.lastApplyVersion || "?"}`;
+          applyEl.className = "text-sea-glow";
+        } else {
+          applyEl.textContent = `\xDAltima instala\xE7\xE3o: em andamento (${fmtWhen(h.lastApplyAt)}) \u2014 v${h.lastApplyVersion || "?"}`;
+          applyEl.className = "text-warn";
+        }
+      }
+    } catch (err) {
+      console.warn("Falha ao ler hist\xF3rico de update", err);
+    }
+  }
+  function fmtWhen(value) {
+    if (!value) return "\u2014";
+    try {
+      return new Date(value).toLocaleString();
+    } catch {
+      return String(value);
+    }
+  }
   function showOverlay() {
     const overlay = document.getElementById("updateOverlay");
     const err = document.getElementById("updateProgressError");
@@ -33058,6 +34185,30 @@ Digite o n\xFAmero para instalar no Windows (ou cancele):`,
     showOverlay();
     try {
       await api2("/api/update/apply", { method: "POST", body: "{}" });
+    } catch (err) {
+      showError(err.message || String(err));
+      return;
+    }
+    if (pollTimer) clearInterval(pollTimer);
+    pollTimer = setInterval(() => pollProgress(api2), 500);
+    pollProgress(api2);
+  }
+  async function startRollback(api2) {
+    const target = rollbackTarget;
+    if (!target) return;
+    const ok = window.confirm(
+      `Voltar o SoftPrint para a vers\xE3o ${target}?
+
+Ser\xE1 restaurada a c\xF3pia local salva antes da \xFAltima atualiza\xE7\xE3o (s\xF3 essa vers\xE3o fica guardada).`
+    );
+    if (!ok) return;
+    showOverlay();
+    setProgress(1, `Preparando retorno para v${target}\u2026`);
+    try {
+      await api2("/api/update/apply", {
+        method: "POST",
+        body: JSON.stringify({ rollback: true, version: target })
+      });
     } catch (err) {
       showError(err.message || String(err));
       return;
@@ -33163,6 +34314,8 @@ Digite o n\xFAmero para instalar no Windows (ou cancele):`,
   };
   var systemSettings = { load: async () => {
   } };
+  var setupWizard = { maybeAutoOpen() {
+  } };
   try {
     printer = bindPrinterTab({ api, onSaved: () => refreshAll() });
   } catch (err) {
@@ -33180,6 +34333,16 @@ Digite o n\xFAmero para instalar no Windows (ou cancele):`,
   }
   try {
     systemSettings = bindSystemSettingsTab({ api });
+  } catch (err) {
+    showBootError(err);
+  }
+  try {
+    setupWizard = bindSetupWizard({
+      api,
+      setTab,
+      onRefresh: () => refreshAll(),
+      loadPrinters: (a) => printer.loadPrinters?.(a)
+    });
   } catch (err) {
     showBootError(err);
   }
@@ -33225,6 +34388,7 @@ Digite o n\xFAmero para instalar no Windows (ou cancele):`,
         bad: metrics.uncertainTotal || 0,
         healthLine: `uptime \u2022 ${metrics.jobsPerHourLast24h}/h \u2022 incert ${metrics.uncertainRatePercent}% \u2022 fila ${metrics.pending}/${metrics.processing}`
       });
+      await refreshHeaderPrinterStatus(api, state.applied);
       monitor.updatePipeline?.();
       monitor.renderJobs?.();
     } catch (e) {
@@ -33264,6 +34428,7 @@ Digite o n\xFAmero para instalar no Windows (ou cancele):`,
     try {
       const update = await api(force ? "/api/update?refresh=1" : "/api/update");
       applyUpdateInfo(update, { api });
+      await refreshRollback(api);
     } catch (err) {
       console.warn("Falha ao verificar atualiza\xE7\xE3o", err);
     }
@@ -33273,7 +34438,7 @@ Digite o n\xFAmero para instalar no Windows (ou cancele):`,
     const summary = document.getElementById("printerSummary");
     if (summary) summary.textContent = e.message || "Falha ao listar impressoras.";
   }).finally(() => {
-    refreshAll();
+    refreshAll().then(() => setupWizard.maybeAutoOpen?.()).catch(showBootError);
     setInterval(refreshAll, 2e3);
     setTimeout(refreshUpdate, 4e3);
     setInterval(refreshUpdate, 30 * 60 * 1e3);

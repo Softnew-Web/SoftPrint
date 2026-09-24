@@ -205,6 +205,30 @@ public sealed class DomainTests
     public void SoftPrintVersionCompare_DetectsNewer(string latest, string current, bool expected) =>
         Assert.Equal(expected, SoftPrintVersionCompare.IsNewer(latest, current));
 
+    [Theory]
+    [InlineData("1.0.23", "1.0.24", true)]
+    [InlineData("1.0.24", "1.0.23", false)]
+    [InlineData("1.0.24", "1.0.24", false)]
+    public void SoftPrintVersionCompare_DetectsOlder(string candidate, string current, bool expected) =>
+        Assert.Equal(expected, SoftPrintVersionCompare.IsOlder(candidate, current));
+
+    [Fact]
+    public void PackageIntegrity_ParsesChecksumsFile()
+    {
+        const string body = """
+            # comment
+            abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789  SoftPrint-win-x64.zip
+            1111111111111111111111111111111111111111111111111111111111111111 *SoftPrint-Setup.exe
+            """;
+        Assert.Equal(
+            "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789",
+            SoftPrint.Infrastructure.Updates.PackageIntegrity.FindHashForFile(body, "SoftPrint-win-x64.zip"));
+        Assert.Equal(
+            "1111111111111111111111111111111111111111111111111111111111111111",
+            SoftPrint.Infrastructure.Updates.PackageIntegrity.FindHashForFile(body, "SoftPrint-Setup.exe"));
+        Assert.Null(SoftPrint.Infrastructure.Updates.PackageIntegrity.FindHashForFile(body, "missing.zip"));
+    }
+
     private static string FindRepoRoot()
     {
         var dir = new DirectoryInfo(AppContext.BaseDirectory);

@@ -5,14 +5,17 @@ namespace SoftPrint.UI;
 /// <summary>Tela de abertura com barra de progresso (mínimo ~15s; pode alongar se houver atualização).</summary>
 public sealed class SplashForm : Form
 {
-    private static readonly (int UntilPercent, string Message)[] Stages =
+    private static readonly (int UntilPercent, string Status, string Detail)[] Stages =
     {
-        (12, "Iniciando SoftPrint…"),
-        (35, "Buscando versões…"),
-        (55, "Conferindo atualizações…"),
-        (72, "Preparando o painel…"),
-        (88, "Carregando interface…"),
-        (100, "Quase pronto…")
+        (8, "Iniciando SoftPrint…", "Preparando o ambiente…"),
+        (18, "Carregando configurações…", "Lendo preferências e impressora…"),
+        (28, "Preparando impressão…", "Carregando estratégias e fila…"),
+        (40, "Buscando versões…", "Consultando o servidor de atualizações…"),
+        (52, "Conferindo atualizações…", "Comparando com a versão instalada…"),
+        (64, "Iniciando monitoramento…", "Conectando à caixa de entrada…"),
+        (76, "Montando o painel…", "Carregando a interface web…"),
+        (88, "Organizando arquivos…", "Preparando logs e histórico…"),
+        (100, "Quase pronto…", "Finalizando a abertura…")
     };
 
     private readonly Label _status;
@@ -20,12 +23,14 @@ public sealed class SplashForm : Form
     private readonly ProgressBar _bar;
     private readonly Label _percent;
     private readonly System.Windows.Forms.Timer _timer;
+    private readonly System.Windows.Forms.Timer _resumeTimer;
     private DateTime _startedUtc;
     private readonly int _durationMs;
     private bool _started;
     private string? _liveStatus;
     private string? _liveDetail;
     private int? _livePercent;
+    private bool _lockProgress;
 
     public bool IsFinished { get; private set; }
 
@@ -77,7 +82,7 @@ public sealed class SplashForm : Form
             Height = 32,
             TextAlign = ContentAlignment.MiddleCenter,
             ForeColor = Color.FromArgb(238, 243, 247),
-            Text = "Buscando versões…"
+            Text = Stages[0].Status
         };
 
         _detail = new Label
@@ -88,7 +93,7 @@ public sealed class SplashForm : Form
             TextAlign = ContentAlignment.TopCenter,
             ForeColor = Color.FromArgb(154, 171, 188),
             Font = new Font("Segoe UI", 9f, FontStyle.Regular, GraphicsUnit.Point),
-            Text = "Procurando se há uma versão nova…"
+            Text = Stages[0].Detail
         };
 
         _percent = new Label
@@ -141,6 +146,12 @@ public sealed class SplashForm : Form
 
         _timer = new System.Windows.Forms.Timer { Interval = 50 };
         _timer.Tick += (_, _) => TickProgress();
+        _resumeTimer = new System.Windows.Forms.Timer { Interval = 2_200 };
+        _resumeTimer.Tick += (_, _) =>
+        {
+            _resumeTimer.Stop();
+            ResumeStages();
+        };
         Shown += (_, _) => StartProgress();
     }
 
@@ -157,27 +168,67 @@ public sealed class SplashForm : Form
     }
 
     /// <summary>
-    /// Progresso real (atualização). Antes dos 15s mínimos só o texto muda;
-    /// depois a barra acompanha o download.
+    /// Progresso real (atualização / etapa pontual).
+    /// Com <paramref name="resumeAfterMs"/> &gt; 0, a mensagem some e as etapas automáticas voltam.
     /// </summary>
-    public void SetLiveProgress(int? percent, string? status, string? detail = null)
+    public void SetLiveProgress(
+        int? percent,
+        string? status,
+        string? detail = null,
+        int resumeAfterMs = 0,
+        bool lockProgress = false)
     {
         void Apply()
         {
             if (IsDisposed) return;
+            _resumeTimer.Stop();
             if (status is not null) _liveStatus = status;
             if (detail is not null) _liveDetail = detail;
             if (percent is int p)
                 _livePercent = Math.Clamp(p, 0, 100);
+            if (lockProgress)
+                _lockProgress = true;
 
             if (_liveStatus is not null) _status.Text = _liveStatus;
             if (_liveDetail is not null) _detail.Text = _liveDetail;
 
-            if (IsFinished && _livePercent is int live)
+            if ((IsFinished || _lockProgress) && _livePercent is int live)
                 ApplyBar(Math.Max(_bar.Value, live));
 
             if (!_timer.Enabled && !IsDisposed)
                 _timer.Start();
+
+            if (resumeAfterMs > 0 && !_lockProgress)
+            {
+                _resumeTimer.Interval = Math.Clamp(resumeAfterMs, 800, 8_000);
+                _resumeTimer.Start();
+            }
+        }
+
+        if (IsDisposed) return;
+        if (InvokeRequired)
+        {
+            try { BeginInvoke(Apply); }
+            catch (InvalidOperationException) { Apply(); }
+        }
+        else Apply();
+    }
+
+    /// <summary>Volta a narrar as etapas automáticas de abertura (config, painel, etc.).</summary>
+    public void ResumeStages()
+    {
+        void Apply()
+        {
+            if (IsDisposed || _lockProgress) return;
+            _resumeTimer.Stop();
+            _liveStatus = null;
+            _liveDetail = null;
+            if (!IsFinished)
+            {
+                var stage = StageFor(_bar.Value);
+                _status.Text = stage.Status;
+                _detail.Text = stage.Detail;
+            }
         }
 
         if (IsDisposed) return;
@@ -224,6 +275,7 @@ public sealed class SplashForm : Form
         try
         {
             _timer.Stop();
+            _resumeTimer.Stop();
             if (InvokeRequired) BeginInvoke(Close);
             else Close();
         }
@@ -236,7 +288,9 @@ public sealed class SplashForm : Form
     protected override void OnFormClosed(FormClosedEventArgs e)
     {
         _timer.Stop();
+        _resumeTimer.Stop();
         _timer.Dispose();
+        _resumeTimer.Dispose();
         base.OnFormClosed(e);
     }
 
@@ -244,15 +298,24 @@ public sealed class SplashForm : Form
     {
         if (IsDisposed) return;
 
-        if (!IsFinished)
+        if (!IsFinished && !_lockProgress)
         {
             var elapsed = (DateTime.UtcNow - _startedUtc).TotalMilliseconds;
             var raw = Math.Clamp(elapsed / _durationMs, 0, 1);
             var value = (int)Math.Round(raw * 100);
             ApplyBar(Math.Max(_bar.Value, value));
 
-            _status.Text = _liveStatus ?? StageMessage(_bar.Value);
-            _detail.Text = _liveDetail ?? DetailMessage(_bar.Value);
+            if (_liveStatus is null)
+            {
+                var stage = StageFor(_bar.Value);
+                _status.Text = stage.Status;
+                _detail.Text = stage.Detail;
+            }
+            else
+            {
+                _status.Text = _liveStatus;
+                if (_liveDetail is not null) _detail.Text = _liveDetail;
+            }
 
             if (raw >= 1)
             {
@@ -268,14 +331,14 @@ public sealed class SplashForm : Form
             return;
         }
 
-        // Depois dos 15s: só acompanha atualização em curso.
+        // Atualização em curso (ou após os 15s): acompanha o progresso real.
         if (_livePercent is int live)
         {
             ApplyBar(Math.Max(_bar.Value, live));
             if (_liveStatus is not null) _status.Text = _liveStatus;
             if (_liveDetail is not null) _detail.Text = _liveDetail;
         }
-        else
+        else if (IsFinished && _liveStatus is null)
         {
             _timer.Stop();
         }
@@ -288,23 +351,13 @@ public sealed class SplashForm : Form
         _percent.Text = $"{value}%";
     }
 
-    private static string StageMessage(int percent)
+    private static (string Status, string Detail) StageFor(int percent)
     {
-        foreach (var (until, message) in Stages)
+        foreach (var (until, status, detail) in Stages)
         {
             if (percent <= until)
-                return message;
+                return (status, detail);
         }
-        return "Quase pronto…";
+        return ("Quase pronto…", "Finalizando a abertura…");
     }
-
-    private static string DetailMessage(int percent) => percent switch
-    {
-        < 15 => "Abrindo o SoftPrint…",
-        < 40 => "Procurando se há uma versão nova…",
-        < 60 => "Comparando com a versão instalada…",
-        < 80 => "Organizando arquivos…",
-        < 95 => "Quase lá…",
-        _ => "Finalizando…"
-    };
 }

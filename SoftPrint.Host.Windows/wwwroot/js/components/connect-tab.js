@@ -1,5 +1,5 @@
-import { feedback, openDlg, state } from "../state.js";
-import { escapeHtml } from "../api.js";
+import { feedback, openDlg, openDlgHtml, state } from "../state.js";
+import { escapeHtml, statusLabel } from "../api.js";
 import { buildSettingsPayload } from "../settings-payload.js";
 import { setApiHint } from "./stats.js";
 
@@ -41,23 +41,108 @@ export function bindConnectTab({ api, apiKey }) {
   document.getElementById("btnEvents").addEventListener("click", async () => {
     try {
       const data = await api("/api/events");
-      const lines = [`Eventos de ${data.day}`, "─".repeat(40)];
-      const events = (data.events || []).slice().reverse().slice(0, 80);
-      if (!events.length) lines.push("Nenhum evento neste dia.");
-      else
-        events.forEach((e) => {
-          lines.push(
-            `${new Date(e.at).toLocaleTimeString()}  ${e.reference}  [${e.status}]  via ${
-              e.delivery || "—"
-            }`
-          );
-          if (e.error) lines.push(`    erro: ${e.error}`);
-        });
-      openDlg("Eventos do dia", lines.join("\n"));
+      const events = (data.events || []).slice().reverse().slice(0, 100);
+      const dayLabel = formatDayLabel(data.day);
+      if (!events.length) {
+        openDlgHtml(
+          `Eventos · ${dayLabel}`,
+          `<p class="text-mist text-center py-8">Nenhum evento neste dia.</p>`
+        );
+        return;
+      }
+      const summary = buildEventsSummary(events);
+      openDlgHtml(
+        `Eventos · ${dayLabel}`,
+        `${renderSummaryBar(summary)}
+         <div class="mt-3 space-y-1.5">${events.map((e) => renderLogEntry(e)).join("")}</div>`
+      );
     } catch (err) {
       feedback(err.message, true);
     }
   });
+
+  const eventsDay = document.getElementById("eventsDay");
+  const eventsFilter = document.getElementById("eventsFilter");
+  const eventsPanelList = document.getElementById("eventsPanelList");
+  const eventsPanelSummary = document.getElementById("eventsPanelSummary");
+  let statusChip = "";
+  if (eventsDay && !eventsDay.value) {
+    eventsDay.value = new Date().toISOString().slice(0, 10);
+  }
+
+  document.querySelectorAll(".events-chip").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      statusChip = btn.dataset.status ?? "";
+      document.querySelectorAll(".events-chip").forEach((b) => b.classList.remove("active"));
+      btn.classList.add("active");
+      loadEventsPanel();
+    });
+  });
+
+  async function loadEventsPanel() {
+    if (!eventsPanelList) return;
+    eventsPanelList.innerHTML = `<p class="px-2 py-6 text-center text-mist animate-pulse">Carregando eventos…</p>`;
+    if (eventsPanelSummary) {
+      eventsPanelSummary.classList.add("hidden");
+      eventsPanelSummary.innerHTML = "";
+    }
+    try {
+      const day = eventsDay?.value || "";
+      const q = (eventsFilter?.value || "").trim().toLowerCase();
+      const url = day ? `/api/events?day=${encodeURIComponent(day)}` : "/api/events";
+      const data = await api(url);
+      let events = (data.events || []).slice().reverse();
+      if (q) {
+        events = events.filter((e) => {
+          const hay = [
+            e.reference, e.status, e.error, e.errorReason, e.errorWhere,
+            e.delivery, e.deliveryDetail, e.printerName, e.jobType, e.contentKind,
+          ]
+            .filter(Boolean)
+            .join(" ")
+            .toLowerCase();
+          return hay.includes(q);
+        });
+      }
+      if (statusChip === "ok") {
+        events = events.filter((e) => isOkStatus(e.status));
+      } else if (statusChip === "uncertain") {
+        events = events.filter((e) => !isOkStatus(e.status));
+      }
+      const allForSummary = events;
+      events = events.slice(0, 150);
+      if (!events.length) {
+        eventsPanelList.innerHTML = `<p class="px-2 py-8 text-center text-mist">Nenhum evento com esse filtro.</p>`;
+        return;
+      }
+      const summary = buildEventsSummary(allForSummary);
+      if (eventsPanelSummary) {
+        eventsPanelSummary.classList.remove("hidden");
+        eventsPanelSummary.innerHTML = renderSummaryChips(summary, data.day);
+      }
+      eventsPanelList.innerHTML = events.map((e) => renderLogEntry(e)).join("");
+    } catch (err) {
+      eventsPanelList.innerHTML = `<p class="px-2 py-6 text-center text-bad">${escapeHtml(
+        err.message || "Falha ao ler logs."
+      )}</p>`;
+    }
+  }
+
+  document.getElementById("btnLoadEventsPanel")?.addEventListener("click", loadEventsPanel);
+  eventsDay?.addEventListener("change", loadEventsPanel);
+  let filterTimer = 0;
+  eventsFilter?.addEventListener("input", () => {
+    clearTimeout(filterTimer);
+    filterTimer = setTimeout(loadEventsPanel, 280);
+  });
+  eventsFilter?.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      clearTimeout(filterTimer);
+      loadEventsPanel();
+    }
+  });
+  setTimeout(loadEventsPanel, 600);
+
   document.getElementById("btnDiscover").addEventListener("click", async () => {
     try {
       feedback("Varrendo rede local…");
@@ -153,11 +238,7 @@ export function bindConnectTab({ api, apiKey }) {
       applyInboxFromSettings();
       await refreshInbox();
       if (inboxStatus) {
-        inboxStatus.textContent = state.applied.inboxFolder
-          ? state.applied.inboxEnabled
-            ? "Pasta salva — vigilância ativa."
-            : "Pasta salva — vigilância desativada."
-          : "Pasta removida.";
+        inboxStatus.textContent = inboxSaveMessage(state.applied);
         inboxStatus.className = "text-sm text-sea-glow min-h-[1.25rem]";
       }
     } catch (err) {
@@ -216,23 +297,226 @@ export function bindConnectTab({ api, apiKey }) {
     }
   }
 
-  function formatBytes(n) {
-    if (n < 1024) return `${n} B`;
-    if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
-    return `${(n / (1024 * 1024)).toFixed(1)} MB`;
-  }
-
-  function inboxStatusInfo(status) {
-    return {
-      queued: { label: "Na fila", css: "bg-warn/15 text-warn" },
-      printing: { label: "Imprimindo", css: "bg-sea/20 text-sea-glow" },
-      sent: { label: "Enviado", css: "bg-good/15 text-good" },
-      simulated: { label: "Simulado", css: "bg-good/15 text-good" },
-      failed: { label: "Falhou", css: "bg-bad/15 text-bad" },
-      copying: { label: "Copiando", css: "bg-ink-line text-mist" },
-      waiting: { label: "Aguardando", css: "bg-ink-line text-mist" },
-    }[status] || { label: status || "Aguardando", css: "bg-ink-line text-mist" };
-  }
-
   return { applyInboxFromSettings, refreshInbox };
+}
+
+function inboxSaveMessage(applied) {
+  if (!applied?.inboxFolder) return "Pasta removida.";
+  if (applied.inboxEnabled) return "Pasta salva — vigilância ativa.";
+  return "Pasta salva — vigilância desativada.";
+}
+
+function formatBytes(n) {
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function inboxStatusInfo(status) {
+  return {
+    queued: { label: "Na fila", css: "bg-warn/15 text-warn" },
+    printing: { label: "Imprimindo", css: "bg-sea/20 text-sea-glow" },
+    sent: { label: "Enviado", css: "bg-good/15 text-good" },
+    simulated: { label: "Simulado", css: "bg-good/15 text-good" },
+    failed: { label: "Falhou", css: "bg-bad/15 text-bad" },
+    copying: { label: "Copiando", css: "bg-ink-line text-mist" },
+    waiting: { label: "Aguardando", css: "bg-ink-line text-mist" },
+  }[status] || { label: status || "Aguardando", css: "bg-ink-line text-mist" };
+}
+
+function isOkStatus(status) {
+  const s = (status || "").toLowerCase();
+  return s === "sent" || s === "simulated" || s === "started" || s === "host-stop"
+    || s === "user-closed" || s === "update-restart";
+}
+
+function isLifecycleEvent(e) {
+  return (e.contentKind || "").toLowerCase() === "lifecycle"
+    || (e.eventType || "").toLowerCase() === "app.lifecycle"
+    || (e.delivery || "").toLowerCase() === "lifecycle";
+}
+
+function eventStatusInfo(status) {
+  const s = (status || "").toLowerCase();
+  if (s === "sent")
+    return { label: statusLabel.sent || "Enviado", bar: "bg-sea-glow", badge: "bg-sea/20 text-sea-glow", tone: "ok" };
+  if (s === "simulated")
+    return { label: statusLabel.simulated || "Simulado", bar: "bg-good", badge: "bg-good/15 text-good", tone: "ok" };
+  if (s === "uncertain")
+    return { label: statusLabel.uncertain || "Conferir", bar: "bg-bad", badge: "bg-bad/20 text-bad", tone: "bad" };
+  if (s === "processing")
+    return { label: statusLabel.processing || "Enviando", bar: "bg-sea", badge: "bg-sea/15 text-sea-glow", tone: "mid" };
+  if (s === "pending")
+    return { label: statusLabel.pending || "Na fila", bar: "bg-warn", badge: "bg-warn/15 text-warn", tone: "mid" };
+  if (s === "started")
+    return { label: "Iniciado", bar: "bg-good", badge: "bg-good/15 text-good", tone: "ok" };
+  if (s === "user-closed")
+    return { label: "Fechado", bar: "bg-sea", badge: "bg-sea/15 text-sea-glow", tone: "ok" };
+  if (s === "windows-shutdown")
+    return { label: "Windows desligou", bar: "bg-warn", badge: "bg-warn/15 text-warn", tone: "mid" };
+  if (s === "windows-logoff")
+    return { label: "Logoff Windows", bar: "bg-warn", badge: "bg-warn/15 text-warn", tone: "mid" };
+  if (s === "crashed")
+    return { label: "Crash", bar: "bg-bad", badge: "bg-bad/20 text-bad", tone: "bad" };
+  if (s === "unclean-exit")
+    return { label: "Parou de súbito", bar: "bg-bad", badge: "bg-bad/20 text-bad", tone: "bad" };
+  if (s === "update-restart")
+    return { label: "Atualização", bar: "bg-sea", badge: "bg-sea/15 text-sea-glow", tone: "ok" };
+  if (s === "host-stop")
+    return { label: "Encerrado", bar: "bg-mist", badge: "bg-ink-line text-mist", tone: "mid" };
+  return {
+    label: statusLabel[s] || status || "—",
+    bar: "bg-mist",
+    badge: "bg-ink-line text-mist",
+    tone: "mid",
+  };
+}
+
+function formatEventTime(at) {
+  try {
+    return new Date(at).toLocaleTimeString("pt-BR", {
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+    });
+  } catch {
+    return "—";
+  }
+}
+
+function formatDayLabel(day) {
+  if (!day) return "hoje";
+  try {
+    const [y, m, d] = String(day).split("-").map(Number);
+    return new Date(y, m - 1, d).toLocaleDateString("pt-BR", {
+      weekday: "short",
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+    });
+  } catch {
+    return String(day);
+  }
+}
+
+function buildEventsSummary(events) {
+  let ok = 0;
+  let bad = 0;
+  for (const e of events) {
+    if (isLifecycleEvent(e)) {
+      const s = (e.status || "").toLowerCase();
+      if (s === "crashed" || s === "unclean-exit") bad += 1;
+      else ok += 1;
+      continue;
+    }
+    if (isOkStatus(e.status)) ok += 1;
+    else bad += 1;
+  }
+  return { total: events.length, ok, bad };
+}
+
+function renderSummaryChips(summary, day) {
+  return `
+    <span class="rounded-full bg-ink border border-ink-line px-2.5 py-0.5 text-paper">${summary.total} evento${summary.total === 1 ? "" : "s"}</span>
+    <span class="rounded-full bg-good/10 border border-good/30 px-2.5 py-0.5 text-good">${summary.ok} OK</span>
+    <span class="rounded-full bg-bad/10 border border-bad/30 px-2.5 py-0.5 text-bad">${summary.bad} conferir</span>
+    <span class="text-mist ml-auto">${escapeHtml(formatDayLabel(day))}</span>`;
+}
+
+function renderSummaryBar(summary) {
+  return `<div class="flex flex-wrap gap-2 text-[11px] pb-2 border-b border-ink-line">${renderSummaryChips(summary)}</div>`;
+}
+
+function renderLogEntry(e) {
+  if (isLifecycleEvent(e))
+    return renderLifecycleEntry(e);
+
+  const info = eventStatusInfo(e.status);
+  const time = formatEventTime(e.at);
+  const ref = e.reference || "—";
+  const chips = buildLogChips(e);
+  const errHtml = renderLogErrorDetails(e);
+  const toneClass = logToneClass(info.tone);
+
+  return `<article class="log-entry ${toneClass}">
+    <div class="${info.bar}" aria-hidden="true"></div>
+    <div class="px-3 py-2.5 min-w-0">
+      <div class="flex items-start justify-between gap-2">
+        <div class="min-w-0">
+          <p class="text-paper font-medium text-sm truncate" title="${escapeHtml(ref)}">${escapeHtml(ref)}</p>
+          <p class="text-[11px] text-mist mt-0.5 tabular-nums">${escapeHtml(time)}</p>
+        </div>
+        <span class="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold tracking-wide ${info.badge}">${escapeHtml(info.label)}</span>
+      </div>
+      ${chips.length ? `<div class="mt-2 flex flex-wrap gap-1">${chips.join("")}</div>` : ""}
+      ${errHtml}
+    </div>
+  </article>`;
+}
+
+function renderLifecycleEntry(e) {
+  const info = eventStatusInfo(e.status);
+  const time = formatEventTime(e.at);
+  const title = e.error || "Evento do SoftPrint";
+  const detail = e.errorReason || "";
+  const toneClass = logToneClass(info.tone);
+  const detailHtml = detail
+    ? `<p class="mt-1.5 text-[11px] text-paper/80 whitespace-pre-wrap break-words">${escapeHtml(detail)}</p>`
+    : "";
+
+  return `<article class="log-entry ${toneClass}">
+    <div class="${info.bar}" aria-hidden="true"></div>
+    <div class="px-3 py-2.5 min-w-0">
+      <div class="flex items-start justify-between gap-2">
+        <div class="min-w-0">
+          <p class="text-paper font-medium text-sm">${escapeHtml(title)}</p>
+          <p class="text-[11px] text-mist mt-0.5 tabular-nums">${escapeHtml(time)}</p>
+        </div>
+        <span class="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold tracking-wide ${info.badge}">${escapeHtml(info.label)}</span>
+      </div>
+      ${detailHtml}
+    </div>
+  </article>`;
+}
+
+function logToneClass(tone) {
+  if (tone === "bad") return "is-bad";
+  if (tone === "ok") return "is-ok";
+  return "";
+}
+
+function buildLogChips(e) {
+  const chips = [];
+  if (e.printerName) chips.push(metaChip("Impressora", e.printerName));
+  if (e.delivery) chips.push(metaChip("Entrega", e.delivery));
+  if (e.jobType && e.jobType !== "default") chips.push(metaChip("Tipo", e.jobType));
+  if (e.contentKind) chips.push(metaChip("Conteúdo", e.contentKind));
+  if (e.deliveryDetail) chips.push(metaChip("Detalhe", e.deliveryDetail));
+  return chips;
+}
+
+function renderLogErrorDetails(e) {
+  if (!(e.error || e.errorReason || e.errorWhere)) return "";
+  const rows = [];
+  if (e.error) rows.push(errorDetailRow("O quê", e.error));
+  if (e.errorWhere) rows.push(errorDetailRow("Onde", e.errorWhere));
+  if (e.errorReason) rows.push(errorDetailRow("Por quê", e.errorReason));
+  return `<details class="mt-2 group">
+        <summary class="cursor-pointer text-bad/90 text-[11px] hover:text-bad list-none flex items-center gap-1">
+          <span class="opacity-70 group-open:rotate-90 transition-transform inline-block">▸</span>
+          Detalhe do problema
+        </summary>
+        <div class="mt-1.5 rounded-lg bg-bad/10 border border-bad/25 px-2.5 py-2 text-[11px] text-paper/90 space-y-1">
+          ${rows.join("")}
+        </div>
+      </details>`;
+}
+
+function errorDetailRow(label, value) {
+  return `<p><span class="text-mist">${escapeHtml(label)}:</span> ${escapeHtml(value)}</p>`;
+}
+
+function metaChip(kind, text) {
+  const title = escapeHtml(kind + ": " + text);
+  return `<span class="log-meta-chip truncate" title="${title}"><span class="text-mist/70">${escapeHtml(kind)}</span> ${escapeHtml(text)}</span>`;
 }

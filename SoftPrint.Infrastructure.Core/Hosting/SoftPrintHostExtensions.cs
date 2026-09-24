@@ -60,6 +60,7 @@ public static class SoftPrintHostExtensions
         services.AddSingleton<INetworkPrinterDiscovery, NetworkPrinterDiscovery>();
         services.AddSingleton<IMetricsService, MetricsService>();
         services.AddSingleton<IEventLogStore, EventLogStore>();
+        services.AddSingleton<IAppLifecycleLogger, AppLifecycleLogger>();
         services.AddSingleton(sp => ActivatorUtilities.CreateInstance<WebhookRetryQueue>(sp).Init());
         services.AddSingleton<IWebhookRetryQueue>(sp => sp.GetRequiredService<WebhookRetryQueue>());
         services.AddSingleton<WebhookNotifier>();
@@ -71,12 +72,16 @@ public static class SoftPrintHostExtensions
         services.AddSingleton<SettingsService>();
         services.AddSingleton<InboxService>();
         services.AddSingleton<IUpdateChecker, SoftPrint.Infrastructure.Updates.GitHubReleaseUpdateChecker>();
+        services.AddSingleton<IPreviousVersionStore, SoftPrint.Infrastructure.Updates.LocalPreviousVersionStore>();
+        services.AddSingleton<IUpdateHistoryStore, SoftPrint.Infrastructure.Updates.LocalUpdateHistoryStore>();
         services.AddSingleton<IUpdateApplier, SoftPrint.Infrastructure.Updates.SoftPrintUpdateApplier>();
         services.AddHostedService<SoftPrint.Infrastructure.Updates.UpdateCheckHostedService>();
+        services.AddHostedService<AppLifecycleHostedService>();
         services.AddHostedService<PrintWorker>();
         services.AddHostedService<InboxFolderWatcher>();
         services.AddHostedService<DataMaintenanceWorker>();
         services.AddHostedService<WebhookRetryWorker>();
+        services.AddHostedService<SoftPrint.Infrastructure.Operations.QueueHealthHostedService>();
         return services;
     }
 
@@ -88,5 +93,34 @@ public static class SoftPrintHostExtensions
                       ?? new SoftPrintFeatureOptions();
         logging.AddProvider(new FileLogProvider(environment, Options.Create(options)));
         return logging;
+    }
+
+    /// <summary>
+    /// Consome falha de atualização pendente e devolve o texto para a UI (WinForms/etc.).
+    /// Null se não houver aviso.
+    /// </summary>
+    public static string? TryConsumeUpdateFailureMessage(IServiceProvider services)
+    {
+        var updateError = SoftPrint.Infrastructure.Updates.UpdateFailureNotice.TryConsume();
+        if (string.IsNullOrWhiteSpace(updateError))
+            return null;
+
+        var detail = updateError;
+        try
+        {
+            var previous = services.GetService<IPreviousVersionStore>()?.TryGet();
+            if (previous is not null)
+            {
+                detail +=
+                    $"\n\nHá uma versão anterior local (v{previous.Version}). " +
+                    "Em Configurações → Sobre você pode retroceder.";
+            }
+        }
+        catch
+        {
+            /* ignore */
+        }
+
+        return "A última atualização do SoftPrint não concluiu corretamente.\n\n" + detail;
     }
 }

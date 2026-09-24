@@ -1,3 +1,44 @@
+/** Status da impressora no topo do painel (e espelho no Monitor). */
+export async function refreshHeaderPrinterStatus(api, settings) {
+  const targets = [
+    document.getElementById("headerPrinterStatus"),
+    document.getElementById("printerHealthLine"),
+  ].filter(Boolean);
+
+  const apply = (text, tone) => {
+    for (const el of targets) {
+      el.textContent = text;
+      const header = el.id === "headerPrinterStatus";
+      el.className = header ? `text-xs mt-0.5 truncate ${tone}` : `text-xs mt-1 ${tone}`;
+    }
+  };
+
+  const name = settings?.printerName;
+  if (!name) {
+    apply("Impressora: nenhuma selecionada", "text-bad");
+    return { ok: false, offline: false, missing: true };
+  }
+
+  try {
+    const list = await api("/api/printers");
+    const found = (list || []).find((p) => p.name === name);
+    if (!found) {
+      apply(`Impressora: '${name}' não encontrada`, "text-bad");
+      return { ok: false, offline: false, missing: true };
+    }
+    if (found.isOffline) {
+      apply(`Impressora: '${name}' offline / sem papel`, "text-bad");
+      return { ok: false, offline: true, missing: false };
+    }
+    const where = found.connection || found.port || "local";
+    apply(`Impressora: '${name}' pronta · ${where}`, "text-sea-glow");
+    return { ok: true, offline: false, missing: false };
+  } catch {
+    apply(`Impressora: '${name}' (status indisponível)`, "text-mist");
+    return { ok: null, offline: false, missing: false };
+  }
+}
+
 export function modeLabel({ paused, simulation } = {}) {
   const base = simulation ? "Simulação" : "Real";
   return paused ? `${base} · pausa` : base;

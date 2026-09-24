@@ -24,6 +24,10 @@ public static class SoftPrintVersionCompare
         return a > b;
     }
 
+    /// <summary>True se <paramref name="candidate"/> for estritamente mais antiga que <paramref name="current"/>.</summary>
+    public static bool IsOlder(string candidate, string current) =>
+        IsNewer(current, candidate);
+
     private static string Pad(string version)
     {
         var parts = version.Split('.', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);

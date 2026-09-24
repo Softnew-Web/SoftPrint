@@ -36,14 +36,33 @@ public sealed class TemplateRenderer(Microsoft.Extensions.Options.IOptions<SoftP
     }
 }
 
-public sealed class PrinterRouter(Microsoft.Extensions.Options.IOptions<SoftPrintFeatureOptions> options) : IPrinterRouter
+public sealed class PrinterRouter(
+    Microsoft.Extensions.Options.IOptions<SoftPrintFeatureOptions> options,
+    ISystemSettingsRepository systemSettings) : IPrinterRouter
 {
     public string ResolvePrinter(string jobType, string fallbackPrinter)
     {
+        var fromSystem = ParseRoutes(systemSettings.Current.PrinterRoutes);
+        if (fromSystem.TryGetValue(jobType, out var printer) && !string.IsNullOrWhiteSpace(printer))
+            return printer;
+
         var routes = options.Value.ParseRoutes();
-        if (routes.TryGetValue(jobType, out var printer) && !string.IsNullOrWhiteSpace(printer))
+        if (routes.TryGetValue(jobType, out printer) && !string.IsNullOrWhiteSpace(printer))
             return printer;
         return fallbackPrinter;
+    }
+
+    private static IReadOnlyDictionary<string, string> ParseRoutes(string? raw)
+    {
+        var map = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        if (string.IsNullOrWhiteSpace(raw)) return map;
+        foreach (var part in raw.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            var idx = part.IndexOf('=');
+            if (idx <= 0) continue;
+            map[part[..idx].Trim()] = part[(idx + 1)..].Trim();
+        }
+        return map;
     }
 }
 

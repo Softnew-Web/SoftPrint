@@ -34,6 +34,9 @@ public interface IAppNotifier
 {
     void NotifyUncertain(PrintJob job);
     void NotifyCompleted(PrintJob job);
+    void NotifyUpdateAvailable(string currentVersion, string latestVersion, bool mandatory);
+    void NotifyUpdateFailed(string message);
+    void NotifyQueueAlert(string title, string message);
 }
 
 public interface IWindowsStartupService

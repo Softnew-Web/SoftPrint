@@ -24,20 +24,41 @@ public sealed class TrayAppNotifier(ISystemSettingsRepository settings) : IAppNo
     {
         ShowBalloonTip(
             8000,
-            "SoftPrint — conferir envio",
+            "SoftPrint — falha na impressão",
             $"{job.Reference}: {job.ErrorReason ?? job.Error ?? "Falha no envio"}",
             ToolTipIcon.Warning);
     }
 
     public void NotifyCompleted(PrintJob job)
     {
-        if (job.Status == JobStatus.Uncertain) return;
-        ShowBalloonTip(
-            4000,
-            "SoftPrint — concluído",
-            $"{job.Reference}: {job.Status.ToDisplay()}",
-            ToolTipIcon.Info);
+        // Sucesso silencioso — só falhas e updates sobem na bandeja.
     }
+
+    public void NotifyUpdateAvailable(string currentVersion, string latestVersion, bool mandatory)
+    {
+        ShowBalloonTip(
+            mandatory ? 12_000 : 8_000,
+            mandatory ? "SoftPrint — atualização obrigatória" : "SoftPrint — nova versão",
+            $"v{currentVersion} → v{latestVersion}",
+            mandatory ? ToolTipIcon.Warning : ToolTipIcon.Info);
+    }
+
+    public void NotifyUpdateFailed(string message)
+    {
+        ShowBalloonTip(
+            10_000,
+            "SoftPrint — falha na atualização",
+            Truncate(message, 180),
+            ToolTipIcon.Error);
+    }
+
+    public void NotifyQueueAlert(string title, string message)
+    {
+        ShowBalloonTip(10_000, title, Truncate(message, 180), ToolTipIcon.Warning);
+    }
+
+    private static string Truncate(string text, int max) =>
+        text.Length <= max ? text : text[..(max - 1)] + "…";
 }
 
 public sealed class WindowsStartupService(IHostEnvironment environment) : IWindowsStartupService

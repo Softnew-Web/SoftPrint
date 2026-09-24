@@ -19,6 +19,7 @@ public sealed class GitHubReleaseUpdateChecker : IUpdateChecker
 
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly IOptionsMonitor<SoftPrintFeatureOptions> _options;
+    private readonly IUpdateHistoryStore _history;
     private readonly ILogger<GitHubReleaseUpdateChecker> _logger;
     private readonly object _gate = new();
     private UpdateCheckResult? _cached;
@@ -27,10 +28,12 @@ public sealed class GitHubReleaseUpdateChecker : IUpdateChecker
     public GitHubReleaseUpdateChecker(
         IHttpClientFactory httpClientFactory,
         IOptionsMonitor<SoftPrintFeatureOptions> options,
+        IUpdateHistoryStore history,
         ILogger<GitHubReleaseUpdateChecker> logger)
     {
         _httpClientFactory = httpClientFactory;
         _options = options;
+        _history = history;
         _logger = logger;
     }
 
@@ -75,8 +78,12 @@ public sealed class GitHubReleaseUpdateChecker : IUpdateChecker
                 Environment.GetEnvironmentVariable("UPDATE_GITHUB_TOKEN"),
                 Environment.GetEnvironmentVariable("SOFTPRINT_GITHUB_TOKEN"),
                 Environment.GetEnvironmentVariable("GITHUB_TOKEN"));
+            AuthenticationHeaderValue? authorization = null;
             if (!string.IsNullOrWhiteSpace(token))
-                request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token.Trim());
+            {
+                authorization = new AuthenticationHeaderValue("Bearer", token.Trim());
+                request.Headers.Authorization = authorization;
+            }
 
             using var response = await client.SendAsync(request, cancellationToken).ConfigureAwait(false);
             if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
@@ -128,6 +135,14 @@ public sealed class GitHubReleaseUpdateChecker : IUpdateChecker
                 ? asset!.Url
                 : asset?.BrowserDownloadUrl ?? release.HtmlUrl;
 
+            string? sha256 = null;
+            if (updateAvailable && asset?.Name is { Length: > 0 } assetName)
+            {
+                sha256 = await TryResolveSha256Async(
+                    client, authorization, release.Assets, assetName, cancellationToken)
+                    .ConfigureAwait(false);
+            }
+
             return Cache(new UpdateCheckResult(
                 current,
                 latest,
@@ -138,7 +153,8 @@ public sealed class GitHubReleaseUpdateChecker : IUpdateChecker
                 release.Body,
                 null,
                 now,
-                updateAvailable ? asset?.Name : null));
+                updateAvailable ? asset?.Name : null,
+                sha256));
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -168,6 +184,41 @@ public sealed class GitHubReleaseUpdateChecker : IUpdateChecker
         }
     }
 
+    private async Task<string?> TryResolveSha256Async(
+        HttpClient client,
+        AuthenticationHeaderValue? authorization,
+        List<GitHubAsset>? assets,
+        string assetName,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var sums = assets?.FirstOrDefault(a =>
+                string.Equals(a.Name, "checksums.sha256", StringComparison.OrdinalIgnoreCase));
+            if (sums is null) return null;
+
+            var url = !string.IsNullOrWhiteSpace(sums.Url) ? sums.Url! : sums.BrowserDownloadUrl;
+            if (string.IsNullOrWhiteSpace(url)) return null;
+
+            using var req = new HttpRequestMessage(HttpMethod.Get, url);
+            req.Headers.UserAgent.ParseAdd($"SoftPrint/{SoftPrintVersion.Current}");
+            req.Headers.Accept.Clear();
+            req.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/octet-stream"));
+            if (authorization is not null)
+                req.Headers.Authorization = authorization;
+
+            using var response = await client.SendAsync(req, cancellationToken).ConfigureAwait(false);
+            if (!response.IsSuccessStatusCode) return null;
+            var text = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+            return PackageIntegrity.FindHashForFile(text, assetName);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "Não foi possível obter checksums.sha256");
+            return null;
+        }
+    }
+
     private UpdateCheckResult Cache(UpdateCheckResult result) =>
         CacheForMinutes(result, Math.Clamp(_options.CurrentValue.UpdateCacheMinutes, 5, 24 * 60));
 
@@ -180,8 +231,11 @@ public sealed class GitHubReleaseUpdateChecker : IUpdateChecker
         {
             _cached = result;
             _cachedUntil = DateTimeOffset.UtcNow.AddMinutes(minutes);
-            return result;
         }
+
+        try { _history.RecordCheck(result); }
+        catch { /* ignore */ }
+        return result;
     }
 
     internal static string PreferredZipAssetName()
@@ -212,13 +266,11 @@ public sealed class GitHubReleaseUpdateChecker : IUpdateChecker
         static bool HasUrl(GitHubAsset a) =>
             !string.IsNullOrWhiteSpace(a.Url) || !string.IsNullOrWhiteSpace(a.BrowserDownloadUrl);
 
-        // 1) Delta a partir da versão instalada (só o que mudou).
         var deltaName = PreferredDeltaAssetName(currentVersion);
         var delta = assets.FirstOrDefault(a =>
             string.Equals(a.Name, deltaName, StringComparison.OrdinalIgnoreCase) && HasUrl(a));
         if (delta is not null) return delta;
 
-        // 2) Zip completo da arquitetura.
         var preferredZip = PreferredZipAssetName();
         var zip = assets.FirstOrDefault(a =>
             string.Equals(a.Name, preferredZip, StringComparison.OrdinalIgnoreCase) && HasUrl(a));

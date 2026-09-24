@@ -13,6 +13,9 @@ namespace SoftPrint.Infrastructure.Updates;
 public sealed class SoftPrintUpdateApplier : IUpdateApplier
 {
     private readonly IUpdateChecker _checker;
+    private readonly IPreviousVersionStore _previous;
+    private readonly IUpdateHistoryStore _history;
+    private readonly IAppNotifier _notifier;
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly IOptionsMonitor<SoftPrintFeatureOptions> _options;
     private readonly IHostApplicationLifetime _lifetime;
@@ -23,12 +26,18 @@ public sealed class SoftPrintUpdateApplier : IUpdateApplier
 
     public SoftPrintUpdateApplier(
         IUpdateChecker checker,
+        IPreviousVersionStore previous,
+        IUpdateHistoryStore history,
+        IAppNotifier notifier,
         IHttpClientFactory httpClientFactory,
         IOptionsMonitor<SoftPrintFeatureOptions> options,
         IHostApplicationLifetime lifetime,
         ILogger<SoftPrintUpdateApplier> logger)
     {
         _checker = checker;
+        _previous = previous;
+        _history = history;
+        _notifier = notifier;
         _httpClientFactory = httpClientFactory;
         _options = options;
         _lifetime = lifetime;
@@ -42,7 +51,13 @@ public sealed class SoftPrintUpdateApplier : IUpdateApplier
 
     public UpdateApplyStatus GetStatus() => Status;
 
-    public bool TryStart(out string? error)
+    public bool TryStart(out string? error) =>
+        TryStartCore(targetVersion: null, rollback: false, out error);
+
+    public bool TryStartRollback(string? targetVersion, out string? error) =>
+        TryStartCore(targetVersion, rollback: true, out error);
+
+    private bool TryStartCore(string? targetVersion, bool rollback, out string? error)
     {
         if (!OperatingSystem.IsWindows())
         {
@@ -56,22 +71,56 @@ public sealed class SoftPrintUpdateApplier : IUpdateApplier
             return false;
         }
 
-        Set(new UpdateApplyStatus("starting", 1, "Preparando atualização…", true, false, false));
-        _ = Task.Run(RunAsync);
+        var label = rollback ? "Preparando retorno de versão…" : "Preparando atualização…";
+        Set(new UpdateApplyStatus("starting", 1, label, true, false, false));
+        _ = Task.Run(() => RunAsync(targetVersion, rollback));
         error = null;
         return true;
     }
 
-    private async Task RunAsync()
+    private async Task RunAsync(string? targetVersion, bool rollback)
     {
         var tempDir = Path.Combine(Path.GetTempPath(), "SoftPrintUpdate");
         var scriptPath = Path.Combine(tempDir, "apply-update.cmd");
+        var applyVersion = SoftPrintVersion.Current;
 
         try
         {
             Directory.CreateDirectory(tempDir);
-            Set(new UpdateApplyStatus("checking", 5, "Consultando versão no GitHub…", true, false, false));
 
+            if (rollback)
+            {
+                Set(new UpdateApplyStatus("checking", 5, "Preparando versão anterior local…", true, false, false));
+                var previous = _previous.TryGet()
+                    ?? throw new InvalidOperationException(
+                        "Não há versão anterior salva neste computador. O SoftPrint guarda só a última instalação antes de cada atualização.");
+
+                if (!string.IsNullOrWhiteSpace(targetVersion) &&
+                    !string.Equals(
+                        SoftPrintVersionCompare.Normalize(targetVersion),
+                        SoftPrintVersionCompare.Normalize(previous.Version),
+                        StringComparison.OrdinalIgnoreCase))
+                {
+                    throw new InvalidOperationException(
+                        $"Só a versão anterior local (v{previous.Version}) pode ser restaurada.");
+                }
+
+                applyVersion = previous.Version;
+                _history.RecordApplyStarted(applyVersion, rollback: true);
+                Set(new UpdateApplyStatus(
+                    "installing", 40,
+                    $"Restaurando SoftPrint {previous.Version}…",
+                    true, false, false));
+                WriteLocalRestoreScript(scriptPath, previous.DirectoryPath);
+                LaunchDetached(scriptPath);
+                _history.RecordApplySucceeded(applyVersion, rollback: true);
+                Set(new UpdateApplyStatus("restarting", 100, "Reiniciando o SoftPrint…", true, false, true));
+                await Task.Delay(800).ConfigureAwait(false);
+                _lifetime.StopApplication();
+                return;
+            }
+
+            Set(new UpdateApplyStatus("checking", 5, "Consultando versão no GitHub…", true, false, false));
             _checker.InvalidateCache();
             var check = await _checker.CheckAsync().ConfigureAwait(false);
             if (!string.IsNullOrWhiteSpace(check.Error) && !check.UpdateAvailable)
@@ -80,6 +129,9 @@ public sealed class SoftPrintUpdateApplier : IUpdateApplier
             if (!check.UpdateAvailable || string.IsNullOrWhiteSpace(check.DownloadUrl))
                 throw new InvalidOperationException("Nenhuma atualização disponível para instalar.");
 
+            applyVersion = check.LatestVersion ?? SoftPrintVersion.Current;
+            _history.RecordApplyStarted(applyVersion, rollback: false);
+
             var downloadUrl = check.DownloadUrl!;
             var preferZip = LooksLikeZipUrl(downloadUrl)
                 || (check.AssetName?.EndsWith(".zip", StringComparison.OrdinalIgnoreCase) == true);
@@ -87,6 +139,12 @@ public sealed class SoftPrintUpdateApplier : IUpdateApplier
 
             Set(new UpdateApplyStatus("downloading", 8, $"Baixando SoftPrint {check.LatestVersion}…", true, false, false));
             await DownloadAsync(downloadUrl, downloadPath).ConfigureAwait(false);
+
+            Set(new UpdateApplyStatus("verifying", 90, "Verificando integridade (SHA256)…", true, false, false));
+            if (!string.IsNullOrWhiteSpace(check.Sha256))
+                PackageIntegrity.EnsureMatches(downloadPath, check.Sha256);
+            else
+                _logger.LogWarning("Release sem checksums.sha256 — pulando verificação de hash.");
 
             var isZip = preferZip || IsZipFile(downloadPath);
             Set(new UpdateApplyStatus("installing", 92, "Instalando atualização…", true, false, false));
@@ -107,6 +165,7 @@ public sealed class SoftPrintUpdateApplier : IUpdateApplier
             }
 
             LaunchDetached(scriptPath);
+            _history.RecordApplySucceeded(applyVersion, rollback: false);
 
             Set(new UpdateApplyStatus("restarting", 100, "Reiniciando o SoftPrint…", true, false, true));
             await Task.Delay(800).ConfigureAwait(false);
@@ -114,8 +173,14 @@ public sealed class SoftPrintUpdateApplier : IUpdateApplier
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Falha ao aplicar atualização");
-            Set(new UpdateApplyStatus("failed", Status.Percent, "Falha na atualização.", false, true, false, ex.Message));
+            _logger.LogError(ex, rollback ? "Falha ao retroceder versão" : "Falha ao aplicar atualização");
+            UpdateFailureNotice.Record(ex.Message);
+            try { _history.RecordApplyFailed(applyVersion, rollback, ex.Message); } catch { /* ignore */ }
+            try { _notifier.NotifyUpdateFailed(ex.Message); } catch { /* ignore */ }
+            Set(new UpdateApplyStatus(
+                "failed", Status.Percent,
+                rollback ? "Falha ao retroceder." : "Falha na atualização.",
+                false, true, false, ex.Message));
             Interlocked.Exchange(ref _running, 0);
         }
     }
@@ -243,10 +308,10 @@ public sealed class SoftPrintUpdateApplier : IUpdateApplier
 
     private static void WriteZipRestartScript(string scriptPath, string extractDir)
     {
-        var installDir = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "Programs",
-            "SoftPrint");
+        var installDir = LocalPreviousVersionStore.InstallDirectory;
+        var previousDir = LocalPreviousVersionStore.PreviousDirectory;
+        var versionMarker = LocalPreviousVersionStore.VersionMarkerPath;
+        var currentVersion = SoftPrintVersion.Current;
         var modern = Path.Combine(installDir, "SoftPrint.exe");
         var legacy = Path.Combine(installDir, "SoftPrint.Legacy.exe");
         var current = Environment.ProcessPath ?? "";
@@ -269,8 +334,12 @@ public sealed class SoftPrintUpdateApplier : IUpdateApplier
             "  goto waitpid",
             ")",
             $"if not exist \"{installDir}\" mkdir \"{installDir}\"",
+            // Só uma cópia anterior: apaga a velha e guarda a instalação atual antes de sobrescrever.
+            $"if exist \"{previousDir}\" rmdir /s /q \"{previousDir}\"",
+            $"mkdir \"{previousDir}\"",
+            $"robocopy \"{installDir}\" \"{previousDir}\" /E /NFL /NDL /NJH /NJS /NC /NS /NP >nul",
+            $"echo {currentVersion}> \"{versionMarker}\"",
             $"set HPATCH={hpatch}",
-            // Patches binários (delta): gera o exe novo a partir do instalado + .hdiff
             $"if exist \"%HPATCH%\" if exist \"{extractDir}\\SoftPrint.exe.hdiff\" if exist \"{modern}\" (",
             $"  \"%HPATCH%\" \"{modern}\" \"{extractDir}\\SoftPrint.exe.hdiff\" \"{extractDir}\\SoftPrint.exe\"",
             "  if errorlevel 1 echo SoftPrint hpatch SoftPrint.exe failed>> \"%TEMP%\\softprint-update-error.txt\"",
@@ -279,7 +348,6 @@ public sealed class SoftPrintUpdateApplier : IUpdateApplier
             $"  \"%HPATCH%\" \"{legacy}\" \"{extractDir}\\SoftPrint.Legacy.exe.hdiff\" \"{extractDir}\\SoftPrint.Legacy.exe\"",
             "  if errorlevel 1 echo SoftPrint hpatch SoftPrint.Legacy.exe failed>> \"%TEMP%\\softprint-update-error.txt\"",
             ")",
-            // Copia só o que veio no pacote (delta ou completo), ignorando ferramentas de patch.
             $"robocopy \"{extractDir}\" \"{installDir}\" /E /IS /IT /NFL /NDL /NJH /NJS /NC /NS /NP /XF *.hdiff hpatchz.exe hpatchz softprint-delta.json >nul",
             "set ERR=%ERRORLEVEL%",
             "if %ERR% GEQ 8 (",
@@ -301,24 +369,81 @@ public sealed class SoftPrintUpdateApplier : IUpdateApplier
         File.WriteAllLines(scriptPath, lines);
     }
 
-    private static void WriteExeRestartScript(string scriptPath, string setupPath)
+    private static void WriteLocalRestoreScript(string scriptPath, string previousDir)
     {
-        var installDir = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "Programs",
-            "SoftPrint");
+        var installDir = LocalPreviousVersionStore.InstallDirectory;
         var modern = Path.Combine(installDir, "SoftPrint.exe");
         var legacy = Path.Combine(installDir, "SoftPrint.Legacy.exe");
         var current = Environment.ProcessPath ?? "";
         var preferLegacy = current.Contains("Legacy", StringComparison.OrdinalIgnoreCase);
         var fallback = File.Exists(current) ? current : modern;
+        var pid = Environment.ProcessId;
 
-        // /VERYSILENT aceita termos; a política customizada também é ignorada no modo silent (Inno).
+        var lines = new List<string>
+        {
+            "@echo off",
+            "setlocal",
+            "timeout /t 2 /nobreak >nul",
+            ":waitpid",
+            $"tasklist /FI \"PID eq {pid}\" 2>NUL | find \"{pid}\" >NUL",
+            "if not errorlevel 1 (",
+            "  timeout /t 1 /nobreak >nul",
+            "  goto waitpid",
+            ")",
+            $"if not exist \"{previousDir}\" (",
+            "  echo SoftPrint previous version missing>> \"%TEMP%\\softprint-update-error.txt\"",
+            "  goto done",
+            ")",
+            $"if not exist \"{installDir}\" mkdir \"{installDir}\"",
+            $"robocopy \"{previousDir}\" \"{installDir}\" /E /IS /IT /NFL /NDL /NJH /NJS /NC /NS /NP /XF version.txt >nul",
+            "set ERR=%ERRORLEVEL%",
+            "if %ERR% GEQ 8 (",
+            "  echo SoftPrint restore robocopy exit %ERR%>> \"%TEMP%\\softprint-update-error.txt\"",
+            ") else (",
+            "  set ERR=0",
+            ")",
+            "timeout /t 1 /nobreak >nul",
+            preferLegacy
+                ? $"if exist \"{legacy}\" start \"\" \"{legacy}\" & goto done"
+                : $"if exist \"{modern}\" start \"\" \"{modern}\" & goto done",
+            $"if exist \"{modern}\" start \"\" \"{modern}\" & goto done",
+            $"if exist \"{legacy}\" start \"\" \"{legacy}\" & goto done",
+            $"if exist \"{fallback}\" start \"\" \"{fallback}\" & goto done",
+            "echo SoftPrint rollback could not restart > \"%TEMP%\\softprint-update-error.txt\"",
+            ":done",
+            "endlocal"
+        };
+        File.WriteAllLines(scriptPath, lines);
+    }
+
+    private static void WriteExeRestartScript(string scriptPath, string setupPath)
+    {
+        var installDir = LocalPreviousVersionStore.InstallDirectory;
+        var previousDir = LocalPreviousVersionStore.PreviousDirectory;
+        var versionMarker = LocalPreviousVersionStore.VersionMarkerPath;
+        var currentVersion = SoftPrintVersion.Current;
+        var modern = Path.Combine(installDir, "SoftPrint.exe");
+        var legacy = Path.Combine(installDir, "SoftPrint.Legacy.exe");
+        var current = Environment.ProcessPath ?? "";
+        var preferLegacy = current.Contains("Legacy", StringComparison.OrdinalIgnoreCase);
+        var fallback = File.Exists(current) ? current : modern;
+        var pid = Environment.ProcessId;
+
         var lines = new[]
         {
             "@echo off",
             "setlocal",
             "timeout /t 2 /nobreak >nul",
+            ":waitpid",
+            $"tasklist /FI \"PID eq {pid}\" 2>NUL | find \"{pid}\" >NUL",
+            "if not errorlevel 1 (",
+            "  timeout /t 1 /nobreak >nul",
+            "  goto waitpid",
+            ")",
+            $"if exist \"{previousDir}\" rmdir /s /q \"{previousDir}\"",
+            $"mkdir \"{previousDir}\"",
+            $"if exist \"{installDir}\" robocopy \"{installDir}\" \"{previousDir}\" /E /NFL /NDL /NJH /NJS /NC /NS /NP >nul",
+            $"echo {currentVersion}> \"{versionMarker}\"",
             $"\"{setupPath}\" /VERYSILENT /NORESTART /SUPPRESSMSGBOXES /CLOSEAPPLICATIONS /FORCECLOSEAPPLICATIONS",
             "set ERR=%ERRORLEVEL%",
             "timeout /t 2 /nobreak >nul",
