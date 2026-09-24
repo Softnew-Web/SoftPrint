@@ -116,12 +116,18 @@ jobs:
         shell: pwsh
         run: |
           .\scripts\publish-all.ps1
-          choco install innosetup --version=6.3.3 -y --no-progress
-          $iscc = @(
-            "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe",
-            "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe",
-            "${env:ProgramFiles}\Inno Setup 6\ISCC.exe"
-          ) | Where-Object { Test-Path $_ } | Select-Object -First 1
+          function Find-Iscc {
+            @(
+              "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe",
+              "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe",
+              "${env:ProgramFiles}\Inno Setup 6\ISCC.exe"
+            ) | Where-Object { Test-Path $_ } | Select-Object -First 1
+          }
+          $iscc = Find-Iscc
+          if (-not $iscc) {
+            choco install innosetup -y --no-progress
+            $iscc = Find-Iscc
+          }
           if (-not $iscc) { throw "ISCC.exe não encontrado." }
           & $iscc installer\SoftPrint.iss
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

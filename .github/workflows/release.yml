@@ -13,6 +13,10 @@ on:
         description: Marcar release como atualização obrigatória
         type: boolean
         default: false
+      skip_bump:
+        description: Republicar a VERSION atual (sem incrementar; use se o bump já rodou)
+        type: boolean
+        default: false
 
 concurrency:
   group: softprint-release
@@ -76,21 +80,35 @@ jobs:
       - name: Install npm deps
         run: npm ci
 
-      - name: Bump version
+      - name: Resolve version
         id: version
         shell: pwsh
         run: |
-          $bump = "${{ github.event.inputs.bump || 'patch' }}"
-          & .\scripts\bump-version.ps1 -Bump $bump
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          $next = [System.IO.File]::ReadAllText("$PWD\VERSION").Trim().TrimStart([char]0xFEFF)
-          if ($next -notmatch '^\d+\.\d+\.\d+$') { throw "Versão inválida após bump: '$next'" }
-          Add-Content -Path $env:GITHUB_ENV -Value "SOFTPRINT_VERSION=$next" -Encoding utf8NoBOM
-          Write-Host "Nova versão: $next"
+          $skip = ("${{ github.event.inputs.skip_bump }}" -eq "true")
+          if ($skip) {
+            $next = [System.IO.File]::ReadAllText("$PWD\VERSION").Trim().TrimStart([char]0xFEFF)
+            if ($next -notmatch '^\d+\.\d+\.\d+$') { throw "VERSION inválida: '$next'" }
+            Add-Content -Path $env:GITHUB_ENV -Value "SOFTPRINT_VERSION=$next" -Encoding utf8NoBOM
+            Add-Content -Path $env:GITHUB_ENV -Value "SOFTPRINT_SKIP_BUMP=true" -Encoding utf8NoBOM
+            Write-Host "Republicando versão existente: $next"
+          } else {
+            $bump = "${{ github.event.inputs.bump || 'patch' }}"
+            & .\scripts\bump-version.ps1 -Bump $bump
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            $next = [System.IO.File]::ReadAllText("$PWD\VERSION").Trim().TrimStart([char]0xFEFF)
+            if ($next -notmatch '^\d+\.\d+\.\d+$') { throw "Versão inválida após bump: '$next'" }
+            Add-Content -Path $env:GITHUB_ENV -Value "SOFTPRINT_VERSION=$next" -Encoding utf8NoBOM
+            Add-Content -Path $env:GITHUB_ENV -Value "SOFTPRINT_SKIP_BUMP=false" -Encoding utf8NoBOM
+            Write-Host "Nova versão: $next"
+          }
 
       - name: Commit version bump
         shell: pwsh
         run: |
+          if ($env:SOFTPRINT_SKIP_BUMP -eq "true") {
+            Write-Host "skip_bump: sem commit/tag (já existentes)."
+            exit 0
+          }
           $ver = $env:SOFTPRINT_VERSION
           if ($ver -notmatch '^\d+\.\d+\.\d+$') {
             $ver = [System.IO.File]::ReadAllText("$PWD\VERSION").Trim().TrimStart([char]0xFEFF)
@@ -146,12 +164,20 @@ jobs:
       - name: Install Inno Setup
         shell: pwsh
         run: |
-          choco install innosetup --version=6.3.3 -y --no-progress
-          $iscc = @(
-            "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe",
-            "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe",
-            "${env:ProgramFiles}\Inno Setup 6\ISCC.exe"
-          ) | Where-Object { Test-Path $_ } | Select-Object -First 1
+          function Find-Iscc {
+            @(
+              "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe",
+              "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe",
+              "${env:ProgramFiles}\Inno Setup 6\ISCC.exe"
+            ) | Where-Object { Test-Path $_ } | Select-Object -First 1
+          }
+
+          $iscc = Find-Iscc
+          if (-not $iscc) {
+            choco install innosetup -y --no-progress
+            if ($LASTEXITCODE -ne 0) { Write-Warning "choco innosetup saiu com $LASTEXITCODE" }
+            $iscc = Find-Iscc
+          }
           if (-not $iscc) { throw "ISCC.exe não encontrado." }
           Write-Host "ISCC: $iscc"
           [System.IO.File]::AppendAllText($env:GITHUB_ENV, "ISCC=$iscc$([Environment]::NewLine)")
@@ -237,5 +263,6 @@ jobs:
 
           git push origin :refs/tags/v 2>$null
           gh release delete "v" -y 2>$null
+          gh release delete "v$ver" -y 2>$null
 
           gh release create "v$ver" @assets --title $title --notes-file $notesFile
