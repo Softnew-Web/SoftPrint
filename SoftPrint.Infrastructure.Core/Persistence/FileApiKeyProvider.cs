@@ -57,8 +57,10 @@ public sealed class FileApiKeyProvider : IApiKeyProvider
         {
             if (OperatingSystem.IsWindows())
                 HardenWindowsAcl(path);
+#if NET7_0_OR_GREATER
             else if (OperatingSystem.IsLinux() || OperatingSystem.IsMacOS())
                 File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+#endif
         }
         catch
         {
