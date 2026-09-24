@@ -24,6 +24,7 @@ public static class ApplicationComposer
         });
 
         builder.AddSoftPrintConfiguration();
+        SoftPrint.Infrastructure.Hosting.LoopbackBindingGuard.Enforce(builder);
         builder.Services.AddSoftPrintCore();
         builder.Services.AddSingleton<IPrinterCatalog, WindowsPrinterCatalog>();
         builder.Services.AddSingleton<IPrinterPageMetrics, WindowsPrinterPageMetrics>();

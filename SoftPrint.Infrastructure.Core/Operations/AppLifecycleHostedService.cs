@@ -7,12 +7,14 @@ namespace SoftPrint.Infrastructure.Operations;
 /// <summary>Liga o ciclo de vida do host aos logs de sessão (início/fim).</summary>
 public sealed class AppLifecycleHostedService(
     IAppLifecycleLogger lifecycle,
+    IUpdateHistoryStore updateHistory,
     ILogger<AppLifecycleHostedService> log) : IHostedService
 {
     public Task StartAsync(CancellationToken cancellationToken)
     {
         try
         {
+            PendingUpdateFinalizer.TryFinalize(updateHistory);
             lifecycle.OnApplicationStarted();
         }
         catch (Exception ex)

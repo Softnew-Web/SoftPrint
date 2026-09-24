@@ -382,7 +382,12 @@ public sealed class FeatureApiTests
 
     private sealed class MemoryApiKeyProvider(string key) : IApiKeyProvider
     {
-        public string ApiKey { get; } = key;
+        public string ApiKey { get; private set; } = key;
+        public string Rotate()
+        {
+            ApiKey = Convert.ToHexString(System.Security.Cryptography.RandomNumberGenerator.GetBytes(16));
+            return ApiKey;
+        }
     }
 
     private sealed class MemoryPrinterCatalog(params string[] names) : IPrinterCatalog

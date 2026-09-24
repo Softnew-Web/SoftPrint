@@ -110,22 +110,15 @@ Pacote Linux, depois do publish:
 
 ## Versionamento e atualizações (GitHub Releases)
 
-A cada **push na `main`**, o GitHub Actions:
+Release **só sob demanda** (não sai a cada push na `main`):
 
-1. Incrementa automaticamente o patch (`1.0.2` → `1.0.3`)
-2. Atualiza `VERSION`, `SoftPrintVersion.cs` e `installer/SoftPrint.iss`
-3. Publica os builds Windows/Linux e gera `SoftPrint-Setup.exe`
-4. Cria a tag `vX.Y.Z` e o **GitHub Release** com o instalador
+1. **Actions → Release → Run workflow**
+2. Escolha `patch`, `minor` ou `major` (e opcionalmente **mandatory**)
+3. O workflow incrementa a versão, publica Windows/Linux, assina EXEs (se houver secrets), gera zips/deltas, `SoftPrint-Setup.exe`, `checksums.sha256` e cria a tag/release
 
-Os clientes instalados consultam o release mais recente e mostram o aviso no painel (com download/instalação automática no Windows).
+CI em todo push/PR: testes + smoke Windows (`--diagnose`) + smoke Linux. Na `main`, também compila o instalador Inno (smoke).
 
-### Manual
-
-- **Actions → Release → Run workflow**: escolha `patch`, `minor` ou `major`
-- Marque **mandatory** para release obrigatória (`[mandatory]` nas notas)
-- Para não gerar release num commit: inclua `[skip release]` na mensagem
-
-Arquivos de versão (atualizados pelo CI):
+Arquivos de versão (atualizados pelo CI de release):
 
 1. `VERSION`
 2. `SoftPrint.Domain/SoftPrintVersion.cs`
@@ -137,14 +130,29 @@ API:
 | --- | --- |
 | `GET /api/update` | Versão atual, última do GitHub, URL de download e se é obrigatória |
 | `GET /api/status` | Inclui `version` e `update` (cache) |
+| `POST /api/support/bundle` | Gera zip de suporte (logs + sessão, sem segredos) e abre a pasta |
+| `GET /api/connect/key` | Revela a chave (cookie/header; preferencialmente localhost) |
+| `POST /api/connect/rotate-key` | Regenera a chave de API |
 
-Releases públicos não precisam de token. Para repositório privado, configure o secret `SOFTPRINT_UPDATE_TOKEN` no GitHub Actions (é injetado nos builds) ou `UPDATE_GITHUB_TOKEN` no `.env` local.
+O painel **não embute** a chave no HTML: autenticação via cookie HttpOnly em localhost (integradores usam `X-SoftPrint-Key`).
 
-Atualização no Windows: o cliente prefere o zip **delta** (`SoftPrint-win-x64-from-1.0.8.zip`, etc.) com patch binário do `.exe` + só arquivos alterados; se não houver delta para a versão instalada, usa o zip completo; por último o `SoftPrint-Setup.exe`. Pacotes de update não incluem `.pdb`/`.xml`.
+Bind padrão é `127.0.0.1`. Para ouvir na rede: `ALLOW_NON_LOOPBACK_BINDING=true` (risco — só em LAN confiável).
 
-Assinatura Authenticode (opcional no CI): secrets `CODE_SIGNING_PFX_BASE64` e `CODE_SIGNING_PASSWORD`.
+Releases públicos não precisam de token. **Não embutimos PAT nos instaladores/zips.** Em repo privado, configure `UPDATE_GITHUB_TOKEN` no `.env` local do cliente.
 
-Telemetria de falhas: opt-in no painel (Sistema) ou `TELEMETRY_ENABLED` / `TELEMETRY_URL` — envia só metadados anônimos (versão, plataforma, tipo, erro), sem conteúdo do pedido.
+Atualização no Windows: zip **delta** → zip completo → `SoftPrint-Setup.exe`. **SHA256 obrigatório**. Sucesso de update/rollback só é confirmado na **próxima abertura** do SoftPrint. Linux: use o pacote `softprint-linux-x64.zip` (auto-update completo ainda é Windows-first).
+
+Assinatura Authenticode (opcional): `CODE_SIGNING_PFX_BASE64` / `CODE_SIGNING_PASSWORD`. `REQUIRE_SIGNED_UPDATES=true` força Authenticode no cliente.
+
+Telemetria opt-in: falhas + heartbeat (`TELEMETRY_*`). Timeout por impressão: `PRINT_JOB_TIMEOUT_SECONDS` (padrão 180). Alerta de fila no painel: `QUEUE_STALL_ALERT_MINUTES` (padrão 5).
+
+Logs: retenção 30 dias; crashes em `%LocalAppData%\SoftPrint\data\dumps\`; pacote de suporte em Sistema → Diagnóstico.
+
+### Operação em clínica (Windows)
+
+- Dados em `%LocalAppData%\SoftPrint` (por usuário)
+- `SoftPrint.exe --tray` / `--headless` para quiosque ou só API
+- Impressora offline → pedido vai para **Conferir** (não “Enviado”)
 
 ## Checklist de testes externos
 

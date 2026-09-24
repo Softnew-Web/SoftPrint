@@ -66,6 +66,7 @@ public static class SoftPrintHostExtensions
         services.AddSingleton<WebhookNotifier>();
         services.AddSingleton<IWebhookNotifier>(sp => sp.GetRequiredService<WebhookNotifier>());
         services.AddSingleton<ITelemetryService, SoftPrint.Infrastructure.Integrations.TelemetryService>();
+        services.AddSingleton<ISupportBundleService, SoftPrint.Infrastructure.Operations.SupportBundleService>();
         services.AddSingleton<IPrintStrategy, SimulationPrintStrategy>();
         services.AddSingleton<PrintStrategyResolver>();
         services.AddSingleton<JobQueueService>();
@@ -82,6 +83,7 @@ public static class SoftPrintHostExtensions
         services.AddHostedService<DataMaintenanceWorker>();
         services.AddHostedService<WebhookRetryWorker>();
         services.AddHostedService<SoftPrint.Infrastructure.Operations.QueueHealthHostedService>();
+        services.AddHostedService<SoftPrint.Infrastructure.Operations.TelemetryHeartbeatHostedService>();
         return services;
     }
 

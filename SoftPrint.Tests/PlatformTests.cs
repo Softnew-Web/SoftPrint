@@ -204,7 +204,13 @@ public sealed class PlatformTests
     private sealed class TestKeyProvider : IApiKeyProvider
     {
         public const string Key = "12345678901234567890123456789012";
-        public string ApiKey => Key;
+        private string _key = Key;
+        public string ApiKey => _key;
+        public string Rotate()
+        {
+            _key = "abcdefghijklmnopqrstuvwxyz123456";
+            return _key;
+        }
     }
 
     private sealed record TestPaths(string Root) : IAppPaths

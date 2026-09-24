@@ -229,6 +229,26 @@ public sealed class DomainTests
         Assert.Null(SoftPrint.Infrastructure.Updates.PackageIntegrity.FindHashForFile(body, "missing.zip"));
     }
 
+    [Fact]
+    public void PackageIntegrity_EnsureMatches_RequiresHash()
+    {
+        var path = Path.GetTempFileName();
+        try
+        {
+            File.WriteAllText(path, "softprint");
+            Assert.Throws<InvalidOperationException>(() =>
+                SoftPrint.Infrastructure.Updates.PackageIntegrity.EnsureMatches(path, null));
+            Assert.Throws<InvalidOperationException>(() =>
+                SoftPrint.Infrastructure.Updates.PackageIntegrity.EnsureMatches(path, "   "));
+            Assert.Throws<InvalidOperationException>(() =>
+                SoftPrint.Infrastructure.Updates.PackageIntegrity.EnsureMatches(path, "deadbeef"));
+        }
+        finally
+        {
+            try { File.Delete(path); } catch { /* ignore */ }
+        }
+    }
+
     private static string FindRepoRoot()
     {
         var dir = new DirectoryInfo(AppContext.BaseDirectory);

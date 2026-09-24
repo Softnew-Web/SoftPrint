@@ -8,7 +8,7 @@ import { bindSystemSettingsTab } from "./components/system-settings-tab.js";
 import { bindSetupWizard } from "./components/setup-wizard.js";
 import { applyUpdateInfo, applyVersion, refreshRollback } from "./components/update-banner.js";
 
-const KEY = window.SOFTPRINT_KEY || "";
+const KEY = ""; // autenticação via cookie HttpOnly (não embutir chave no HTML)
 const { api } = createApi(KEY);
 
 setApiHint(location.origin);
@@ -100,7 +100,7 @@ try {
 }
 
 try {
-  connect = bindConnectTab({ api, apiKey: KEY });
+  connect = bindConnectTab({ api });
 } catch (err) {
   showBootError(err);
 }
@@ -165,6 +165,7 @@ async function refreshAll() {
       bad: metrics.uncertainTotal || 0,
       healthLine: `uptime • ${metrics.jobsPerHourLast24h}/h • incert ${metrics.uncertainRatePercent}% • fila ${metrics.pending}/${metrics.processing}`,
     });
+    applyQueueAlert(status.health);
     await refreshHeaderPrinterStatus(api, state.applied);
 
     monitor.updatePipeline?.();
@@ -175,6 +176,20 @@ async function refreshAll() {
     if (line) line.textContent = e.message || "Falha ao conectar na API";
     feedback(e.message, true);
   }
+}
+
+function applyQueueAlert(health) {
+  const banner = document.getElementById("queueAlertBanner");
+  const text = document.getElementById("queueAlertText");
+  if (!banner || !text) return;
+  const alert = health?.queueAlert || "";
+  if (!alert) {
+    banner.classList.add("hidden");
+    text.textContent = "";
+    return;
+  }
+  text.textContent = alert;
+  banner.classList.remove("hidden");
 }
 
 function applyCapabilities(capabilities) {

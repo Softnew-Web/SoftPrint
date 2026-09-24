@@ -40,8 +40,14 @@ public static class EnvFileConfigurationExtensions
         ["UPDATE_ASSET_NAME"] = "SoftPrint:UpdateAssetName",
         ["UPDATE_ALWAYS_MANDATORY"] = "SoftPrint:UpdateAlwaysMandatory",
         ["AUTO_UPDATE_ON_STARTUP"] = "SoftPrint:AutoUpdateOnStartup",
+        ["REQUIRE_SIGNED_UPDATES"] = "SoftPrint:RequireSignedUpdates",
         ["TELEMETRY_ENABLED"] = "SoftPrint:TelemetryEnabled",
         ["TELEMETRY_URL"] = "SoftPrint:TelemetryUrl",
+        ["TELEMETRY_HEARTBEAT_HOURS"] = "SoftPrint:TelemetryHeartbeatHours",
+        ["FILE_LOG_RETENTION_DAYS"] = "SoftPrint:FileLogRetentionDays",
+        ["PRINT_JOB_TIMEOUT_SECONDS"] = "SoftPrint:PrintJobTimeoutSeconds",
+        ["ALLOW_NON_LOOPBACK_BINDING"] = "SoftPrint:AllowNonLoopbackBinding",
+        ["QUEUE_STALL_ALERT_MINUTES"] = "SoftPrint:QueueStallAlertMinutes",
         ["STATUS_PENDING_WIRE"] = "SoftPrint:Statuses:Pending:Wire",
         ["STATUS_PENDING_LABEL"] = "SoftPrint:Statuses:Pending:Label",
         ["STATUS_PROCESSING_WIRE"] = "SoftPrint:Statuses:Processing:Wire",
@@ -75,7 +81,8 @@ public static class EnvFileConfigurationExtensions
     {
         var data = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
 
-        // Token injetado no publish (CI) para repos privados — fora do git.
+        // Token local opcional (repo privado). NÃO vem mais nos zips/instaladores.
+        // Preferir UPDATE_GITHUB_TOKEN no .env do usuário.
         var tokenPath = Path.Combine(contentRoot, "update-github.token");
         if (File.Exists(tokenPath))
         {

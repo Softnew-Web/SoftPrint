@@ -240,6 +240,9 @@ public sealed class GitHubReleaseUpdateChecker : IUpdateChecker
 
     internal static string PreferredZipAssetName()
     {
+        if (OperatingSystem.IsLinux())
+            return "softprint-linux-x64.zip";
+
         var isLegacy = (Environment.ProcessPath ?? "")
             .Contains("Legacy", StringComparison.OrdinalIgnoreCase);
         var arch = Environment.Is64BitProcess ? "x64" : "x86";
@@ -251,6 +254,9 @@ public sealed class GitHubReleaseUpdateChecker : IUpdateChecker
     internal static string PreferredDeltaAssetName(string currentVersion)
     {
         var ver = SoftPrintVersionCompare.Normalize(currentVersion);
+        if (OperatingSystem.IsLinux())
+            return $"softprint-linux-x64-from-{ver}.zip";
+
         var isLegacy = (Environment.ProcessPath ?? "")
             .Contains("Legacy", StringComparison.OrdinalIgnoreCase);
         var arch = Environment.Is64BitProcess ? "x64" : "x86";

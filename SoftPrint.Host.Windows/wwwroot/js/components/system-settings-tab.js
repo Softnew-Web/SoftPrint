@@ -102,6 +102,22 @@ export function bindSystemSettingsTab({ api }) {
 
   byId("btnDiagnose")?.addEventListener("click", () => loadDiagnose());
 
+  byId("btnSupportBundle")?.addEventListener("click", async () => {
+    const msg = byId("supportBundleMsg") || message;
+    try {
+      msg.textContent = "Gerando pacote…";
+      msg.className = "text-xs text-mist";
+      const res = await api("/api/support/bundle", { method: "POST" });
+      msg.textContent = res.message
+        ? `${res.message} → ${res.fileName || res.path || ""}`
+        : `Pacote: ${res.fileName || res.path}`;
+      msg.className = "text-xs text-sea-glow";
+    } catch (err) {
+      msg.textContent = err.message || "Falha ao gerar pacote.";
+      msg.className = "text-xs text-bad";
+    }
+  });
+
   byId("btnExportBackup")?.addEventListener("click", async () => {
     try {
       const data = await api("/api/backup/export");

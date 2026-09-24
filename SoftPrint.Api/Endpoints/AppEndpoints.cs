@@ -358,6 +358,18 @@ public static class SettingsEndpoints
             var baseUrl = $"{request.Scheme}://{request.Host}".TrimEnd('/');
             var application = capabilities.IsLegacy ? "SoftPrint Legacy" : "SoftPrint";
             var update = ToUpdateDto(updates.TryGetCached());
+            var queued = all.Where(j => j.Status is JobStatus.Pending or JobStatus.Processing).ToArray();
+            var oldest = queued.OrderBy(j => j.CreatedAt).FirstOrDefault();
+            int? oldestMinutes = oldest is null
+                ? null
+                : (int)Math.Max(0, (DateTimeOffset.UtcNow - oldest.CreatedAt.ToUniversalTime()).TotalMinutes);
+            var stallAfter = Math.Max(1, features.Value.QueueStallAlertMinutes);
+            string? queueAlert = null;
+            if (current.Paused && queued.Length > 0)
+                queueAlert = $"Fila pausada · {queued.Length} pedido(s) aguardando";
+            else if (oldestMinutes is int om && om >= stallAfter)
+                queueAlert = $"Fila parada · {oldest!.Reference} há {oldestMinutes} min";
+
             return new StatusResponse(
                 application,
                 baseUrl,
@@ -383,7 +395,9 @@ public static class SettingsEndpoints
                     Metrics: new MetricsDto(
                         m.TotalJobs, m.Last24Hours, m.JobsPerHourLast24h, m.UncertainTotal,
                         m.UncertainRatePercent, m.SimulatedTotal, m.SentTotal, m.Pending,
-                        m.Processing, m.BusiestJobType)),
+                        m.Processing, m.BusiestJobType),
+                    QueueOldestMinutes: oldestMinutes,
+                    QueueAlert: queueAlert),
                 new PlatformCapabilitiesDto(
                     capabilities.Platform,
                     capabilities.PrintingBackend,
@@ -564,6 +578,24 @@ public static class SettingsEndpoints
         {
             startup.ApplyFromOptions(request.Enabled);
             return Results.Ok(new { startWithWindows = startup.IsEnabled });
+        });
+        app.MapPost("/api/support/bundle", (ISupportBundleService support, IFolderOperations folders) =>
+        {
+            try
+            {
+                var path = support.CreateBundle();
+                try { folders.Open(Path.GetDirectoryName(path)!); } catch { /* ignore */ }
+                return Results.Ok(new
+                {
+                    path,
+                    fileName = Path.GetFileName(path),
+                    message = "Pacote de suporte gerado (logs + sessão, sem segredos)."
+                });
+            }
+            catch (Exception ex)
+            {
+                return Results.Problem(ex.Message, statusCode: 500);
+            }
         });
         app.MapGet("/api/diagnose", (
             IPlatformCapabilities capabilities,

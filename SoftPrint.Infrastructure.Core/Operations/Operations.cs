@@ -8,12 +8,13 @@ public sealed class FileLogProvider : ILoggerProvider
 {
     private readonly string _directory;
     private readonly bool _enabled;
+    private readonly int _keepDays;
     private readonly object _gate = new();
-    private const int KeepDays = 2;
 
     public FileLogProvider(IAppPaths paths, IOptions<SoftPrintFeatureOptions> options)
     {
         _enabled = options.Value.LogToFile;
+        _keepDays = Math.Max(1, options.Value.FileLogRetentionDays);
         _directory = Path.Combine(paths.DataRoot, "logs");
         if (_enabled) Directory.CreateDirectory(_directory);
     }
@@ -23,13 +24,14 @@ public sealed class FileLogProvider : ILoggerProvider
     {
     }
 
-    public ILogger CreateLogger(string categoryName) => new FileLogger(categoryName, _directory, _enabled, _gate);
+    public ILogger CreateLogger(string categoryName) =>
+        new FileLogger(categoryName, _directory, _enabled, _keepDays, _gate);
 
     public void Dispose()
     {
     }
 
-    private sealed class FileLogger(string category, string directory, bool enabled, object gate) : ILogger
+    private sealed class FileLogger(string category, string directory, bool enabled, int keepDays, object gate) : ILogger
     {
         public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
         public bool IsEnabled(LogLevel logLevel) => enabled && logLevel >= LogLevel.Information;
@@ -44,15 +46,14 @@ public sealed class FileLogProvider : ILoggerProvider
             lock (gate)
             {
                 File.AppendAllText(path, line + Environment.NewLine);
-                Rotate(directory);
+                Rotate(directory, keepDays);
             }
         }
 
-        private static void Rotate(string directory)
+        private static void Rotate(string directory, int keepDays)
         {
-            // 2 dias: ao gerar o 3º arquivo, apaga o mais antigo.
             foreach (var file in Directory.EnumerateFiles(directory, "softprint-*.log")
-                         .OrderByDescending(f => f).Skip(KeepDays))
+                         .OrderByDescending(f => f).Skip(keepDays))
             {
                 try { File.Delete(file); } catch { /* ignore */ }
             }

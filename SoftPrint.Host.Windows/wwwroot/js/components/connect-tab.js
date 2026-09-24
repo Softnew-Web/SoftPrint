@@ -3,7 +3,7 @@ import { escapeHtml, statusLabel } from "../api.js";
 import { buildSettingsPayload } from "../settings-payload.js";
 import { setApiHint } from "./stats.js";
 
-export function bindConnectTab({ api, apiKey }) {
+export function bindConnectTab({ api }) {
   const inboxFolder = document.getElementById("inboxFolder");
   const inboxEnabled = document.getElementById("inboxEnabled");
   const deleteInboxAfterPrint = document.getElementById("deleteInboxAfterPrint");
@@ -26,9 +26,24 @@ export function bindConnectTab({ api, apiKey }) {
     navigator.clipboard.writeText(document.getElementById("endpoint").value);
     feedback("Endereço copiado.");
   });
-  document.getElementById("btnCopyKey").addEventListener("click", () => {
-    navigator.clipboard.writeText(apiKey);
-    feedback("Chave copiada. Use só no sistema autorizado.");
+  document.getElementById("btnCopyKey").addEventListener("click", async () => {
+    try {
+      const data = await api("/api/connect/key");
+      if (!data?.apiKey) throw new Error("Chave indisponível.");
+      await navigator.clipboard.writeText(data.apiKey);
+      feedback("Chave copiada. Use só no sistema autorizado.");
+    } catch (err) {
+      feedback(err.message || "Não foi possível copiar a chave.", true);
+    }
+  });
+  document.getElementById("btnRotateKey")?.addEventListener("click", async () => {
+    if (!confirm("Gerar nova chave de API? Integrações com a chave antiga param de autenticar.")) return;
+    try {
+      const data = await api("/api/connect/rotate-key", { method: "POST", body: "{}" });
+      feedback(data.message || "Chave regenerada.");
+    } catch (err) {
+      feedback(err.message || "Falha ao regenerar a chave.", true);
+    }
   });
   document.getElementById("btnOpenLogs").addEventListener("click", async () => {
     try {

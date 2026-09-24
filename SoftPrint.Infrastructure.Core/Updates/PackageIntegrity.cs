@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
 using System.Text;
 
 namespace SoftPrint.Infrastructure.Updates;
@@ -13,10 +14,13 @@ public static class PackageIntegrity
         return Convert.ToHexString(hash).ToLowerInvariant();
     }
 
+    /// <summary>Exige SHA256 — sem hash ou mismatch = falha (fail-closed).</summary>
     public static void EnsureMatches(string filePath, string? expectedSha256)
     {
         if (string.IsNullOrWhiteSpace(expectedSha256))
-            return;
+            throw new InvalidOperationException(
+                "Release sem checksum SHA256. A atualização foi recusada por segurança. " +
+                "Publique checksums.sha256 no GitHub Release.");
 
         var expected = Normalize(expectedSha256);
         if (expected.Length != 64)
@@ -26,6 +30,42 @@ public static class PackageIntegrity
         if (!string.Equals(actual, expected, StringComparison.OrdinalIgnoreCase))
             throw new InvalidOperationException(
                 "O arquivo baixado não passou na verificação SHA256 (pode estar corrompido). Tente atualizar de novo.");
+    }
+
+    /// <summary>
+    /// No Windows: se o EXE estiver assinado, valida Authenticode.
+    /// Se RequireSigned=true e não houver assinatura, falha.
+    /// </summary>
+    public static void EnsureAuthenticode(string exePath, bool requireSigned)
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        if (!File.Exists(exePath)) return;
+
+        try
+        {
+#pragma warning disable SYSLIB0057 // CreateFromSignedFile — ok em net6/net10 para Authenticode PE
+            using var cert = X509Certificate.CreateFromSignedFile(exePath);
+#pragma warning restore SYSLIB0057
+            if (cert is null || string.IsNullOrWhiteSpace(cert.Subject))
+            {
+                if (requireSigned)
+                    throw new InvalidOperationException(
+                        $"O executável '{Path.GetFileName(exePath)}' não está assinado (Authenticode).");
+                return;
+            }
+
+            // CreateFromSignedFile já prova que há assinatura embutida.
+            _ = cert.GetCertHashString();
+        }
+        catch (CryptographicException) when (!requireSigned)
+        {
+            /* release sem assinatura — permitido quando RequireSignedUpdates=false */
+        }
+        catch (CryptographicException ex) when (requireSigned)
+        {
+            throw new InvalidOperationException(
+                $"Falha na verificação Authenticode de '{Path.GetFileName(exePath)}': {ex.Message}", ex);
+        }
     }
 
     /// <summary>Formato típico: "hash  nome.zip" ou "hash *nome.exe".</summary>

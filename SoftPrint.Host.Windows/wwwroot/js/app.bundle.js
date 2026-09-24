@@ -1,20 +1,23 @@
 (() => {
   // SoftPrint.Host.Windows/wwwroot/js/api.js
-  function createApi(key) {
-    const headers = {
-      "X-SoftPrint-Key": key,
+  function createApi(key = "") {
+    const baseHeaders = {
       "Content-Type": "application/json"
     };
+    if (key) baseHeaders["X-SoftPrint-Key"] = key;
     async function api2(path, opts = {}) {
       const res = await fetch(path, {
         ...opts,
-        headers: { ...headers, ...opts.headers || {} }
+        credentials: "same-origin",
+        headers: { ...baseHeaders, ...opts.headers || {} }
       });
       if (!res.ok) {
         let msg = `Erro ${res.status}`;
         try {
           const j = await res.json();
           if (j.error) msg = j.error;
+          else if (j.title) msg = j.title;
+          else if (j.message) msg = j.message;
         } catch {
         }
         throw new Error(msg);
@@ -23,7 +26,7 @@
       const text = await res.text();
       return text ? JSON.parse(text) : null;
     }
-    return { api: api2, headers };
+    return { api: api2, headers: baseHeaders };
   }
   var statusLabel = {
     pending: "Na fila",
@@ -33192,7 +33195,7 @@ fn fs_main(in : VertexOutput) -> @location(0) vec4<f32> {
   }
 
   // SoftPrint.Host.Windows/wwwroot/js/components/connect-tab.js
-  function bindConnectTab({ api: api2, apiKey }) {
+  function bindConnectTab({ api: api2 }) {
     const inboxFolder = document.getElementById("inboxFolder");
     const inboxEnabled = document.getElementById("inboxEnabled");
     const deleteInboxAfterPrint = document.getElementById("deleteInboxAfterPrint");
@@ -33212,9 +33215,24 @@ fn fs_main(in : VertexOutput) -> @location(0) vec4<f32> {
       navigator.clipboard.writeText(document.getElementById("endpoint").value);
       feedback("Endere\xE7o copiado.");
     });
-    document.getElementById("btnCopyKey").addEventListener("click", () => {
-      navigator.clipboard.writeText(apiKey);
-      feedback("Chave copiada. Use s\xF3 no sistema autorizado.");
+    document.getElementById("btnCopyKey").addEventListener("click", async () => {
+      try {
+        const data = await api2("/api/connect/key");
+        if (!data?.apiKey) throw new Error("Chave indispon\xEDvel.");
+        await navigator.clipboard.writeText(data.apiKey);
+        feedback("Chave copiada. Use s\xF3 no sistema autorizado.");
+      } catch (err) {
+        feedback(err.message || "N\xE3o foi poss\xEDvel copiar a chave.", true);
+      }
+    });
+    document.getElementById("btnRotateKey")?.addEventListener("click", async () => {
+      if (!confirm("Gerar nova chave de API? Integra\xE7\xF5es com a chave antiga param de autenticar.")) return;
+      try {
+        const data = await api2("/api/connect/rotate-key", { method: "POST", body: "{}" });
+        feedback(data.message || "Chave regenerada.");
+      } catch (err) {
+        feedback(err.message || "Falha ao regenerar a chave.", true);
+      }
     });
     document.getElementById("btnOpenLogs").addEventListener("click", async () => {
       try {
@@ -33758,6 +33776,19 @@ fn fs_main(in : VertexOutput) -> @location(0) vec4<f32> {
       }
     });
     byId("btnDiagnose")?.addEventListener("click", () => loadDiagnose());
+    byId("btnSupportBundle")?.addEventListener("click", async () => {
+      const msg = byId("supportBundleMsg") || message;
+      try {
+        msg.textContent = "Gerando pacote\u2026";
+        msg.className = "text-xs text-mist";
+        const res = await api2("/api/support/bundle", { method: "POST" });
+        msg.textContent = res.message ? `${res.message} \u2192 ${res.fileName || res.path || ""}` : `Pacote: ${res.fileName || res.path}`;
+        msg.className = "text-xs text-sea-glow";
+      } catch (err) {
+        msg.textContent = err.message || "Falha ao gerar pacote.";
+        msg.className = "text-xs text-bad";
+      }
+    });
     byId("btnExportBackup")?.addEventListener("click", async () => {
       try {
         const data = await api2("/api/backup/export");
@@ -34238,7 +34269,7 @@ Ser\xE1 restaurada a c\xF3pia local salva antes da \xFAltima atualiza\xE7\xE3o (
   }
 
   // SoftPrint.Host.Windows/wwwroot/js/app.js
-  var KEY = window.SOFTPRINT_KEY || "";
+  var KEY = "";
   var { api } = createApi(KEY);
   setApiHint(location.origin);
   setConnection(false);
@@ -34327,7 +34358,7 @@ Ser\xE1 restaurada a c\xF3pia local salva antes da \xFAltima atualiza\xE7\xE3o (
     showBootError(err);
   }
   try {
-    connect = bindConnectTab({ api, apiKey: KEY });
+    connect = bindConnectTab({ api });
   } catch (err) {
     showBootError(err);
   }
@@ -34388,6 +34419,7 @@ Ser\xE1 restaurada a c\xF3pia local salva antes da \xFAltima atualiza\xE7\xE3o (
         bad: metrics.uncertainTotal || 0,
         healthLine: `uptime \u2022 ${metrics.jobsPerHourLast24h}/h \u2022 incert ${metrics.uncertainRatePercent}% \u2022 fila ${metrics.pending}/${metrics.processing}`
       });
+      applyQueueAlert(status.health);
       await refreshHeaderPrinterStatus(api, state.applied);
       monitor.updatePipeline?.();
       monitor.renderJobs?.();
@@ -34397,6 +34429,19 @@ Ser\xE1 restaurada a c\xF3pia local salva antes da \xFAltima atualiza\xE7\xE3o (
       if (line) line.textContent = e.message || "Falha ao conectar na API";
       feedback(e.message, true);
     }
+  }
+  function applyQueueAlert(health) {
+    const banner = document.getElementById("queueAlertBanner");
+    const text = document.getElementById("queueAlertText");
+    if (!banner || !text) return;
+    const alert = health?.queueAlert || "";
+    if (!alert) {
+      banner.classList.add("hidden");
+      text.textContent = "";
+      return;
+    }
+    text.textContent = alert;
+    banner.classList.remove("hidden");
   }
   function applyCapabilities(capabilities) {
     if (!capabilities) return;

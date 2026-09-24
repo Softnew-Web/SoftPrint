@@ -28,6 +28,72 @@ function Get-TypeLabel([string]$type) {
     }
 }
 
+function Test-LooksPortuguese([string]$text) {
+    if ($text -match '[áàâãéêíóôõúçÁÀÂÃÉÊÍÓÔÕÚÇ]') { return $true }
+    if ($text -match '(?i)\b(para|com|sem|mais|nova|novo|fila|painel|impressora|atualiza|chave|segurança|versão|configura)\b') {
+        return $true
+    }
+    return $false
+}
+
+function Convert-ToPortugueseBullet([string]$msg) {
+    $m = $msg.Trim().TrimEnd('.')
+    if ([string]::IsNullOrWhiteSpace($m)) { return $null }
+
+    $known = @{
+        'lifecycle logs, setup wizard, and update/ui polish' =
+            'Logs de ciclo de vida (ligar, desligar e falhas), assistente de configuração e melhorias no painel de atualização'
+        'faster print path and optional tray notifications' =
+            'Impressão mais rápida e notificações da bandeja opcionais'
+        'always check github for updates on splash' =
+            'Verificação de atualizações no GitHub também na tela inicial'
+        'segurança da api, impressora offline e atualização mais confiável' =
+            'Segurança da API, impressora offline e atualização mais confiável'
+    }
+
+    $key = $m.ToLowerInvariant()
+    if ($known.ContainsKey($key)) { return $known[$key] }
+
+    if (Test-LooksPortuguese $m) {
+        return ($m.Substring(0, 1).ToUpper() + $m.Substring(1))
+    }
+
+    $t = $m
+    $pairs = @(
+        @('lifecycle logs', 'logs de ciclo de vida'),
+        @('setup wizard', 'assistente de configuração'),
+        @('update/ui polish', 'melhorias de atualização e interface'),
+        @('ui polish', 'melhorias na interface'),
+        @('tray notifications', 'notificações da bandeja'),
+        @('print path', 'caminho de impressão'),
+        @('github', 'GitHub'),
+        @('splash', 'tela inicial'),
+        @('api key', 'chave de API'),
+        @('offline printer', 'impressora offline'),
+        @('queue stall', 'fila parada'),
+        @('loopback', 'localhost'),
+        @('and ', 'e '),
+        @(' with ', ' com '),
+        @(' without ', ' sem '),
+        @(' for ', ' para '),
+        @(' on ', ' em '),
+        @(' to ', ' para ')
+    )
+    foreach ($p in $pairs) {
+        $t = [regex]::Replace($t, [regex]::Escape($p[0]), $p[1], 'IgnoreCase')
+    }
+
+    return ($t.Substring(0, 1).ToUpper() + $t.Substring(1))
+}
+
+function Add-UniqueBullet($list, [string]$bullet) {
+    if ([string]::IsNullOrWhiteSpace($bullet)) { return }
+    $normalized = $bullet.Trim()
+    if (-not $list.Contains($normalized)) {
+        $list.Add($normalized)
+    }
+}
+
 if ($Version -notmatch '^\d+\.\d+\.\d+$') {
     throw "Versão inválida: '$Version'"
 }
@@ -46,21 +112,15 @@ $range = if ($prev) { "$prev..$endRef" } else { $endRef }
 $desde = if ($prev) { $prev } else { "início" }
 Write-Host "Notas da release: $tag (desde $desde, até $endRef)"
 
-$gitOut = & git log $range --pretty=format:"%s" --no-merges 2>&1
+# Subject + corpo: bullets do corpo (- item) viram novidades mais claras.
+$gitOut = & git log $range --pretty=format:"<<<COMMIT>>>%n%s%n%b" --no-merges 2>&1
 if ($LASTEXITCODE -ne 0) {
     Write-Warning "git log falhou ($range); tentando só HEAD."
-    $gitOut = & git log -20 --pretty=format:"%s" --no-merges 2>&1
+    $gitOut = & git log -20 --pretty=format:"<<<COMMIT>>>%n%s%n%b" --no-merges 2>&1
 }
 
-$lines = @()
-if ($gitOut) {
-    $lines = @(($gitOut | Out-String) -split "`r?`n") | ForEach-Object { $_.Trim() } | Where-Object {
-        $_ -and
-        $_ -notmatch '^fatal:' -and
-        $_ -notmatch '^chore\(release\):' -and
-        $_ -notmatch '^\[skip release\]'
-    }
-}
+$raw = if ($gitOut) { ($gitOut | Out-String) } else { "" }
+$commits = @($raw -split '<<<COMMIT>>>' | ForEach-Object { $_.Trim() } | Where-Object { $_ })
 
 $buckets = @{
     feat     = New-Object System.Collections.Generic.List[string]
@@ -71,17 +131,41 @@ $buckets = @{
     other    = New-Object System.Collections.Generic.List[string]
 }
 
-foreach ($line in $lines) {
-    $parsed = Normalize-Subject $line
+foreach ($block in $commits) {
+    $blockLines = @($block -split "`r?`n" | ForEach-Object { $_.TrimEnd() })
+    if ($blockLines.Count -lt 1) { continue }
+
+    $subject = $blockLines[0].Trim()
+    if (-not $subject -or
+        $subject -match '^chore\(release\):' -or
+        $subject -match '^\[skip release\]' -or
+        $subject -match '^fatal:') {
+        continue
+    }
+
+    $parsed = Normalize-Subject $subject
     if ($parsed.Type -in @("chore", "ci", "build", "test", "style")) {
         continue
     }
+
     $key = if ($buckets.ContainsKey($parsed.Type)) { $parsed.Type } else { "other" }
-    $msg = $parsed.Message
-    if ([string]::IsNullOrWhiteSpace($msg)) { continue }
-    $msg = $msg.Substring(0, 1).ToUpperInvariant() + $msg.Substring(1)
-    if (-not $buckets[$key].Contains($msg)) {
-        $buckets[$key].Add($msg)
+    $bodyBullets = @()
+    foreach ($line in $blockLines | Select-Object -Skip 1) {
+        $t = $line.Trim()
+        if ($t -match '^[-*•]\s+(.+)$') {
+            $bodyBullets += $Matches[1].Trim()
+        }
+    }
+
+    if ($bodyBullets.Count -gt 0) {
+        foreach ($b in $bodyBullets) {
+            $pt = Convert-ToPortugueseBullet $b
+            Add-UniqueBullet $buckets[$key] $pt
+        }
+    }
+    else {
+        $pt = Convert-ToPortugueseBullet $parsed.Message
+        Add-UniqueBullet $buckets[$key] $pt
     }
 }
 
@@ -92,7 +176,7 @@ $sb = New-Object System.Text.StringBuilder
 if ($Mandatory) {
     [void]$sb.AppendLine("[mandatory]")
     [void]$sb.AppendLine()
-    [void]$sb.AppendLine("> **Atualização obrigatória** — o SoftPrint instala esta versão automaticamente no arranque.")
+    [void]$sb.AppendLine("> **Atualização obrigatória** — o SoftPrint instala esta versão automaticamente na próxima abertura.")
     [void]$sb.AppendLine()
 }
 
@@ -111,15 +195,19 @@ foreach ($key in $order) {
 }
 
 if (-not $any) {
-    [void]$sb.AppendLine("Release automático gerado a partir de ``main``.")
+    [void]$sb.AppendLine("Melhorias e correções gerais nesta versão.")
     [void]$sb.AppendLine()
 }
 
 [void]$sb.AppendLine("---")
 [void]$sb.AppendLine()
-[void]$sb.AppendLine("Clientes Windows preferem o zip **delta** (``*-from-<versão>.zip``) quando existir; senão o zip completo da arquitetura. O Setup completo continua disponível para instalação nova.")
+[void]$sb.AppendLine("**Como atualizar (Windows)**")
 [void]$sb.AppendLine()
-[void]$sb.AppendLine("Os assets incluem ``checksums.sha256`` — o SoftPrint verifica a integridade antes de instalar.")
+[void]$sb.AppendLine("- No SoftPrint, use **Atualizar agora** quando aparecer a faixa de nova versão (o botão **Atualizar** do topo só recarrega o painel).")
+[void]$sb.AppendLine("- Preferimos o pacote **delta** (``*-from-<versão>.zip``) quando existir; senão o zip completo. O ``SoftPrint-Setup.exe`` serve para instalação nova.")
+[void]$sb.AppendLine("- Todos os arquivos incluem ``checksums.sha256`` — a integridade é verificada antes de instalar.")
+[void]$sb.AppendLine()
+[void]$sb.AppendLine("**Linux:** use ``softprint-linux-x64.zip``. A atualização automática completa continua focada no Windows.")
 
 $dir = Split-Path -Parent $OutFile
 if ($dir -and -not (Test-Path $dir)) {

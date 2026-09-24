@@ -7,7 +7,9 @@
   </PropertyGroup>
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <PackageReference Include="System.IO.FileSystem.AccessControl" Version="5.0.0" />
     <ProjectReference Include="..\SoftPrint.Domain\SoftPrint.Domain.csproj" />
     <ProjectReference Include="..\SoftPrint.Application\SoftPrint.Application.csproj" />
+    <InternalsVisibleTo Include="SoftPrint.Tests" />
   </ItemGroup>
 </Project>

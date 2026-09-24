@@ -1,6 +1,8 @@
+using SoftPrint.Application;
 using SoftPrint.Application.Abstractions;
 using SoftPrint.Application.Services;
 using SoftPrint.Domain;
+using Microsoft.Extensions.Options;
 
 namespace SoftPrint.Application.Workers;
 
@@ -9,10 +11,12 @@ public sealed class PrintWorker(
     ISettingsRepository settings,
     ISystemSettingsRepository systemSettings,
     IPrinterRouter router,
+    IPrinterCatalog printers,
     PrintStrategyResolver strategies,
     IWebhookNotifier webhook,
     IAppNotifier notifier,
     ITelemetryService telemetry,
+    IOptions<SoftPrintFeatureOptions> features,
     ILogger<PrintWorker> logger) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -68,39 +72,78 @@ public sealed class PrintWorker(
                     PaperLandscape = options.PaperLandscape
                 };
 
-                var strategy = strategies.Resolve(job, printOptions);
-                var strategyName = strategy.GetType().Name;
-                var mode = printOptions.Simulation ? "simulação (sem papel)" : $"conteúdo {job.ContentKind.ToWire()}";
-
-                // Imprime primeiro; grava os passos depois — evita I/O de jobs.json antes do spooler.
-                status = await strategy.ExecuteAsync(job, printOptions, stoppingToken);
-
-                var steps = new List<JobStepDraft>(4);
-                if (routed)
+                if (!printOptions.Simulation && IsPrinterUnavailable(printer, out var printerDetail))
                 {
-                    steps.Add(new JobStepDraft(
-                        "route", "PrinterRouter",
-                        $"Roteado pelo tipo '{job.JobType}'.",
-                        $"Impressora padrão '{options.PrinterName}' → '{printer}'"));
+                    status = JobStatus.Uncertain;
+                    error = $"Impressora indisponível: {printer}";
+                    errorReason = printerDetail;
+                    errorWhere = "PrintWorker → catálogo de impressoras";
+                    jobs.AppendStep(job.Id, "printer-check", "PrintWorker",
+                        error, errorReason, isError: true);
                 }
+                else
+                {
+                    var strategy = strategies.Resolve(job, printOptions);
+                    var strategyName = strategy.GetType().Name;
+                    var mode = printOptions.Simulation ? "simulação (sem papel)" : $"conteúdo {job.ContentKind.ToWire()}";
 
-                steps.Add(new JobStepDraft(
-                    "layout", "PrintWorker",
-                    $"Layout capturado: {PrintSurfaceMapper.Describe(printOptions)}.",
-                    printOptions.Simulation
-                        ? "A simulação usa a mesma configuração de papel/encaixe do envio real."
-                        : "O spooler recebe este papel, encaixe e escala — os mesmos do preview."));
-                steps.Add(new JobStepDraft(
-                    "strategy", $"PrintWorker → {strategyName}",
-                    $"Estratégia selecionada: {mode}.",
-                    printOptions.Simulation
-                        ? "SimulationPrintStrategy marca como simulado."
-                        : $"Enviando via {strategyName} para '{printer}'."));
-                steps.Add(new JobStepDraft(
-                    "executed", strategyName,
-                    printOptions.Simulation ? "Simulação concluída." : "Impressão enviada ao spooler.",
-                    $"Pedido {job.Reference} • tipo {job.JobType}"));
-                jobs.AppendSteps(job.Id, steps);
+                    var timeoutSec = Math.Clamp(features.Value.PrintJobTimeoutSeconds, 30, 900);
+                    using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
+                    timeoutCts.CancelAfter(TimeSpan.FromSeconds(timeoutSec));
+
+                    try
+                    {
+                        status = await strategy.ExecuteAsync(job, printOptions, timeoutCts.Token)
+                            .ConfigureAwait(false);
+                    }
+                    catch (OperationCanceledException) when (!stoppingToken.IsCancellationRequested)
+                    {
+                        status = JobStatus.Uncertain;
+                        error = $"Impressão excedeu {timeoutSec}s (timeout).";
+                        errorReason =
+                            "O spooler ou a estratégia não respondeu a tempo. A fila segue com o próximo pedido.";
+                        errorWhere = $"PrintWorker → {strategyName}";
+                        logger.LogWarning(
+                            "Timeout de {Seconds}s no pedido {JobId} ({Strategy})",
+                            timeoutSec, job.Id, strategyName);
+                    }
+
+                    var steps = new List<JobStepDraft>(4);
+                    if (routed)
+                    {
+                        steps.Add(new JobStepDraft(
+                            "route", "PrinterRouter",
+                            $"Roteado pelo tipo '{job.JobType}'.",
+                            $"Impressora padrão '{options.PrinterName}' → '{printer}'"));
+                    }
+
+                    steps.Add(new JobStepDraft(
+                        "layout", "PrintWorker",
+                        $"Layout capturado: {PrintSurfaceMapper.Describe(printOptions)}.",
+                        printOptions.Simulation
+                            ? "A simulação usa a mesma configuração de papel/encaixe do envio real."
+                            : "O spooler recebe este papel, encaixe e escala — os mesmos do preview."));
+                    steps.Add(new JobStepDraft(
+                        "strategy", $"PrintWorker → {strategyName}",
+                        $"Estratégia selecionada: {mode}.",
+                        printOptions.Simulation
+                            ? "SimulationPrintStrategy marca como simulado."
+                            : $"Enviando via {strategyName} para '{printer}'."));
+                    if (status is JobStatus.Sent or JobStatus.Simulated)
+                    {
+                        steps.Add(new JobStepDraft(
+                            "executed", strategyName,
+                            printOptions.Simulation ? "Simulação concluída." : "Impressão enviada ao spooler.",
+                            $"Pedido {job.Reference} • tipo {job.JobType}"));
+                    }
+                    else if (status == JobStatus.Uncertain && error is not null)
+                    {
+                        steps.Add(new JobStepDraft(
+                            "timeout", strategyName, error, errorReason, IsError: true));
+                    }
+
+                    jobs.AppendSteps(job.Id, steps);
+                }
             }
             catch (Exception exception)
             {
@@ -121,14 +164,56 @@ public sealed class PrintWorker(
                 _ = telemetry.ReportPrintFailureAsync(finished, CancellationToken.None);
             }
             else notifier.NotifyCompleted(finished);
-            // Não bloqueia a fila se o webhook estiver lento.
             _ = webhook.NotifyFinishedAsync(finished, CancellationToken.None);
+        }
+    }
+
+    private bool IsPrinterUnavailable(string printerName, out string detail)
+    {
+        detail = "";
+        if (string.IsNullOrWhiteSpace(printerName))
+        {
+            detail = "Nenhuma impressora selecionada.";
+            return true;
+        }
+
+        try
+        {
+            var match = printers.ListDetailed()
+                .FirstOrDefault(p => string.Equals(p.Name, printerName, StringComparison.OrdinalIgnoreCase));
+            if (match is null)
+            {
+                detail = $"'{printerName}' não está instalada neste Windows.";
+                return true;
+            }
+
+            if (match.IsOffline)
+            {
+                detail = match.Status is { Length: > 0 } s
+                    ? s
+                    : "Windows reporta a impressora como offline/ausente.";
+                return true;
+            }
+
+            var status = match.Status ?? "";
+            if (status.Contains("Offline", StringComparison.OrdinalIgnoreCase) ||
+                status.Contains("Parada", StringComparison.OrdinalIgnoreCase))
+            {
+                detail = status;
+                return true;
+            }
+
+            return false;
+        }
+        catch (Exception ex)
+        {
+            logger.LogDebug(ex, "Falha ao consultar catálogo de impressoras");
+            return false; // não bloquear se o catálogo falhar
         }
     }
 
     private void TryDeleteInboxSource(PrintOptions options, PrintJob job, JobStatus status)
     {
-        // Só apaga após envio real. Simulação / falha / conferir: arquivo permanece.
         if (!options.DeleteInboxAfterPrint || status != JobStatus.Sent)
             return;
         if (!InboxFileRules.IsUnderInbox(job.SourcePath, options.InboxFolder))

@@ -20,7 +20,9 @@ public sealed class SoftPrintFeatureOptions
     public int WebhookRetrySeconds { get; set; } = 15;
     public int WebhookMaxRetries { get; set; } = 8;
     public string EventLogFolder { get; set; } = "logs";
-    public int EventLogRetentionDays { get; set; } = 2;
+    public int EventLogRetentionDays { get; set; } = 30;
+    /// <summary>Dias de retenção dos softprint-*.log (file logger).</summary>
+    public int FileLogRetentionDays { get; set; } = 30;
     public string InboxFolder { get; set; } = "";
     public bool InboxEnabled { get; set; }
     public bool DeleteInboxAfterPrint { get; set; }
@@ -42,10 +44,27 @@ public sealed class SoftPrintFeatureOptions
     /// <summary>No arranque, se houver versão nova *obrigatória*, baixa e aplica automaticamente. Aviso de versão nova continua mesmo com false.</summary>
     public bool AutoUpdateOnStartup { get; set; }
 
+    /// <summary>
+    /// Se true, recusa update cujo SoftPrint.exe não tenha Authenticode.
+    /// Padrão false para não quebrar releases sem certificado; com CODE_SIGNING no CI, ative em produção.
+    /// </summary>
+    public bool RequireSignedUpdates { get; set; }
+
     /// <summary>Opt-in: envia telemetria anônima de falhas de impressão (status uncertain).</summary>
     public bool TelemetryEnabled { get; set; }
     /// <summary>URL POST para telemetria (somente se TelemetryEnabled).</summary>
     public string TelemetryUrl { get; set; } = "";
+    /// <summary>Intervalo do heartbeat de frota (horas). 0 = desligado.</summary>
+    public int TelemetryHeartbeatHours { get; set; } = 6;
+
+    /// <summary>Timeout por pedido de impressão (segundos). Evita fila travada no spooler.</summary>
+    public int PrintJobTimeoutSeconds { get; set; } = 180;
+
+    /// <summary>Permitir bind em 0.0.0.0 / * / IP não-loopback. Padrão: só 127.0.0.1.</summary>
+    public bool AllowNonLoopbackBinding { get; set; }
+
+    /// <summary>Minutos sem progresso na fila antes do alerta sticky no painel.</summary>
+    public int QueueStallAlertMinutes { get; set; } = 5;
 
     public IReadOnlyDictionary<string, string> ParseRoutes()
     {

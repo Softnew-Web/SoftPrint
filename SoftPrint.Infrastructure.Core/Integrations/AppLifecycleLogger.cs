@@ -122,6 +122,19 @@ public sealed class AppLifecycleLogger(IAppPaths paths, IEventLogStore events) :
         {
             /* ignore */
         }
+
+        try
+        {
+            var dumps = Path.Combine(paths.DataRoot, "dumps");
+            Directory.CreateDirectory(dumps);
+            var file = Path.Combine(dumps, $"crash-{DateTime.Now:yyyyMMdd-HHmmss}.txt");
+            var body = message + Environment.NewLine + Environment.NewLine + (detail ?? "");
+            File.WriteAllText(file, body);
+        }
+        catch
+        {
+            /* ignore */
+        }
     }
 
     private static (string Title, string Detail) FormatException(Exception exception, string? context)

@@ -4,6 +4,7 @@ using System.Net.Http.Headers;
 using SoftPrint.Application;
 using SoftPrint.Application.Abstractions;
 using SoftPrint.Domain;
+using SoftPrint.Infrastructure.Operations;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -107,13 +108,15 @@ public sealed class SoftPrintUpdateApplier : IUpdateApplier
 
                 applyVersion = previous.Version;
                 _history.RecordApplyStarted(applyVersion, rollback: true);
+                VerifyRollbackPayload(previous.DirectoryPath);
                 Set(new UpdateApplyStatus(
                     "installing", 40,
                     $"Restaurando SoftPrint {previous.Version}…",
                     true, false, false));
                 WriteLocalRestoreScript(scriptPath, previous.DirectoryPath);
+                PendingUpdateFinalizer.MarkPending(applyVersion, rollback: true);
                 LaunchDetached(scriptPath);
-                _history.RecordApplySucceeded(applyVersion, rollback: true);
+                // Sucesso só na próxima subida (PendingUpdateFinalizer).
                 Set(new UpdateApplyStatus("restarting", 100, "Reiniciando o SoftPrint…", true, false, true));
                 await Task.Delay(800).ConfigureAwait(false);
                 _lifetime.StopApplication();
@@ -141,10 +144,7 @@ public sealed class SoftPrintUpdateApplier : IUpdateApplier
             await DownloadAsync(downloadUrl, downloadPath).ConfigureAwait(false);
 
             Set(new UpdateApplyStatus("verifying", 90, "Verificando integridade (SHA256)…", true, false, false));
-            if (!string.IsNullOrWhiteSpace(check.Sha256))
-                PackageIntegrity.EnsureMatches(downloadPath, check.Sha256);
-            else
-                _logger.LogWarning("Release sem checksums.sha256 — pulando verificação de hash.");
+            PackageIntegrity.EnsureMatches(downloadPath, check.Sha256);
 
             var isZip = preferZip || IsZipFile(downloadPath);
             Set(new UpdateApplyStatus("installing", 92, "Instalando atualização…", true, false, false));
@@ -157,15 +157,18 @@ public sealed class SoftPrintUpdateApplier : IUpdateApplier
                 Directory.CreateDirectory(extractDir);
                 ZipFile.ExtractToDirectory(downloadPath, extractDir, overwriteFiles: true);
                 var payloadDir = ResolvePayloadDirectory(extractDir);
+                VerifyExtractedExecutables(payloadDir);
                 WriteZipRestartScript(scriptPath, payloadDir);
             }
             else
             {
+                PackageIntegrity.EnsureAuthenticode(downloadPath, _options.CurrentValue.RequireSignedUpdates);
                 WriteExeRestartScript(scriptPath, downloadPath);
             }
 
             LaunchDetached(scriptPath);
-            _history.RecordApplySucceeded(applyVersion, rollback: false);
+            PendingUpdateFinalizer.MarkPending(applyVersion, rollback: false);
+            // Sucesso só na próxima subida (PendingUpdateFinalizer).
 
             Set(new UpdateApplyStatus("restarting", 100, "Reiniciando o SoftPrint…", true, false, true));
             await Task.Delay(800).ConfigureAwait(false);
@@ -274,6 +277,36 @@ public sealed class SoftPrintUpdateApplier : IUpdateApplier
         {
             return false;
         }
+    }
+
+    private void VerifyExtractedExecutables(string payloadDir)
+    {
+        var require = _options.CurrentValue.RequireSignedUpdates;
+        foreach (var name in new[] { "SoftPrint.exe", "SoftPrint.Legacy.exe" })
+        {
+            var path = Path.Combine(payloadDir, name);
+            if (!File.Exists(path)) continue;
+            if (path.EndsWith(".hdiff", StringComparison.OrdinalIgnoreCase)) continue;
+            PackageIntegrity.EnsureAuthenticode(path, require);
+        }
+    }
+
+    private void VerifyRollbackPayload(string previousDir)
+    {
+        if (string.IsNullOrWhiteSpace(previousDir) || !Directory.Exists(previousDir))
+            throw new InvalidOperationException("Pasta da versão anterior ausente ou inválida.");
+
+        var modern = Path.Combine(previousDir, "SoftPrint.exe");
+        var legacy = Path.Combine(previousDir, "SoftPrint.Legacy.exe");
+        var exe = File.Exists(modern) ? modern : File.Exists(legacy) ? legacy : null;
+        if (exe is null)
+            throw new InvalidOperationException("Versão anterior sem SoftPrint.exe — rollback recusado.");
+
+        var info = new FileInfo(exe);
+        if (info.Length < 1024)
+            throw new InvalidOperationException("Executável da versão anterior parece corrompido (arquivo muito pequeno).");
+
+        PackageIntegrity.EnsureAuthenticode(exe, _options.CurrentValue.RequireSignedUpdates);
     }
 
     /// <summary>

@@ -1,8 +1,7 @@
 name: Release
 
+# Release só sob demanda — evita publicar a cada push na main.
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
     inputs:
       bump:
@@ -17,7 +16,6 @@ on:
 
 concurrency:
   group: softprint-release
-  # false: o bump "chore(release)" faz push no meio do job; cancelar abortava o publish.
   cancel-in-progress: false
 
 permissions:
@@ -26,13 +24,6 @@ permissions:
 jobs:
   test:
     runs-on: windows-latest
-    if: >
-      github.event_name == 'workflow_dispatch' ||
-      (
-        github.event_name == 'push' &&
-        !contains(github.event.head_commit.message, 'chore(release):') &&
-        !contains(github.event.head_commit.message, '[skip release]')
-      )
     steps:
       - uses: actions/checkout@v4
 
@@ -62,13 +53,6 @@ jobs:
   release:
     needs: test
     runs-on: windows-latest
-    if: >
-      github.event_name == 'workflow_dispatch' ||
-      (
-        github.event_name == 'push' &&
-        !contains(github.event.head_commit.message, 'chore(release):') &&
-        !contains(github.event.head_commit.message, '[skip release]')
-      )
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -101,7 +85,6 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $next = [System.IO.File]::ReadAllText("$PWD\VERSION").Trim().TrimStart([char]0xFEFF)
           if ($next -notmatch '^\d+\.\d+\.\d+$') { throw "Versão inválida após bump: '$next'" }
-          # GITHUB_ENV é mais confiável que GITHUB_OUTPUT no Windows/pwsh.
           Add-Content -Path $env:GITHUB_ENV -Value "SOFTPRINT_VERSION=$next" -Encoding utf8NoBOM
           Write-Host "Nova versão: $next"
 
@@ -125,18 +108,36 @@ jobs:
         shell: pwsh
         run: .\scripts\publish-all.ps1
 
-      - name: Inject update token (private repos)
-        env:
-          SOFTPRINT_UPDATE_TOKEN: ${{ secrets.SOFTPRINT_UPDATE_TOKEN }}
+      - name: Publish symbols (support)
         shell: pwsh
-        run: .\scripts\inject-update-token.ps1
+        run: .\scripts\publish-symbols.ps1
+
+      - name: Sign published executables
+        env:
+          CODE_SIGNING_PFX_BASE64: ${{ secrets.CODE_SIGNING_PFX_BASE64 }}
+          CODE_SIGNING_PASSWORD: ${{ secrets.CODE_SIGNING_PASSWORD }}
+        shell: pwsh
+        run: |
+          $exes = Get-ChildItem dist -Recurse -Include SoftPrint.exe,SoftPrint.Legacy.exe,softprint -File -ErrorAction SilentlyContinue |
+            Where-Object { $_.FullName -notmatch '\\symbols\\' } |
+            ForEach-Object { $_.FullName }
+          if ($exes.Count -lt 1) { throw "Nenhum SoftPrint.exe encontrado para assinar." }
+          .\scripts\sign-authenticode.ps1 -Files $exes -FailIfSecretsMissing:$false
+
+      - name: Guard — sem token embutido
+        shell: pwsh
+        run: |
+          $tokens = Get-ChildItem dist -Recurse -Filter "update-github.token" -File -ErrorAction SilentlyContinue
+          if ($tokens) {
+            throw "Token embutido encontrado (proibido): $($tokens.FullName -join ', ')"
+          }
+          Write-Host "OK: nenhum update-github.token nos pacotes."
 
       - name: Package update zips
         shell: pwsh
         run: .\scripts\package-update-zips.ps1
 
       - name: Package delta updates
-        continue-on-error: true
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         shell: pwsh
@@ -145,7 +146,7 @@ jobs:
       - name: Install Inno Setup
         shell: pwsh
         run: |
-          choco install innosetup -y --no-progress --ignore-checksums
+          choco install innosetup --version=6.3.3 -y --no-progress
           $iscc = @(
             "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe",
             "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe",
@@ -173,7 +174,7 @@ jobs:
             throw "SoftPrint-Setup.exe não foi gerado."
           }
 
-      - name: Sign installer (optional)
+      - name: Sign installer
         env:
           CODE_SIGNING_PFX_BASE64: ${{ secrets.CODE_SIGNING_PFX_BASE64 }}
           CODE_SIGNING_PASSWORD: ${{ secrets.CODE_SIGNING_PASSWORD }}
@@ -181,7 +182,15 @@ jobs:
         run: |
           .\scripts\sign-authenticode.ps1 -Files @(
             "installer\Output\SoftPrint-Setup.exe"
-          )
+          ) -FailIfSecretsMissing:$false
+
+      - name: Upload symbols artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: softprint-symbols-${{ env.SOFTPRINT_VERSION }}
+          path: dist/symbols
+          if-no-files-found: warn
+          retention-days: 90
 
       - name: Create GitHub Release
         env:
@@ -194,7 +203,7 @@ jobs:
           }
           if ($ver -notmatch '^\d+\.\d+\.\d+$') { throw "Versão inválida para release: '$ver'" }
           $title = "SoftPrint $ver"
-          $mandatory = ("${{ github.event_name }}" -eq "workflow_dispatch" -and "${{ github.event.inputs.mandatory }}" -eq "true")
+          $mandatory = ("${{ github.event.inputs.mandatory }}" -eq "true")
           if ($mandatory) {
             $title = "$title (obrigatória)"
           }
@@ -206,27 +215,26 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           if (-not (Test-Path $notesFile)) { throw "RELEASE_NOTES.md não foi gerado." }
 
-          # Checksums SHA256 dos zips + Setup (clientes verificam antes de instalar).
           .\scripts\write-checksums.ps1
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if (-not (Test-Path "dist\checksums.sha256")) {
+            throw "checksums.sha256 obrigatório — release abortada."
+          }
 
           $assets = @(
             "installer/Output/SoftPrint-Setup.exe#SoftPrint-Setup.exe"
           )
           $assets += Get-ChildItem dist -Filter "*.zip" -File -ErrorAction SilentlyContinue |
             ForEach-Object { "$($_.FullName)#$($_.Name)" }
-          if (Test-Path "dist\checksums.sha256") {
-            $assets += "dist\checksums.sha256#checksums.sha256"
-          }
+          $assets += "dist\checksums.sha256#checksums.sha256"
 
           $assets = $assets | Where-Object {
             $path = ($_ -split '#')[0]
             Test-Path $path
           }
 
-          if ($assets.Count -lt 1) { throw "Nenhum asset para publicar." }
+          if ($assets.Count -lt 2) { throw "Assets insuficientes para publicar (setup + checksums)." }
 
-          # Se uma tag vazia "v" ficou de runs antigos, remove antes.
           git push origin :refs/tags/v 2>$null
           gh release delete "v" -y 2>$null
 

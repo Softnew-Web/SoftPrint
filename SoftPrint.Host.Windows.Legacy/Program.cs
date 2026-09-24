@@ -30,6 +30,7 @@ var builder = WebApplication.CreateBuilder(new WebApplicationOptions
     ContentRootPath = AppContext.BaseDirectory
 });
 builder.AddSoftPrintConfiguration();
+LoopbackBindingGuard.Enforce(builder);
 builder.Services.AddSoftPrintCore();
 builder.Services.AddSingleton<IPrinterCatalog, WindowsPrinterCatalog>();
 builder.Services.AddSingleton<IPrinterPageMetrics, WindowsPrinterPageMetrics>();

@@ -130,7 +130,10 @@ public record HealthInfo(
     bool WebhookConfigured,
     int RetentionDays,
     FeatureFlagsDto Features,
-    MetricsDto? Metrics = null);
+    MetricsDto? Metrics = null,
+    /// <summary>Minutos do pedido mais antigo ainda na fila (pending/processing).</summary>
+    int? QueueOldestMinutes = null,
+    string? QueueAlert = null);
 
 public record StatusResponse(
     string Application,

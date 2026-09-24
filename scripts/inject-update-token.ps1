@@ -2,27 +2,24 @@ param(
     [string] $Token = $env:SOFTPRINT_UPDATE_TOKEN
 )
 
+# Política SoftPrint: NÃO embutir PAT nos installs/zips.
+# Repos privados: use UPDATE_GITHUB_TOKEN no .env local do cliente, ou torne os releases públicos.
+
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
 Set-Location $root
 
-if ([string]::IsNullOrWhiteSpace($Token)) {
-    Write-Host "SOFTPRINT_UPDATE_TOKEN ausente — builds sem token (ok se o repo for público)."
-    exit 0
+Write-Host "inject-update-token.ps1: embutir token nos pacotes está desabilitado (segurança)."
+if (-not [string]::IsNullOrWhiteSpace($Token)) {
+    Write-Host "SOFTPRINT_UPDATE_TOKEN está definido no ambiente do CI, mas NÃO será escrito em dist/."
+    Write-Host "Clientes em repo privado devem configurar UPDATE_GITHUB_TOKEN localmente."
 }
 
-$dirs = @(
-    "dist\windows-modern-x64",
-    "dist\windows-modern-x86",
-    "dist\windows-legacy-x64",
-    "dist\windows-legacy-x86",
-    "dist\linux-x64"
-)
+# Remove tokens residuais de builds anteriores.
+Get-ChildItem (Join-Path $root "dist") -Recurse -Filter "update-github.token" -File -ErrorAction SilentlyContinue |
+    ForEach-Object {
+        Write-Host "Removendo token residual: $($_.FullName)"
+        Remove-Item $_.FullName -Force
+    }
 
-foreach ($rel in $dirs) {
-    $dir = Join-Path $root $rel
-    if (-not (Test-Path $dir)) { continue }
-    $path = Join-Path $dir "update-github.token"
-    [System.IO.File]::WriteAllText($path, $Token.Trim() + "`n")
-    Write-Host "Token de update injetado em $rel"
-}
+exit 0

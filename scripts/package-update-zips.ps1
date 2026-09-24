@@ -15,6 +15,10 @@ function Test-ExcludedPublishFile([string] $path) {
     $ext = [IO.Path]::GetExtension($path)
     if ($ext -in @(".pdb", ".xml")) { return $true }
     if ($name -like "*.staticwebassets.endpoints.json") { return $true }
+    # Nunca empacotar PAT / secrets.
+    if ($name -ieq "update-github.token") { return $true }
+    if ($ext -ieq ".token") { return $true }
+    if ($name -ieq ".env") { return $true }
     return $false
 }
 

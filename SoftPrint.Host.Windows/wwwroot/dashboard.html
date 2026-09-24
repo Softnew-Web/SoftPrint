@@ -111,6 +111,9 @@
         </div>
       </div>
 
+      <div id="queueAlertBanner" class="hidden px-5 py-2.5 border-b border-bad/40 bg-bad/15 text-sm shrink-0">
+        <p id="queueAlertText" class="text-paper/95 font-medium"></p>
+      </div>
       <div id="updateBanner" class="hidden px-5 py-2.5 border-b border-warn/40 bg-warn/15 text-sm shrink-0">
         <div class="flex flex-wrap items-center justify-between gap-2">
           <p id="updateBannerText" class="text-paper/95"></p>
@@ -294,6 +297,7 @@
             <div class="flex flex-wrap gap-2">
               <button id="btnCopyEndpoint" type="button" class="rounded-xl bg-ink-line px-4 py-2.5 text-sm">Copiar endereço</button>
               <button id="btnCopyKey" type="button" class="rounded-xl bg-ink-line px-4 py-2.5 text-sm">Copiar chave</button>
+              <button id="btnRotateKey" type="button" class="rounded-xl bg-ink-line px-4 py-2.5 text-sm">Nova chave</button>
               <button id="btnOpenLogs" type="button" class="rounded-xl bg-ink-line px-4 py-2.5 text-sm">Abrir pasta logs</button>
               <button id="btnEvents" type="button" class="rounded-xl bg-ink-line px-4 py-2.5 text-sm">Eventos do dia</button>
               <button id="btnDiscover" type="button" class="rounded-xl bg-ink-line px-4 py-2.5 text-sm">Buscar rede</button>
@@ -489,10 +493,10 @@ Teste de impressão de texto.</textarea>
             <div class="flex flex-wrap gap-5 text-sm">
               <label><input id="sysSound" type="checkbox" class="accent-sea" /> Notificações na bandeja</label>
               <label><input id="sysLog" type="checkbox" class="accent-sea" /> Gravar logs em arquivo</label>
-              <label><input id="sysTelemetry" type="checkbox" class="accent-sea" /> Telemetria de falhas (opt-in)</label>
+              <label><input id="sysTelemetry" type="checkbox" class="accent-sea" /> Telemetria (falhas + heartbeat, opt-in)</label>
             </div>
             <label class="block text-sm">URL de telemetria<input id="sysTelemetryUrl" type="url" placeholder="https://…" class="mt-1 w-full rounded-lg bg-ink border border-ink-line px-3 py-2" /></label>
-            <p class="text-xs text-mist">Quando ativo, envia só metadados de falha (versão, SO, tipo, erro) — sem texto do pedido, caminhos ou chaves.</p>
+            <p class="text-xs text-mist">Quando ativo, envia só metadados (versão, SO, fila, erro) — sem texto do pedido, caminhos ou chaves.</p>
             <label class="block text-sm">Rotas tipo → impressora
               <input id="sysPrinterRoutes" type="text" placeholder="farmacia=Imp Farmácia;caixa=Imp Caixa" class="mt-1 w-full rounded-lg bg-ink border border-ink-line px-3 py-2 font-mono text-xs" />
             </label>
@@ -512,7 +516,11 @@ Teste de impressão de texto.</textarea>
             </div>
             <div id="diagnoseChecks" class="grid sm:grid-cols-2 gap-2 text-sm"></div>
             <pre id="diagnoseReport" class="rounded-xl bg-ink border border-ink-line p-4 text-xs leading-relaxed overflow-auto scroll-thin min-h-[6rem] text-mist">Carregando diagnóstico…</pre>
-            <button id="btnDiagnose" type="button" class="rounded-xl bg-ink-line px-4 py-2.5 text-sm">Atualizar diagnóstico</button>
+            <div class="flex flex-wrap gap-2 items-center">
+              <button id="btnDiagnose" type="button" class="rounded-xl bg-ink-line px-4 py-2.5 text-sm">Atualizar diagnóstico</button>
+              <button id="btnSupportBundle" type="button" class="rounded-xl bg-ink-line px-4 py-2.5 text-sm">Gerar pacote de suporte</button>
+            </div>
+            <p id="supportBundleMsg" class="text-xs text-mist"></p>
           </div>
         </section>
       </main>
@@ -528,7 +536,8 @@ Teste de impressão de texto.</textarea>
   </dialog>
 
   <script>
-    window.SOFTPRINT_KEY = "{{API_KEY}}";
+    window.SOFTPRINT_KEY = ""; // chave não é mais embutida — cookie HttpOnly + /api/connect/key
+    window.SOFTPRINT_VERSION = "{{APP_VERSION}}";
     // Bootstrap legado removido — a fonte única do painel é app.bundle.js.
   </script>
   <script>

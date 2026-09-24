@@ -52,6 +52,9 @@ public sealed class WindowsPrinterCatalog : IPrinterCatalog
                 var offline = AsBool(printer["WorkOffline"]);
                 var isDefault = AsBool(printer["Default"]);
                 var statusCode = printer["PrinterStatus"] is null ? 0 : Convert.ToInt32(printer["PrinterStatus"]);
+                // 6 = stopped/paused, 7 = offline (Win32_Printer.PrinterStatus)
+                if (statusCode is 6 or 7)
+                    offline = true;
 
                 list.Add(new PrinterDeviceInfo(
                     name,
