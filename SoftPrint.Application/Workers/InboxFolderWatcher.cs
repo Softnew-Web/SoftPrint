@@ -4,12 +4,13 @@ using SoftPrint.Domain;
 
 namespace SoftPrint.Application.Workers;
 
-/// <summary>Vigia a pasta de entrada e enfileira PDF/imagens novos.</summary>
+/// <summary>Vigia todas as pastas de entrada configuradas e enfileira PDF/imagens novos.</summary>
 public sealed class InboxFolderWatcher(
     JobQueueService jobs,
     ISettingsRepository settings,
     ILogger<InboxFolderWatcher> logger) : BackgroundService
 {
+    // Chave: caminho absoluto do arquivo → bloqueado até quando.
     private readonly Dictionary<string, DateTime> _blockedUntil = new(StringComparer.OrdinalIgnoreCase);
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -19,41 +20,51 @@ public sealed class InboxFolderWatcher(
         {
             try
             {
-                ScanOnce();
+                ScanAll();
             }
             catch (Exception ex)
             {
-                logger.LogWarning(ex, "Falha ao varrer pasta de entrada.");
+                logger.LogWarning(ex, "Falha ao varrer pastas de entrada.");
             }
 
             await Task.Delay(1500, stoppingToken);
         }
     }
 
-    private void ScanOnce()
+    private void ScanAll()
     {
-        var options = settings.Current;
-        if (!options.InboxEnabled || string.IsNullOrWhiteSpace(options.InboxFolder))
-            return;
-
-        if (!Directory.Exists(options.InboxFolder))
-        {
-            try { Directory.CreateDirectory(options.InboxFolder); }
-            catch { return; }
-        }
-
         var now = DateTime.UtcNow;
+
+        // Remove entradas de bloqueio expiradas.
         foreach (var key in _blockedUntil.Where(kv => kv.Value <= now).Select(kv => kv.Key).ToList())
             _blockedUntil.Remove(key);
+
+        var entries = settings.Current.InboxEntries;
+        foreach (var entry in entries)
+        {
+            if (!entry.Enabled || string.IsNullOrWhiteSpace(entry.Folder))
+                continue;
+
+            ScanEntry(entry, now);
+        }
+    }
+
+    private void ScanEntry(InboxEntry entry, DateTime now)
+    {
+        if (!Directory.Exists(entry.Folder))
+        {
+            try { Directory.CreateDirectory(entry.Folder); }
+            catch { return; }
+        }
 
         string[] files;
         try
         {
-            files = Directory.GetFiles(options.InboxFolder);
+            files = Directory.GetFiles(entry.Folder);
         }
         catch (Exception ex)
         {
-            logger.LogDebug(ex, "Não foi possível listar a pasta de entrada.");
+            logger.LogDebug(ex, "Não foi possível listar a pasta de entrada '{Folder}'.", entry.Folder);
             return;
         }
 
@@ -72,19 +83,23 @@ public sealed class InboxFolderWatcher(
             if (!InboxFileRules.IsFileReady(full))
                 continue;
 
-            // Evita reenfileirar o mesmo arquivo após falha até ele mudar.
             if (HasStaleFailure(full))
                 continue;
 
             try
             {
+                var printerOverride = string.IsNullOrWhiteSpace(entry.PrinterName) ? null : entry.PrinterName;
                 var job = jobs.Submit(
                     InboxFileRules.BuildReference(full),
                     text: Path.GetFileName(full),
                     jobType: "inbox",
                     contentKind: kind.ToWire(),
-                    sourcePath: full);
-                logger.LogInformation("Pasta de entrada: enfileirado {File} como {JobId}", full, job.Id);
+                    sourcePath: full,
+                    requestedPrinterName: printerOverride,
+                    settingsOverride: entry.CustomSettings);
+                logger.LogInformation(
+                    "Pasta de entrada '{Label}': enfileirado {File} como {JobId}",
+                    entry.Label, full, job.Id);
             }
             catch (ArgumentException ex)
             {
@@ -114,7 +129,6 @@ public sealed class InboxFolderWatcher(
         if (failed is null) return false;
         try
         {
-            // Só bloqueia se o arquivo não foi reescrito depois da falha.
             return File.GetLastWriteTimeUtc(fullPath) <= failed.CreatedAt.UtcDateTime;
         }
         catch

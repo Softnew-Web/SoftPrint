@@ -131,9 +131,6 @@ public sealed class PrintWorkerAndUpdateTests
             double paperWidthMm,
             double paperHeightMm,
             bool paperLandscape,
-            string inboxFolder,
-            bool inboxEnabled,
-            bool deleteInboxAfterPrint,
             long expectedRevision)
         {
             Current = new PrintOptions
@@ -147,12 +144,16 @@ public sealed class PrintWorkerAndUpdateTests
                 PaperWidthMm = paperWidthMm,
                 PaperHeightMm = paperHeightMm,
                 PaperLandscape = paperLandscape,
-                InboxFolder = inboxFolder,
-                InboxEnabled = inboxEnabled,
-                DeleteInboxAfterPrint = deleteInboxAfterPrint,
+                InboxEntries = Current.InboxEntries,
                 Revision = expectedRevision + 1,
                 UpdatedAt = DateTimeOffset.UtcNow
             };
+            return Current;
+        }
+
+        public PrintOptions UpdateInboxEntries(IReadOnlyList<InboxEntry> entries, long expectedRevision)
+        {
+            Current = Current.WithInboxEntries(entries);
             return Current;
         }
     }

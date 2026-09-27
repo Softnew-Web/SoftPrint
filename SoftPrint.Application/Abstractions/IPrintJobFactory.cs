@@ -11,7 +11,9 @@ public interface IPrintJobFactory
         JobContentKind contentKind = JobContentKind.Text,
         string? sourcePath = null,
         string? templateName = null,
-        Guid? reprintedFromId = null);
+        Guid? reprintedFromId = null,
+        string? requestedPrinterName = null,
+        PrintJobSettings? settingsOverride = null);
 }
 
 public interface ITemplateRenderer

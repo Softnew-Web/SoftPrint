@@ -18,10 +18,38 @@ public record SettingsRequest(
     string? PaperSize = null,
     double? PaperWidthMm = null,
     double? PaperHeightMm = null,
-    bool? PaperLandscape = null,
-    string? InboxFolder = null,
-    bool? InboxEnabled = null,
-    bool? DeleteInboxAfterPrint = null);
+    bool? PaperLandscape = null);
+
+public record InboxEntryRequest(
+    Guid? Id,
+    string? Label,
+    string? PrinterName,
+    string? Folder,
+    bool Enabled,
+    bool DeleteAfterPrint,
+    long ExpectedRevision,
+    bool HasCustomSettings = false,
+    string? ImageFit = null,
+    int? ImageScalePercent = null,
+    string? PaperSize = null,
+    double? PaperWidthMm = null,
+    double? PaperHeightMm = null,
+    bool? PaperLandscape = null);
+
+public record InboxEntryDto(
+    Guid Id,
+    string Label,
+    string PrinterName,
+    string Folder,
+    bool Enabled,
+    bool DeleteAfterPrint,
+    bool HasCustomSettings = false,
+    string? ImageFit = null,
+    int? ImageScalePercent = null,
+    string? PaperSize = null,
+    double? PaperWidthMm = null,
+    double? PaperHeightMm = null,
+    bool? PaperLandscape = null);
 
 public record StartupRequest(bool Enabled);
 
@@ -54,9 +82,7 @@ public record PrinterOptionsDto(
     double PaperWidthMm = 210,
     double PaperHeightMm = 297,
     bool PaperLandscape = false,
-    string InboxFolder = "",
-    bool InboxEnabled = false,
-    bool DeleteInboxAfterPrint = false);
+    IReadOnlyList<InboxEntryDto>? InboxEntries = null);
 
 public record ProcessingStepDto(
     DateTimeOffset At,
@@ -168,6 +194,8 @@ public record PlatformCapabilitiesDto(
     bool IsLegacy);
 
 public record DiagnoseCheckDto(string Name, bool Available, string? Detail = null);
+
+public record BrowseNewRequest(string? Folder = null);
 
 public record DiagnoseResponse(
     string Edition,

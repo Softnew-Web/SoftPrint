@@ -18,9 +18,6 @@ public sealed class SettingsService(ISettingsRepository repository, IPrinterCata
         double? paperWidthMm,
         double? paperHeightMm,
         bool? paperLandscape,
-        string? inboxFolder,
-        bool? inboxEnabled,
-        bool? deleteInboxAfterPrint,
         long expectedRevision)
     {
         var printer = printerName?.Trim() ?? "";
@@ -35,36 +32,61 @@ public sealed class SettingsService(ISettingsRepository repository, IPrinterCata
         var width = paperWidthMm ?? current.PaperWidthMm;
         var height = paperHeightMm ?? current.PaperHeightMm;
         var landscape = paperLandscape ?? current.PaperLandscape;
-        var inbox = (inboxFolder ?? current.InboxFolder)?.Trim() ?? "";
-        var watch = inboxEnabled ?? current.InboxEnabled;
-        var deleteAfter = deleteInboxAfterPrint ?? current.DeleteInboxAfterPrint;
 
         if (kind != PaperSizeKind.Custom)
             (width, height) = PaperSizeCatalog.GetMillimeters(kind);
 
-        if (string.IsNullOrWhiteSpace(inbox))
-        {
-            // Limpar o caminho também desativa recursos que dependem da pasta.
-            inbox = "";
-            watch = false;
-            deleteAfter = false;
-        }
-        else
-        {
-            try
-            {
-                inbox = Path.GetFullPath(inbox);
-                Directory.CreateDirectory(inbox);
-            }
-            catch (Exception ex)
-            {
-                throw new ArgumentException($"Pasta de entrada inválida: {ex.Message}");
-            }
-        }
-
         return repository.Update(
             printer, simulation, paused, fit, scale,
-            kind, width, height, landscape,
-            inbox, watch, deleteAfter, expectedRevision);
+            kind, width, height, landscape, expectedRevision);
+    }
+
+    public PrintOptions UpsertInboxEntry(InboxEntry entry, long expectedRevision)
+    {
+        ValidateInboxEntry(entry);
+
+        var current = repository.Current;
+        var list = current.InboxEntries.ToList();
+        var idx = list.FindIndex(e => e.Id == entry.Id);
+        if (idx >= 0)
+            list[idx] = entry;
+        else
+            list.Add(entry);
+
+        return repository.UpdateInboxEntries(list, expectedRevision);
+    }
+
+    public PrintOptions RemoveInboxEntry(Guid id, long expectedRevision)
+    {
+        var current = repository.Current;
+        var list = current.InboxEntries.Where(e => e.Id != id).ToList();
+        return repository.UpdateInboxEntries(list, expectedRevision);
+    }
+
+    /// <summary>Substitui toda a lista de entradas (usado em importação de backup).</summary>
+    public PrintOptions UpsertInboxEntries(IReadOnlyList<InboxEntry> entries, long expectedRevision)
+    {
+        foreach (var entry in entries)
+            ValidateInboxEntry(entry);
+        return repository.UpdateInboxEntries(entries, expectedRevision);
+    }
+
+    private void ValidateInboxEntry(InboxEntry entry)
+    {
+        if (string.IsNullOrWhiteSpace(entry.Folder))
+            return;
+
+        if (!string.IsNullOrWhiteSpace(entry.PrinterName) && !printers.IsInstalled(entry.PrinterName))
+            throw new ArgumentException($"Impressora '{entry.PrinterName}' não está instalada. Atualize a lista e tente novamente.");
+
+        try
+        {
+            var resolved = Path.GetFullPath(entry.Folder.Trim());
+            Directory.CreateDirectory(resolved);
+        }
+        catch (Exception ex)
+        {
+            throw new ArgumentException($"Pasta de entrada inválida: {ex.Message}");
+        }
     }
 }

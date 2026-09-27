@@ -151,10 +151,7 @@ public sealed class FeatureApiTests
                     "paperSize": "padrao",
                     "paperWidthMm": 200,
                     "paperHeightMm": 70,
-                    "paperLandscape": false,
-                    "inboxFolder": "",
-                    "inboxEnabled": false,
-                    "deleteInboxAfterPrint": false
+                    "paperLandscape": false
                   }
                 }
                 """,
@@ -338,9 +335,6 @@ public sealed class FeatureApiTests
                         printEl.TryGetProperty("paperWidthMm", out var pw) ? pw.GetDouble() : null,
                         printEl.TryGetProperty("paperHeightMm", out var ph) ? ph.GetDouble() : null,
                         printEl.TryGetProperty("paperLandscape", out var pl) ? pl.GetBoolean() : null,
-                        printEl.TryGetProperty("inboxFolder", out var ib) ? ib.GetString() : null,
-                        printEl.TryGetProperty("inboxEnabled", out var ie) ? ie.GetBoolean() : null,
-                        printEl.TryGetProperty("deleteInboxAfterPrint", out var di) ? di.GetBoolean() : null,
                         settings.Current.Revision);
                 }
                 catch (Exception ex)
@@ -408,14 +402,19 @@ public sealed class FeatureApiTests
         public PrintOptions Update(
             string printerName, bool simulation, bool paused, ImageFitMode imageFit, int imageScalePercent,
             PaperSizeKind paperSize, double paperWidthMm, double paperHeightMm, bool paperLandscape,
-            string inboxFolder, bool inboxEnabled, bool deleteInboxAfterPrint, long expectedRevision)
+            long expectedRevision)
         {
             if (expectedRevision != Current.Revision)
                 throw new SettingsConflictException();
             Current = Current.WithUpdate(
                 printerName, simulation, paused, imageFit, imageScalePercent,
-                paperSize, paperWidthMm, paperHeightMm, paperLandscape,
-                inboxFolder, inboxEnabled, deleteInboxAfterPrint);
+                paperSize, paperWidthMm, paperHeightMm, paperLandscape);
+            return Current;
+        }
+
+        public PrintOptions UpdateInboxEntries(IReadOnlyList<InboxEntry> entries, long expectedRevision)
+        {
+            Current = Current.WithInboxEntries(entries);
             return Current;
         }
     }

@@ -18,9 +18,17 @@ public static class ApiMapping
             settings.PaperWidthMm,
             settings.PaperHeightMm,
             settings.PaperLandscape,
-            settings.InboxFolder,
-            settings.InboxEnabled,
-            settings.DeleteInboxAfterPrint);
+            settings.InboxEntries
+                .Select(e => new InboxEntryDto(
+                    e.Id, e.Label, e.PrinterName, e.Folder, e.Enabled, e.DeleteAfterPrint,
+                    e.CustomSettings is not null,
+                    e.CustomSettings?.ImageFit.ToWire(),
+                    e.CustomSettings?.ImageScalePercent,
+                    e.CustomSettings?.PaperSize.ToWire(),
+                    e.CustomSettings?.PaperWidthMm,
+                    e.CustomSettings?.PaperHeightMm,
+                    e.CustomSettings?.PaperLandscape))
+                .ToArray());
 
     public static PrintJobDto ToDto(this PrintJob job) =>
         new(

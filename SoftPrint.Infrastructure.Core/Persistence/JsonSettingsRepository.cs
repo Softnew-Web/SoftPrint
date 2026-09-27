@@ -36,9 +36,7 @@ public sealed class JsonSettingsRepository : ISettingsRepository
                 PaperWidthMm = 210,
                 PaperHeightMm = 297,
                 PaperLandscape = false,
-                InboxFolder = configuration["SoftPrint:InboxFolder"] ?? "",
-                InboxEnabled = configuration.GetValue("SoftPrint:InboxEnabled", false),
-                DeleteInboxAfterPrint = configuration.GetValue("SoftPrint:DeleteInboxAfterPrint", false),
+                InboxEntries = MigrateOldInboxConfig(configuration),
                 Revision = 1,
                 UpdatedAt = DateTimeOffset.UtcNow
             };
@@ -54,9 +52,6 @@ public sealed class JsonSettingsRepository : ISettingsRepository
         double paperWidthMm,
         double paperHeightMm,
         bool paperLandscape,
-        string inboxFolder,
-        bool inboxEnabled,
-        bool deleteInboxAfterPrint,
         long expectedRevision)
     {
         lock (_gate)
@@ -66,19 +61,76 @@ public sealed class JsonSettingsRepository : ISettingsRepository
 
             var updated = _current.WithUpdate(
                 printerName, simulation, paused, imageFit, imageScalePercent,
-                paperSize, paperWidthMm, paperHeightMm, paperLandscape,
-                inboxFolder, inboxEnabled, deleteInboxAfterPrint);
-            File.WriteAllText(_path + ".tmp", JsonSerializer.Serialize(ToRecord(updated), JsonOptions));
-            File.Move(_path + ".tmp", _path, true);
+                paperSize, paperWidthMm, paperHeightMm, paperLandscape);
+            Persist(updated);
             _current = updated;
             return _current;
         }
+    }
+
+    public PrintOptions UpdateInboxEntries(IReadOnlyList<InboxEntry> entries, long expectedRevision)
+    {
+        lock (_gate)
+        {
+            if (expectedRevision != _current.Revision)
+                throw new SettingsConflictException();
+
+            var updated = _current.WithInboxEntries(entries);
+            Persist(updated);
+            _current = updated;
+            return _current;
+        }
+    }
+
+    private void Persist(PrintOptions options)
+    {
+        File.WriteAllText(_path + ".tmp", JsonSerializer.Serialize(ToRecord(options), JsonOptions));
+        File.Move(_path + ".tmp", _path, true);
     }
 
     private static PrintOptions ToDomain(SettingsRecord record)
     {
         var kind = PaperSizeCatalog.FromWire(record.PaperSize);
         var (presetW, presetH) = PaperSizeCatalog.GetMillimeters(kind, record.PaperWidthMm, record.PaperHeightMm);
+
+        IReadOnlyList<InboxEntry> inboxEntries;
+        if (record.InboxEntries is { Count: > 0 })
+        {
+            inboxEntries = record.InboxEntries
+                .Select(e =>
+                {
+                    PrintJobSettings? customSettings = null;
+                    if (e.HasCustomSettings)
+                    {
+                        var kind = PaperSizeCatalog.FromWire(e.PaperSize);
+                        var (pw, ph) = PaperSizeCatalog.GetMillimeters(kind, e.PaperWidthMm, e.PaperHeightMm);
+                        customSettings = new PrintJobSettings(
+                            ImageFitModeExtensions.FromWire(e.ImageFit),
+                            e.ImageScalePercent is >= 10 and <= 200 ? e.ImageScalePercent.Value : 100,
+                            kind,
+                            kind == PaperSizeKind.Custom ? Math.Clamp(e.PaperWidthMm ?? 210, 20, 1200) : pw,
+                            kind == PaperSizeKind.Custom ? Math.Clamp(e.PaperHeightMm ?? 297, 20, 1200) : ph,
+                            e.PaperLandscape ?? false);
+                    }
+                    return new InboxEntry
+                    {
+                        Id = e.Id == Guid.Empty ? Guid.NewGuid() : e.Id,
+                        Label = e.Label ?? "",
+                        PrinterName = e.PrinterName ?? "",
+                        Folder = e.Folder ?? "",
+                        Enabled = e.Enabled,
+                        DeleteAfterPrint = e.DeleteAfterPrint,
+                        CustomSettings = customSettings
+                    };
+                })
+                .ToArray();
+        }
+        else
+        {
+            // Migração: settings.json antigo com InboxFolder único → vira primeira entrada.
+            inboxEntries = MigrateOldInboxRecord(record);
+        }
+
         return new PrintOptions
         {
             PrinterName = record.PrinterName,
@@ -94,12 +146,49 @@ public sealed class JsonSettingsRepository : ISettingsRepository
                 ? Math.Clamp(record.PaperHeightMm ?? 297, 20, 1200)
                 : presetH,
             PaperLandscape = record.PaperLandscape ?? false,
-            InboxFolder = record.InboxFolder ?? "",
-            InboxEnabled = record.InboxEnabled ?? false,
-            DeleteInboxAfterPrint = record.DeleteInboxAfterPrint ?? false,
+            InboxEntries = inboxEntries,
             Revision = record.Revision,
             UpdatedAt = record.UpdatedAt
         };
+    }
+
+    private static IReadOnlyList<InboxEntry> MigrateOldInboxRecord(SettingsRecord record)
+    {
+        if (string.IsNullOrWhiteSpace(record.InboxFolder))
+            return [];
+
+        return
+        [
+            new InboxEntry
+            {
+                Id = Guid.NewGuid(),
+                Label = "Pasta de entrada",
+                PrinterName = "",
+                Folder = record.InboxFolder,
+                Enabled = record.InboxEnabled ?? false,
+                DeleteAfterPrint = record.DeleteInboxAfterPrint ?? false
+            }
+        ];
+    }
+
+    private static IReadOnlyList<InboxEntry> MigrateOldInboxConfig(IConfiguration configuration)
+    {
+        var folder = configuration["SoftPrint:InboxFolder"] ?? "";
+        if (string.IsNullOrWhiteSpace(folder))
+            return [];
+
+        return
+        [
+            new InboxEntry
+            {
+                Id = Guid.NewGuid(),
+                Label = "Pasta de entrada",
+                PrinterName = "",
+                Folder = folder,
+                Enabled = configuration.GetValue("SoftPrint:InboxEnabled", false),
+                DeleteAfterPrint = configuration.GetValue("SoftPrint:DeleteInboxAfterPrint", false)
+            }
+        ];
     }
 
     private static SettingsRecord ToRecord(PrintOptions settings) =>
@@ -115,9 +204,17 @@ public sealed class JsonSettingsRepository : ISettingsRepository
             settings.PaperWidthMm,
             settings.PaperHeightMm,
             settings.PaperLandscape,
-            settings.InboxFolder,
-            settings.InboxEnabled,
-            settings.DeleteInboxAfterPrint);
+            settings.InboxEntries
+                .Select(e => new InboxEntryRecord(
+                    e.Id, e.Label, e.PrinterName, e.Folder, e.Enabled, e.DeleteAfterPrint,
+                    e.CustomSettings is not null,
+                    e.CustomSettings?.ImageFit.ToWire(),
+                    e.CustomSettings?.ImageScalePercent,
+                    e.CustomSettings?.PaperSize.ToWire(),
+                    e.CustomSettings?.PaperWidthMm,
+                    e.CustomSettings?.PaperHeightMm,
+                    e.CustomSettings?.PaperLandscape))
+                .ToList());
 
     private sealed record SettingsRecord(
         string PrinterName,
@@ -131,7 +228,24 @@ public sealed class JsonSettingsRepository : ISettingsRepository
         double? PaperWidthMm = null,
         double? PaperHeightMm = null,
         bool? PaperLandscape = null,
+        List<InboxEntryRecord>? InboxEntries = null,
+        // Campos legados para migração — ignorados na escrita.
         string? InboxFolder = null,
         bool? InboxEnabled = null,
         bool? DeleteInboxAfterPrint = null);
+
+    private sealed record InboxEntryRecord(
+        Guid Id,
+        string? Label,
+        string? PrinterName,
+        string? Folder,
+        bool Enabled,
+        bool DeleteAfterPrint,
+        bool HasCustomSettings = false,
+        string? ImageFit = null,
+        int? ImageScalePercent = null,
+        string? PaperSize = null,
+        double? PaperWidthMm = null,
+        double? PaperHeightMm = null,
+        bool? PaperLandscape = null);
 }

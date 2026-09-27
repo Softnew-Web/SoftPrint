@@ -40,7 +40,9 @@ public sealed class PrintWorker(
                 continue;
             }
 
-            var printer = router.ResolvePrinter(pending.JobType, options.PrinterName);
+            var printer = !string.IsNullOrWhiteSpace(pending.RequestedPrinterName)
+                ? pending.RequestedPrinterName
+                : router.ResolvePrinter(pending.JobType, options.PrinterName);
             var routed = !string.Equals(printer, options.PrinterName, StringComparison.OrdinalIgnoreCase)
                 && !string.IsNullOrWhiteSpace(printer);
 
@@ -57,6 +59,7 @@ public sealed class PrintWorker(
             string? errorWhere = null;
             try
             {
+                var eff = pending.SettingsOverride;
                 var printOptions = new PrintOptions
                 {
                     PrinterName = printer,
@@ -64,12 +67,12 @@ public sealed class PrintWorker(
                     Paused = options.Paused,
                     Revision = options.Revision,
                     UpdatedAt = options.UpdatedAt,
-                    ImageFit = options.ImageFit,
-                    ImageScalePercent = options.ImageScalePercent,
-                    PaperSize = options.PaperSize,
-                    PaperWidthMm = options.PaperWidthMm,
-                    PaperHeightMm = options.PaperHeightMm,
-                    PaperLandscape = options.PaperLandscape
+                    ImageFit = eff?.ImageFit ?? options.ImageFit,
+                    ImageScalePercent = eff?.ImageScalePercent ?? options.ImageScalePercent,
+                    PaperSize = eff?.PaperSize ?? options.PaperSize,
+                    PaperWidthMm = eff?.PaperWidthMm ?? options.PaperWidthMm,
+                    PaperHeightMm = eff?.PaperHeightMm ?? options.PaperHeightMm,
+                    PaperLandscape = eff?.PaperLandscape ?? options.PaperLandscape
                 };
 
                 if (!printOptions.Simulation && IsPrinterUnavailable(printer, out var printerDetail))
@@ -214,9 +217,11 @@ public sealed class PrintWorker(
 
     private void TryDeleteInboxSource(PrintOptions options, PrintJob job, JobStatus status)
     {
-        if (!options.DeleteInboxAfterPrint || status != JobStatus.Sent)
+        if (status != JobStatus.Sent)
             return;
-        if (!InboxFileRules.IsUnderInbox(job.SourcePath, options.InboxFolder))
+        var matchingEntry = options.InboxEntries.FirstOrDefault(e =>
+            e.DeleteAfterPrint && InboxFileRules.IsUnderInbox(job.SourcePath, e.Folder));
+        if (matchingEntry is null)
             return;
         if (string.IsNullOrWhiteSpace(job.SourcePath) || !File.Exists(job.SourcePath))
             return;

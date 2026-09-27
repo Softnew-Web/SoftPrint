@@ -113,7 +113,7 @@ public sealed class DomainTests
     {
         var updated = new PrintOptions().WithUpdate(
             "", true, false, ImageFitMode.Contain, 999,
-            PaperSizeKind.Custom, 5, 2000, false, "", false, false);
+            PaperSizeKind.Custom, 5, 2000, false);
 
         Assert.Equal(200, updated.ImageScalePercent);
         Assert.Equal(20, updated.PaperWidthMm);

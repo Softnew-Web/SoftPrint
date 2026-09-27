@@ -13,9 +13,6 @@ export function buildSettingsPayload(overrides = {}) {
     paperWidthMm: s.paperWidthMm ?? 210,
     paperHeightMm: s.paperHeightMm ?? 297,
     paperLandscape: !!s.paperLandscape,
-    inboxFolder: s.inboxFolder || "",
-    inboxEnabled: !!s.inboxEnabled,
-    deleteInboxAfterPrint: !!s.deleteInboxAfterPrint,
     expectedRevision: s.revision,
     ...overrides,
   };

@@ -15,8 +15,6 @@ public interface ISettingsRepository
         double paperWidthMm,
         double paperHeightMm,
         bool paperLandscape,
-        string inboxFolder,
-        bool inboxEnabled,
-        bool deleteInboxAfterPrint,
         long expectedRevision);
+    PrintOptions UpdateInboxEntries(IReadOnlyList<InboxEntry> entries, long expectedRevision);
 }

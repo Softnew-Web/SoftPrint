@@ -13,8 +13,10 @@ public sealed class PrintJobFactory : IPrintJobFactory
         JobContentKind contentKind = JobContentKind.Text,
         string? sourcePath = null,
         string? templateName = null,
-        Guid? reprintedFromId = null) =>
-        PrintJob.CreatePending(reference.Trim(), text, jobType, contentKind, sourcePath, templateName, reprintedFromId);
+        Guid? reprintedFromId = null,
+        string? requestedPrinterName = null,
+        PrintJobSettings? settingsOverride = null) =>
+        PrintJob.CreatePending(reference.Trim(), text, jobType, contentKind, sourcePath, templateName, reprintedFromId, requestedPrinterName, settingsOverride);
 }
 
 public sealed class TemplateRenderer(Microsoft.Extensions.Options.IOptions<SoftPrintFeatureOptions> options) : ITemplateRenderer
@@ -81,7 +83,9 @@ public sealed class JobQueueService(
         string? jobType = null,
         string? contentKind = null,
         string? sourcePath = null,
-        string? templateName = null)
+        string? templateName = null,
+        string? requestedPrinterName = null,
+        PrintJobSettings? settingsOverride = null)
     {
         if (string.IsNullOrWhiteSpace(text) && string.IsNullOrWhiteSpace(sourcePath))
             throw new ArgumentException("Envie texto ou um arquivo (PDF/imagem).");
@@ -103,7 +107,7 @@ public sealed class JobQueueService(
         if (kind == JobContentKind.Text && string.IsNullOrWhiteSpace(payload))
             throw new ArgumentException("Texto final do pedido ficou vazio após o template.");
 
-        return repository.Add(factory.Create(reference, payload, type, kind, sourcePath, templateName));
+        return repository.Add(factory.Create(reference, payload, type, kind, sourcePath, templateName, null, requestedPrinterName, settingsOverride));
     }
 
     public PrintJob Reprint(Guid id)

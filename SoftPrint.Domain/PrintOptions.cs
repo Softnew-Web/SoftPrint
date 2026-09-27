@@ -13,9 +13,7 @@ public sealed class PrintOptions
     public double PaperWidthMm { get; init; } = 210;
     public double PaperHeightMm { get; init; } = 297;
     public bool PaperLandscape { get; init; }
-    public string InboxFolder { get; init; } = "";
-    public bool InboxEnabled { get; init; }
-    public bool DeleteInboxAfterPrint { get; init; }
+    public IReadOnlyList<InboxEntry> InboxEntries { get; init; } = [];
 
     public (double WidthMm, double HeightMm) EffectivePaperMm()
     {
@@ -32,10 +30,7 @@ public sealed class PrintOptions
         PaperSizeKind paperSize,
         double paperWidthMm,
         double paperHeightMm,
-        bool paperLandscape,
-        string inboxFolder,
-        bool inboxEnabled,
-        bool deleteInboxAfterPrint) => new()
+        bool paperLandscape) => new()
     {
         PrinterName = printerName,
         Simulation = simulation,
@@ -46,9 +41,23 @@ public sealed class PrintOptions
         PaperWidthMm = Math.Clamp(paperWidthMm, 20, 1200),
         PaperHeightMm = Math.Clamp(paperHeightMm, 20, 1200),
         PaperLandscape = paperLandscape,
-        InboxFolder = inboxFolder.Trim(),
-        InboxEnabled = inboxEnabled,
-        DeleteInboxAfterPrint = deleteInboxAfterPrint,
+        InboxEntries = InboxEntries,
+        Revision = Revision + 1,
+        UpdatedAt = DateTimeOffset.UtcNow
+    };
+
+    public PrintOptions WithInboxEntries(IReadOnlyList<InboxEntry> entries) => new()
+    {
+        PrinterName = PrinterName,
+        Simulation = Simulation,
+        Paused = Paused,
+        ImageFit = ImageFit,
+        ImageScalePercent = ImageScalePercent,
+        PaperSize = PaperSize,
+        PaperWidthMm = PaperWidthMm,
+        PaperHeightMm = PaperHeightMm,
+        PaperLandscape = PaperLandscape,
+        InboxEntries = entries,
         Revision = Revision + 1,
         UpdatedAt = DateTimeOffset.UtcNow
     };

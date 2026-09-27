@@ -125,9 +125,6 @@ public static class SettingsEndpoints
                     request.PaperWidthMm,
                     request.PaperHeightMm,
                     request.PaperLandscape,
-                    request.InboxFolder,
-                    request.InboxEnabled,
-                    request.DeleteInboxAfterPrint,
                     request.ExpectedRevision).ToDto());
             }
             catch (ArgumentException ex)
@@ -297,14 +294,32 @@ public static class SettingsEndpoints
                         printEl.TryGetProperty("paperWidthMm", out var pw) ? pw.GetDouble() : null,
                         printEl.TryGetProperty("paperHeightMm", out var ph) ? ph.GetDouble() : null,
                         printEl.TryGetProperty("paperLandscape", out var pl) ? pl.GetBoolean() : null,
-                        printEl.TryGetProperty("inboxFolder", out var ib) ? ib.GetString() : null,
-                        printEl.TryGetProperty("inboxEnabled", out var ie) ? ie.GetBoolean() : null,
-                        printEl.TryGetProperty("deleteInboxAfterPrint", out var di) ? di.GetBoolean() : null,
                         settings.Current.Revision);
                 }
                 catch (Exception ex)
                 {
                     return Results.BadRequest(new { error = "Backup parcial: sistema ok, impressão falhou — " + ex.Message });
+                }
+            }
+
+            if (root.TryGetProperty("inboxEntries", out var inboxEl) && inboxEl.ValueKind == JsonValueKind.Array)
+            {
+                try
+                {
+                    var entries = inboxEl.EnumerateArray().Select(e => new InboxEntry
+                    {
+                        Id = e.TryGetProperty("id", out var eid) && eid.TryGetGuid(out var g) ? g : Guid.NewGuid(),
+                        Label = e.TryGetProperty("label", out var lbl) ? lbl.GetString() ?? "" : "",
+                        PrinterName = e.TryGetProperty("printerName", out var epr) ? epr.GetString() ?? "" : "",
+                        Folder = e.TryGetProperty("folder", out var ef) ? ef.GetString() ?? "" : "",
+                        Enabled = e.TryGetProperty("enabled", out var ee) && ee.GetBoolean(),
+                        DeleteAfterPrint = e.TryGetProperty("deleteAfterPrint", out var ed) && ed.GetBoolean()
+                    }).ToList();
+                    settings.UpsertInboxEntries(entries, settings.Current.Revision);
+                }
+                catch (Exception ex)
+                {
+                    return Results.BadRequest(new { error = "Backup parcial: pastas de entrada não importadas — " + ex.Message });
                 }
             }
 
@@ -330,14 +345,69 @@ public static class SettingsEndpoints
         });
         app.MapGet("/api/webhook/retries", (IWebhookRetryQueue queue) => queue.Snapshot());
         app.MapGet("/api/inbox", (InboxService inbox) => inbox.Snapshot());
-        app.MapPost("/api/inbox/open", (InboxService inbox) =>
+        app.MapGet("/api/inbox/{id:guid}", (Guid id, InboxService inbox) =>
         {
-            try { return Results.Ok(new { folder = inbox.OpenFolder() }); }
+            try { return Results.Ok(inbox.EntrySnapshot(id)); }
+            catch (ArgumentException ex) { return Results.NotFound(new { error = ex.Message }); }
+        });
+        app.MapPost("/api/inbox/entries", (InboxEntryRequest request, SettingsService settings) =>
+        {
+            try
+            {
+                var entry = new InboxEntry
+                {
+                    Id = request.Id ?? Guid.NewGuid(),
+                    Label = request.Label?.Trim() ?? "",
+                    PrinterName = request.PrinterName?.Trim() ?? "",
+                    Folder = request.Folder?.Trim() ?? "",
+                    Enabled = request.Enabled,
+                    DeleteAfterPrint = request.DeleteAfterPrint,
+                    CustomSettings = BuildCustomSettings(request)
+                };
+                return Results.Ok(settings.UpsertInboxEntry(entry, request.ExpectedRevision).ToDto());
+            }
+            catch (ArgumentException ex) { return Results.BadRequest(new { error = ex.Message }); }
+            catch (SettingsConflictException) { return Results.Conflict(new { error = "As configurações mudaram. Recarregue antes de salvar." }); }
+        });
+        app.MapPut("/api/inbox/entries/{id:guid}", (Guid id, InboxEntryRequest request, SettingsService settings) =>
+        {
+            try
+            {
+                var entry = new InboxEntry
+                {
+                    Id = id,
+                    Label = request.Label?.Trim() ?? "",
+                    PrinterName = request.PrinterName?.Trim() ?? "",
+                    Folder = request.Folder?.Trim() ?? "",
+                    Enabled = request.Enabled,
+                    DeleteAfterPrint = request.DeleteAfterPrint,
+                    CustomSettings = BuildCustomSettings(request)
+                };
+                return Results.Ok(settings.UpsertInboxEntry(entry, request.ExpectedRevision).ToDto());
+            }
+            catch (ArgumentException ex) { return Results.BadRequest(new { error = ex.Message }); }
+            catch (SettingsConflictException) { return Results.Conflict(new { error = "As configurações mudaram. Recarregue antes de salvar." }); }
+        });
+        app.MapDelete("/api/inbox/entries/{id:guid}", (Guid id, long expectedRevision, SettingsService settings) =>
+        {
+            try { return Results.Ok(settings.RemoveInboxEntry(id, expectedRevision).ToDto()); }
+            catch (SettingsConflictException) { return Results.Conflict(new { error = "As configurações mudaram. Recarregue antes de salvar." }); }
+        });
+        app.MapPost("/api/inbox/entries/{id:guid}/open", (Guid id, InboxService inbox) =>
+        {
+            try { return Results.Ok(new { folder = inbox.OpenFolder(id) }); }
             catch (ArgumentException ex) { return Results.BadRequest(new { error = ex.Message }); }
         });
-        app.MapPost("/api/inbox/browse", (InboxService inbox) =>
+        app.MapPost("/api/inbox/entries/{id:guid}/browse", (Guid id, InboxService inbox) =>
         {
-            var folder = inbox.BrowseFolder();
+            var folder = inbox.BrowseFolder(id);
+            return folder is null
+                ? Results.Ok(new { cancelled = true, folder = (string?)null })
+                : Results.Ok(new { cancelled = false, folder });
+        });
+        app.MapPost("/api/inbox/entries/browse-new", (BrowseNewRequest? request, InboxService inbox) =>
+        {
+            var folder = inbox.BrowseFolderFree(request?.Folder ?? "");
             return folder is null
                 ? Results.Ok(new { cancelled = true, folder = (string?)null })
                 : Results.Ok(new { cancelled = false, folder });
@@ -622,21 +692,24 @@ public static class SettingsEndpoints
                         ? $"'{opts.PrinterName}' offline"
                         : $"'{opts.PrinterName}' pronta";
 
-            var inboxPath = opts.InboxFolder?.Trim() ?? "";
-            var inboxConfigured = !string.IsNullOrWhiteSpace(inboxPath);
-            var inboxExists = inboxConfigured && Directory.Exists(inboxPath);
-            var inboxWritable = false;
-            if (inboxExists)
+            var enabledEntries = opts.InboxEntries.Where(e => e.Enabled && !string.IsNullOrWhiteSpace(e.Folder)).ToList();
+            var inboxOk = !enabledEntries.Any() || enabledEntries.All(e =>
             {
+                if (!Directory.Exists(e.Folder)) return false;
                 try
                 {
-                    var probe = Path.Combine(inboxPath, ".softprint-write-test");
+                    var probe = Path.Combine(e.Folder, ".softprint-write-test");
                     File.WriteAllText(probe, "ok");
                     File.Delete(probe);
-                    inboxWritable = true;
+                    return true;
                 }
-                catch { inboxWritable = false; }
-            }
+                catch { return false; }
+            });
+            var inboxDetail = !enabledEntries.Any()
+                ? $"{opts.InboxEntries.Count} entrada(s) configurada(s), nenhuma ativa"
+                : inboxOk
+                    ? $"{enabledEntries.Count} pasta(s) ativa(s) e graváveis"
+                    : "uma ou mais pastas com problema de acesso";
 
             var webView2 = DetectWebView2();
             var apiKeyOk = !string.IsNullOrWhiteSpace(keys.ApiKey);
@@ -653,11 +726,7 @@ public static class SettingsEndpoints
             {
                 new("WebView2", webView2.ok, webView2.detail),
                 new("Chave da API", apiKeyOk, apiKeyOk ? "configurada" : "ausente"),
-                new("Pasta de entrada", !opts.InboxEnabled || inboxWritable,
-                    !opts.InboxEnabled ? "vigilância desligada"
-                    : !inboxConfigured ? "caminho vazio"
-                    : !inboxExists ? "pasta não existe"
-                    : inboxWritable ? inboxPath : "sem permissão de escrita"),
+                new("Pastas de entrada", inboxOk, inboxDetail),
                 new("Impressora selecionada", printerOk, printerDetail),
                 new("Catálogo de impressoras", catalogOk, catalogOk ? $"{printers.Count} impressoras" : "falha ao listar"),
                 new("Atualizações GitHub", cachedUpdate?.Error is null, updateDetail),
@@ -723,4 +792,18 @@ public static class SettingsEndpoints
                 result.DownloadUrl,
                 result.ReleaseUrl,
                 result.Error);
+
+    private static PrintJobSettings? BuildCustomSettings(InboxEntryRequest request)
+    {
+        if (!request.HasCustomSettings) return null;
+        var kind = PaperSizeCatalog.FromWire(request.PaperSize);
+        var (pw, ph) = PaperSizeCatalog.GetMillimeters(kind, request.PaperWidthMm, request.PaperHeightMm);
+        return new PrintJobSettings(
+            ImageFitModeExtensions.FromWire(request.ImageFit),
+            Math.Clamp(request.ImageScalePercent ?? 100, 10, 200),
+            kind,
+            kind == PaperSizeKind.Custom ? Math.Clamp(request.PaperWidthMm ?? 210, 20, 1200) : pw,
+            kind == PaperSizeKind.Custom ? Math.Clamp(request.PaperHeightMm ?? 297, 20, 1200) : ph,
+            request.PaperLandscape ?? false);
+    }
 }

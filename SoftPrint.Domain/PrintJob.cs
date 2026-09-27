@@ -11,6 +11,8 @@ public sealed class PrintJob
     public JobContentKind ContentKind { get; init; } = JobContentKind.Text;
     public string? SourcePath { get; init; }
     public string? TemplateName { get; init; }
+    public string? RequestedPrinterName { get; init; }
+    public PrintJobSettings? SettingsOverride { get; init; }
     public JobStatus Status { get; private set; }
     public DateTimeOffset CreatedAt { get; init; }
     public DateTimeOffset? FinishedAt { get; private set; }
@@ -43,7 +45,9 @@ public sealed class PrintJob
         JobContentKind contentKind = JobContentKind.Text,
         string? sourcePath = null,
         string? templateName = null,
-        Guid? reprintedFromId = null)
+        Guid? reprintedFromId = null,
+        string? requestedPrinterName = null,
+        PrintJobSettings? settingsOverride = null)
     {
         Id = id;
         Reference = reference;
@@ -52,6 +56,8 @@ public sealed class PrintJob
         ContentKind = contentKind;
         SourcePath = sourcePath;
         TemplateName = templateName;
+        RequestedPrinterName = string.IsNullOrWhiteSpace(requestedPrinterName) ? null : requestedPrinterName.Trim();
+        SettingsOverride = settingsOverride;
         Status = status;
         CreatedAt = createdAt;
         FinishedAt = finishedAt;
@@ -71,12 +77,15 @@ public sealed class PrintJob
         JobContentKind contentKind = JobContentKind.Text,
         string? sourcePath = null,
         string? templateName = null,
-        Guid? reprintedFromId = null)
+        Guid? reprintedFromId = null,
+        string? requestedPrinterName = null,
+        PrintJobSettings? settingsOverride = null)
     {
         var job = new PrintJob(
             Guid.NewGuid(), reference, text, JobStatus.Pending, DateTimeOffset.UtcNow,
             jobType: jobType, contentKind: contentKind, sourcePath: sourcePath,
-            templateName: templateName, reprintedFromId: reprintedFromId);
+            templateName: templateName, reprintedFromId: reprintedFromId,
+            requestedPrinterName: requestedPrinterName, settingsOverride: settingsOverride);
 
         var detail = $"Tipo: {job.JobType} • Conteúdo: {contentKind.ToWire()}"
                      + (templateName is null ? "" : $" • Template: {templateName}")
