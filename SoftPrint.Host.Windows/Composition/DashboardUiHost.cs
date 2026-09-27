@@ -190,17 +190,7 @@ internal sealed class DashboardUiHost
         var p = new Dashboard(_address, _apiKey, _features, _tray);
         var menu = new ContextMenuStrip();
         menu.Items.Add("Abrir painel", null, (_, _) => BringLiveToFront());
-        menu.Items.Add("Abrir pasta de entrada", null, (_, _) =>
-        {
-            try
-            {
-                _app.Services.GetService<SoftPrint.Application.Services.InboxService>()?.OpenFolder();
-            }
-            catch
-            {
-                /* ignore */
-            }
-        });
+        menu.Items.Add("Pastas de entrada", null, (_, _) => BringLiveToFront());
         menu.Items.Add($"Versão {SoftPrint.Domain.SoftPrintVersion.Current}", null, (_, _) => { });
         menu.Items[^1].Enabled = false;
         menu.Items.Add("Sair", null, (_, _) =>
@@ -234,9 +224,18 @@ internal sealed class DashboardUiHost
             if (p is null || p.IsDisposed)
                 return;
             if (p.InvokeRequired)
-                p.BeginInvoke(BringLiveToFront);
+            {
+                // Usa Invoke (síncrono) para garantir que a janela apareça antes de retornar.
+                // BeginInvoke pode perder-se se a fila de mensagens estiver congestionada.
+                try { p.Invoke(BringLiveToFront); }
+                catch { p.BeginInvoke(BringLiveToFront); }
+            }
             else
+            {
                 p.ShowFromTray();
+                // Garante que a janela aparece por cima mesmo em monitores múltiplos.
+                p.Activate();
+            }
         }
         catch (Exception ex) when (ex is ObjectDisposedException or InvalidOperationException)
         {

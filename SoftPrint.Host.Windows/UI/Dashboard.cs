@@ -152,7 +152,39 @@ public sealed class Dashboard : Form
                 return;
             }
 
-            var env = await CoreWebView2Environment.CreateAsync(null, userData);
+            // Tenta criar o ambiente WebView2. Se falhar (lock/corrupção pós-crash),
+            // limpa a pasta e tenta uma segunda vez antes de desistir.
+            CoreWebView2Environment env;
+            try
+            {
+                env = await CoreWebView2Environment.CreateAsync(null, userData);
+            }
+            catch
+            {
+                try
+                {
+                    // Deleta apenas os lock files conhecidos — preserva cache/cookies se possível.
+                    foreach (var lockName in new[] { "SingletonLock", ".lock", "lockfile" })
+                    {
+                        var lf = Path.Combine(userData, lockName);
+                        if (File.Exists(lf)) File.Delete(lf);
+                    }
+                }
+                catch { /* ignore — na pior das hipóteses vai para o catch externo */ }
+
+                // Se ainda assim falhar, apaga a pasta inteira e recria.
+                try
+                {
+                    env = await CoreWebView2Environment.CreateAsync(null, userData);
+                }
+                catch
+                {
+                    try { Directory.Delete(userData, recursive: true); Directory.CreateDirectory(userData); }
+                    catch { }
+                    env = await CoreWebView2Environment.CreateAsync(null, userData);
+                }
+            }
+
             await _web.EnsureCoreWebView2Async(env);
             _web.CoreWebView2.Settings.AreDefaultContextMenusEnabled = true;
             _web.CoreWebView2.Settings.IsStatusBarEnabled = false;
