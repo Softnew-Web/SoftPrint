@@ -1,4 +1,81 @@
 (() => {
+  var __defProp = Object.defineProperty;
+  var __getOwnPropNames = Object.getOwnPropertyNames;
+  var __esm = (fn, res) => function __init() {
+    return fn && (res = (0, fn[__getOwnPropNames(fn)[0]])(fn = 0)), res;
+  };
+  var __export = (target, all) => {
+    for (var name in all)
+      __defProp(target, name, { get: all[name], enumerable: true });
+  };
+
+  // SoftPrint.Host.Windows/wwwroot/js/state.js
+  function feedback(msg, err = false) {
+    const el = document.getElementById("feedback");
+    if (!el) return;
+    el.textContent = msg || "";
+    el.className = `text-sm min-h-[1.25rem] ${err ? "text-bad" : "text-sea-glow"}`;
+  }
+  function openDlg(title, body) {
+    const dlg = document.getElementById("dlg");
+    dlg.classList.remove("max-w-3xl");
+    dlg.classList.add("max-w-2xl");
+    document.getElementById("dlgTitle").textContent = title;
+    const el = document.getElementById("dlgBody");
+    el.className = "p-5 text-sm whitespace-pre-wrap overflow-auto max-h-[70vh] scroll-thin leading-relaxed font-body";
+    el.textContent = body;
+    dlg.showModal();
+  }
+  function openDlgHtml(title, html, { wide = false } = {}) {
+    const dlg = document.getElementById("dlg");
+    dlg.classList.toggle("max-w-3xl", wide);
+    dlg.classList.toggle("max-w-2xl", !wide);
+    document.getElementById("dlgTitle").textContent = title;
+    const el = document.getElementById("dlgBody");
+    el.className = "p-5 text-sm overflow-auto max-h-[75vh] scroll-thin leading-relaxed font-body";
+    el.innerHTML = html;
+    dlg.showModal();
+  }
+  var state;
+  var init_state = __esm({
+    "SoftPrint.Host.Windows/wwwroot/js/state.js"() {
+      state = {
+        jobs: [],
+        selectedId: null,
+        applied: null,
+        dirty: false,
+        inboxDirty: false
+      };
+    }
+  });
+
+  // SoftPrint.Host.Windows/wwwroot/js/settings-payload.js
+  var settings_payload_exports = {};
+  __export(settings_payload_exports, {
+    buildSettingsPayload: () => buildSettingsPayload
+  });
+  function buildSettingsPayload(overrides = {}) {
+    const s = state.applied || {};
+    return {
+      printerName: s.printerName || "",
+      simulation: !!s.simulation,
+      paused: !!s.paused,
+      imageFit: s.imageFit || "contain",
+      imageScalePercent: s.imageScalePercent ?? 100,
+      paperSize: s.paperSize || "a4",
+      paperWidthMm: s.paperWidthMm ?? 210,
+      paperHeightMm: s.paperHeightMm ?? 297,
+      paperLandscape: !!s.paperLandscape,
+      expectedRevision: s.revision,
+      ...overrides
+    };
+  }
+  var init_settings_payload = __esm({
+    "SoftPrint.Host.Windows/wwwroot/js/settings-payload.js"() {
+      init_state();
+    }
+  });
+
   // SoftPrint.Host.Windows/wwwroot/js/api.js
   function createApi(key = "") {
     const baseHeaders = {
@@ -42,40 +119,8 @@
     );
   }
 
-  // SoftPrint.Host.Windows/wwwroot/js/state.js
-  var state = {
-    jobs: [],
-    selectedId: null,
-    applied: null,
-    dirty: false,
-    inboxDirty: false
-  };
-  function feedback(msg, err = false) {
-    const el = document.getElementById("feedback");
-    if (!el) return;
-    el.textContent = msg || "";
-    el.className = `text-sm min-h-[1.25rem] ${err ? "text-bad" : "text-sea-glow"}`;
-  }
-  function openDlg(title, body) {
-    const dlg = document.getElementById("dlg");
-    dlg.classList.remove("max-w-3xl");
-    dlg.classList.add("max-w-2xl");
-    document.getElementById("dlgTitle").textContent = title;
-    const el = document.getElementById("dlgBody");
-    el.className = "p-5 text-sm whitespace-pre-wrap overflow-auto max-h-[70vh] scroll-thin leading-relaxed font-body";
-    el.textContent = body;
-    dlg.showModal();
-  }
-  function openDlgHtml(title, html, { wide = false } = {}) {
-    const dlg = document.getElementById("dlg");
-    dlg.classList.toggle("max-w-3xl", wide);
-    dlg.classList.toggle("max-w-2xl", !wide);
-    document.getElementById("dlgTitle").textContent = title;
-    const el = document.getElementById("dlgBody");
-    el.className = "p-5 text-sm overflow-auto max-h-[75vh] scroll-thin leading-relaxed font-body";
-    el.innerHTML = html;
-    dlg.showModal();
-  }
+  // SoftPrint.Host.Windows/wwwroot/js/app.js
+  init_state();
 
   // SoftPrint.Host.Windows/wwwroot/js/components/stats.js
   async function refreshHeaderPrinterStatus(api2, settings) {
@@ -151,6 +196,9 @@
       hint.textContent = location.host || "\u2014";
     }
   }
+
+  // SoftPrint.Host.Windows/wwwroot/js/components/printer-tab.js
+  init_state();
 
   // SoftPrint.Host.Windows/wwwroot/js/image-layout.js
   var PAPER_PRESETS = {
@@ -422,26 +470,8 @@
     return Number.isInteger(v) ? String(v) : v.toFixed(1);
   }
 
-  // SoftPrint.Host.Windows/wwwroot/js/settings-payload.js
-  function buildSettingsPayload(overrides = {}) {
-    const s = state.applied || {};
-    return {
-      printerName: s.printerName || "",
-      simulation: !!s.simulation,
-      paused: !!s.paused,
-      imageFit: s.imageFit || "contain",
-      imageScalePercent: s.imageScalePercent ?? 100,
-      paperSize: s.paperSize || "a4",
-      paperWidthMm: s.paperWidthMm ?? 210,
-      paperHeightMm: s.paperHeightMm ?? 297,
-      paperLandscape: !!s.paperLandscape,
-      inboxFolder: s.inboxFolder || "",
-      inboxEnabled: !!s.inboxEnabled,
-      deleteInboxAfterPrint: !!s.deleteInboxAfterPrint,
-      expectedRevision: s.revision,
-      ...overrides
-    };
-  }
+  // SoftPrint.Host.Windows/wwwroot/js/components/printer-tab.js
+  init_settings_payload();
 
   // node_modules/pdfjs-dist/legacy/build/pdf.mjs
   var import_meta = {};
@@ -32214,17 +32244,18 @@ fn fs_main(in : VertexOutput) -> @location(0) vec4<f32> {
   // SoftPrint.Host.Windows/wwwroot/js/components/printer-tab.js
   function bindPrinterTab({ api: api2, onSaved }) {
     const printers = document.getElementById("printers");
+    const inboxEntryPrinter = document.getElementById("inboxEntryPrinter");
     const simulation = document.getElementById("simulation");
     const paused = document.getElementById("paused");
     const startup = document.getElementById("startup");
-    const imageFit = document.getElementById("imageFit");
-    const imageScale = document.getElementById("imageScale");
-    const imageScaleLabel = document.getElementById("imageScaleLabel");
-    const paperSize = document.getElementById("paperSize");
-    const paperWidthMm = document.getElementById("paperWidthMm");
-    const paperHeightMm = document.getElementById("paperHeightMm");
-    const paperLandscape = document.getElementById("paperLandscape");
-    const customPaperRow = document.getElementById("customPaperRow");
+    const imageFit = document.getElementById("inboxEntryImageFit");
+    const imageScale = document.getElementById("inboxEntryScale");
+    const imageScaleLabel = document.getElementById("inboxEntryScaleLabel");
+    const paperSize = document.getElementById("inboxEntryPaperSize");
+    const paperWidthMm = document.getElementById("inboxEntryPaperW");
+    const paperHeightMm = document.getElementById("inboxEntryPaperH");
+    const paperLandscape = document.getElementById("inboxEntryLandscape");
+    const customPaperRow = document.getElementById("inboxEntryCustomPaperRow");
     const msg = document.getElementById("settingsMsg");
     const summary = document.getElementById("printerSummary");
     const previewMeta = document.getElementById("previewMeta");
@@ -32270,7 +32301,7 @@ fn fs_main(in : VertexOutput) -> @location(0) vec4<f32> {
       return true;
     };
     const loadDefaultPaper = async (apiFn, { silent = false } = {}) => {
-      const name = printers?.value || "";
+      const name = inboxEntryPrinter?.value || printers?.value || "";
       if (!name) {
         if (!silent) feedback("Selecione uma impressora primeiro.", true);
         return false;
@@ -32287,31 +32318,62 @@ fn fs_main(in : VertexOutput) -> @location(0) vec4<f32> {
       }
     };
     const markDirty = () => {
-      state.dirty = true;
-      if (msg) {
-        msg.textContent = "Altera\xE7\xF5es ainda n\xE3o salvas.";
-        msg.className = "text-sm text-warn leading-relaxed";
-      }
-      syncCustomRow();
       syncModeStat();
-      redrawPreview();
-      refreshPreviewMargins();
+      if (!state.applied) return;
+      const { buildSettingsPayload: bp } = { buildSettingsPayload: (x) => x };
+      Promise.resolve().then(() => (init_settings_payload(), settings_payload_exports)).then(({ buildSettingsPayload: buildSettingsPayload2 }) => {
+        api2("/api/settings", {
+          method: "PUT",
+          body: JSON.stringify(buildSettingsPayload2({
+            printerName: state.applied.printerName || "",
+            simulation: !!simulation?.checked,
+            paused: !!paused?.checked,
+            imageFit: state.applied.imageFit || "contain",
+            imageScalePercent: state.applied.imageScalePercent ?? 100,
+            paperSize: state.applied.paperSize || "a4",
+            paperWidthMm: state.applied.paperWidthMm ?? 210,
+            paperHeightMm: state.applied.paperHeightMm ?? 297,
+            paperLandscape: !!state.applied.paperLandscape
+          }))
+        }).then((saved) => {
+          state.applied = saved;
+          state.dirty = false;
+          if (msg) {
+            msg.textContent = `v${saved.revision}`;
+            msg.className = "text-xs text-sea-glow leading-relaxed";
+          }
+          onSaved?.();
+        }).catch((err) => feedback(err.message, true));
+      });
     };
-    ["simulation", "paused", "imageFit", "paperSize", "paperLandscape"].forEach((id) => {
+    ["simulation", "paused"].forEach((id) => {
       const el = document.getElementById(id);
       if (el) el.addEventListener("change", markDirty);
     });
-    if (printers) {
-      printers.addEventListener("change", async () => {
-        markDirty();
+    if (paperSize) paperSize.addEventListener("change", () => {
+      syncCustomRow();
+      redrawPreview();
+      refreshPreviewMargins();
+    });
+    if (paperLandscape) paperLandscape.addEventListener("change", () => {
+      redrawPreview();
+      refreshPreviewMargins();
+    });
+    if (imageFit) imageFit.addEventListener("change", () => redrawPreview());
+    if (paperWidthMm) paperWidthMm.addEventListener("input", () => {
+      redrawPreview();
+      refreshPreviewMargins();
+    });
+    if (paperHeightMm) paperHeightMm.addEventListener("input", () => {
+      redrawPreview();
+      refreshPreviewMargins();
+    });
+    if (inboxEntryPrinter) {
+      inboxEntryPrinter.addEventListener("change", async () => {
         await loadDefaultPaper(api2, { silent: true });
-        markDirty();
+        redrawPreview();
       });
     }
-    ["paperWidthMm", "paperHeightMm"].forEach((id) => {
-      const el = document.getElementById(id);
-      if (el) el.addEventListener("input", markDirty);
-    });
     document.getElementById("btnPrinterPaper")?.addEventListener("click", async () => {
       if (await loadDefaultPaper(api2)) markDirty();
     });
@@ -32507,43 +32569,6 @@ fn fs_main(in : VertexOutput) -> @location(0) vec4<f32> {
         feedback(err.message || "Falha na instala\xE7\xE3o.", true);
       }
     });
-    const btnSave = document.getElementById("btnSaveSettings");
-    if (btnSave) {
-      btnSave.addEventListener("click", async () => {
-        if (!state.applied) {
-          if (msg) {
-            msg.textContent = "Configura\xE7\xF5es ainda n\xE3o carregadas. Clique em Atualizar.";
-            msg.className = "text-sm text-bad leading-relaxed";
-          }
-          return;
-        }
-        try {
-          state.applied = await api2("/api/settings", {
-            method: "PUT",
-            body: JSON.stringify(
-              buildSettingsPayload({
-                printerName: printers?.value || "",
-                simulation: !!simulation?.checked,
-                paused: !!paused?.checked,
-                imageFit: imageFit?.value || "contain",
-                imageScalePercent: Number(imageScale?.value || 100),
-                paperSize: paperSize?.value || "a4",
-                paperWidthMm: Number(paperWidthMm?.value || 210),
-                paperHeightMm: Number(paperHeightMm?.value || 297),
-                paperLandscape: !!paperLandscape?.checked
-              })
-            )
-          });
-          state.dirty = false;
-          applySettingsToForm();
-          syncModeStat();
-          feedback("Configura\xE7\xE3o salva.");
-          onSaved?.();
-        } catch (err) {
-          feedback(err.message, true);
-        }
-      });
-    }
     function currentPaper() {
       const requested = resolvePaperMm(
         paperSize?.value || "a4",
@@ -32560,14 +32585,14 @@ fn fs_main(in : VertexOutput) -> @location(0) vec4<f32> {
         requestedW: requested.w,
         requestedH: requested.h,
         honored: previewMargins?.matchesRequest !== false,
-        margins: previewMargins
+        margins: previewMargins ?? void 0
       };
     }
     async function refreshPreviewMargins() {
       const request = ++marginRequest;
       try {
         const query = new URLSearchParams({
-          printerName: printers?.value || "",
+          printerName: inboxEntryPrinter?.value || printers?.value || "",
           paperSize: paperSize?.value || "a4",
           widthMm: paperWidthMm?.value || "210",
           heightMm: paperHeightMm?.value || "297",
@@ -32636,20 +32661,10 @@ fn fs_main(in : VertexOutput) -> @location(0) vec4<f32> {
       if (simulation) simulation.checked = !!state.applied.simulation;
       if (paused) paused.checked = !!state.applied.paused;
       if (state.applied.printerName && printers) printers.value = state.applied.printerName;
-      if (imageFit) imageFit.value = state.applied.imageFit || "contain";
-      const scale = state.applied.imageScalePercent ?? 100;
-      if (imageScale) imageScale.value = String(scale);
-      if (imageScaleLabel) imageScaleLabel.textContent = `${scale}%`;
-      if (paperSize) paperSize.value = state.applied.paperSize || "a4";
-      if (paperWidthMm) paperWidthMm.value = String(state.applied.paperWidthMm ?? 210);
-      if (paperHeightMm) paperHeightMm.value = String(state.applied.paperHeightMm ?? 297);
-      if (paperLandscape) paperLandscape.checked = !!state.applied.paperLandscape;
-      syncCustomRow();
       syncModeStat();
-      refreshPreviewMargins();
       if (msg) {
-        msg.textContent = `v${state.applied.revision} \xB7 ${state.applied.printerName || "Nenhuma impressora"}`;
-        msg.className = "text-sm text-sea-glow leading-relaxed";
+        msg.textContent = `v${state.applied.revision}`;
+        msg.className = "text-xs text-sea-glow leading-relaxed";
       }
       redrawPreview();
     }
@@ -32682,6 +32697,8 @@ fn fs_main(in : VertexOutput) -> @location(0) vec4<f32> {
   }
 
   // SoftPrint.Host.Windows/wwwroot/js/components/monitor-tab.js
+  init_state();
+  init_settings_payload();
   var STATUS_OPTIONS = [
     { value: "pending", label: "Na fila" },
     { value: "processing", label: "Enviando" },
@@ -33195,19 +33212,9 @@ fn fs_main(in : VertexOutput) -> @location(0) vec4<f32> {
   }
 
   // SoftPrint.Host.Windows/wwwroot/js/components/connect-tab.js
+  init_state();
+  init_settings_payload();
   function bindConnectTab({ api: api2 }) {
-    const inboxFolder = document.getElementById("inboxFolder");
-    const inboxEnabled = document.getElementById("inboxEnabled");
-    const deleteInboxAfterPrint = document.getElementById("deleteInboxAfterPrint");
-    const inboxStatus = document.getElementById("inboxStatus");
-    const inboxFiles = document.getElementById("inboxFiles");
-    const markInboxDirty = () => {
-      state.inboxDirty = true;
-      if (inboxStatus) {
-        inboxStatus.textContent = "Altera\xE7\xF5es da pasta ainda n\xE3o salvas.";
-        inboxStatus.className = "text-sm text-warn min-h-[1.25rem]";
-      }
-    };
     const endpoint = document.getElementById("endpoint");
     if (endpoint) endpoint.value = location.origin + "/api/jobs";
     setApiHint(location.origin);
@@ -33361,137 +33368,327 @@ fn fs_main(in : VertexOutput) -> @location(0) vec4<f32> {
         feedback(err.message, true);
       }
     });
-    if (inboxFolder) inboxFolder.addEventListener("input", () => {
-      if (!inboxFolder.value.trim()) {
-        if (inboxEnabled) inboxEnabled.checked = false;
-        if (deleteInboxAfterPrint) deleteInboxAfterPrint.checked = false;
-      }
-      markInboxDirty();
+    const inboxCards = document.getElementById("inboxCards");
+    const inboxDetail = document.getElementById("inboxDetail");
+    const inboxDetailTitle = document.getElementById("inboxDetailTitle");
+    const inboxEntryLabel = document.getElementById("inboxEntryLabel");
+    const inboxEntryPrinter = document.getElementById("inboxEntryPrinter");
+    const inboxEntryStatus = document.getElementById("inboxEntryStatus");
+    const inboxEntryPaperSize = document.getElementById("inboxEntryPaperSize");
+    const inboxEntryCustomPaperRow = document.getElementById("inboxEntryCustomPaperRow");
+    const inboxEntryPaperW = document.getElementById("inboxEntryPaperW");
+    const inboxEntryPaperH = document.getElementById("inboxEntryPaperH");
+    const inboxEntryImageFit = document.getElementById("inboxEntryImageFit");
+    const inboxEntryLandscape = document.getElementById("inboxEntryLandscape");
+    const inboxEntryScale = document.getElementById("inboxEntryScale");
+    const inboxEntryScaleLabel = document.getElementById("inboxEntryScaleLabel");
+    const inboxFolderList = document.getElementById("inboxFolderList");
+    let _entries = [];
+    let _printerStatuses = {};
+    let _selectedId = null;
+    let _entryDirty = false;
+    let _openingDetail = false;
+    function getRevision() {
+      return state.applied?.revision ?? 1;
+    }
+    function setEntryStatus(msg, isError = false) {
+      if (!inboxEntryStatus) return;
+      inboxEntryStatus.textContent = msg;
+      inboxEntryStatus.className = `text-sm min-h-[1.25rem] ${isError ? "text-bad" : "text-sea-glow"}`;
+    }
+    function markDirty() {
+      if (_openingDetail) return;
+      _entryDirty = true;
+      setEntryStatus("Altera\xE7\xF5es n\xE3o salvas.");
+    }
+    function toggleCustomPaperRow() {
+      const isCustom = inboxEntryPaperSize?.value === "custom";
+      if (inboxEntryCustomPaperRow) inboxEntryCustomPaperRow.classList.toggle("hidden", !isCustom);
+    }
+    inboxEntryPaperSize?.addEventListener("change", () => {
+      toggleCustomPaperRow();
+      markDirty();
     });
-    if (inboxEnabled) inboxEnabled.addEventListener("change", markInboxDirty);
-    if (deleteInboxAfterPrint) deleteInboxAfterPrint.addEventListener("change", markInboxDirty);
-    const btnClearInbox = document.getElementById("btnClearInbox");
-    if (btnClearInbox) btnClearInbox.addEventListener("click", () => {
-      if (inboxFolder) inboxFolder.value = "";
-      if (inboxEnabled) inboxEnabled.checked = false;
-      if (deleteInboxAfterPrint) deleteInboxAfterPrint.checked = false;
-      markInboxDirty();
-      if (inboxStatus) inboxStatus.textContent = "Pasta removida do formul\xE1rio. Clique em Salvar pasta.";
+    inboxEntryScale?.addEventListener("input", () => {
+      if (inboxEntryScaleLabel) inboxEntryScaleLabel.textContent = `${inboxEntryScale.value}%`;
+      markDirty();
     });
-    const btnBrowse = document.getElementById("btnBrowseInbox");
-    if (btnBrowse) btnBrowse.addEventListener("click", async () => {
+    async function loadPrinterOptions(selectedPrinter) {
+      if (!inboxEntryPrinter) return;
       try {
-        if (inboxStatus) {
-          inboxStatus.textContent = "Abrindo seletor de pasta\u2026";
-          inboxStatus.className = "text-sm text-sea-glow min-h-[1.25rem]";
-        }
-        const result = await api2("/api/inbox/browse", { method: "POST", body: "{}" });
-        if (result.cancelled || !result.folder) {
-          if (inboxStatus) inboxStatus.textContent = "Sele\xE7\xE3o cancelada.";
-          return;
-        }
-        if (inboxFolder) inboxFolder.value = result.folder;
-        markInboxDirty();
-        if (inboxStatus) inboxStatus.textContent = "Pasta selecionada. Clique em Salvar pasta.";
-      } catch (err) {
-        if (inboxStatus) {
-          inboxStatus.textContent = err.message;
-          inboxStatus.className = "text-sm text-bad min-h-[1.25rem]";
-        }
+        const names = await api2("/api/printers/names");
+        inboxEntryPrinter.innerHTML = `<option value="">\u2014 padr\xE3o do SoftPrint \u2014</option>` + (names || []).map((n) => `<option value="${escapeHtml(n)}"${n === selectedPrinter ? " selected" : ""}>${escapeHtml(n)}</option>`).join("");
+        if (!names?.includes(selectedPrinter)) inboxEntryPrinter.value = "";
+      } catch {
+        inboxEntryPrinter.innerHTML = `<option value="">\u2014 padr\xE3o do SoftPrint \u2014</option>`;
       }
-    });
-    const btnOpenInbox = document.getElementById("btnOpenInbox");
-    if (btnOpenInbox) btnOpenInbox.addEventListener("click", async () => {
-      try {
-        if (inboxFolder?.value.trim() && inboxFolder.value.trim() !== (state.applied?.inboxFolder || "")) {
-          feedback("Salve a pasta antes de abrir.", true);
-          return;
-        }
-        await api2("/api/inbox/open", { method: "POST", body: "{}" });
-        feedback("Pasta de entrada aberta.");
-      } catch (err) {
-        feedback(err.message, true);
-      }
-    });
-    const btnSaveInbox = document.getElementById("btnSaveInbox");
-    if (btnSaveInbox) btnSaveInbox.addEventListener("click", async () => {
-      if (!state.applied) {
-        if (inboxStatus) {
-          inboxStatus.textContent = "Configura\xE7\xF5es ainda n\xE3o carregadas. Clique em Atualizar.";
-          inboxStatus.className = "text-sm text-bad min-h-[1.25rem]";
-        }
+    }
+    async function openDetail(entry) {
+      _openingDetail = true;
+      _selectedId = entry?.id ?? null;
+      _entryDirty = false;
+      if (inboxDetailTitle) inboxDetailTitle.textContent = entry ? entry.label || "Sem nome" : "Nova impressora";
+      if (inboxEntryLabel) inboxEntryLabel.value = entry?.label ?? "";
+      if (inboxEntryPaperSize) inboxEntryPaperSize.value = entry?.paperSize ?? "a4";
+      if (inboxEntryPaperW) inboxEntryPaperW.value = entry?.paperWidthMm ?? 210;
+      if (inboxEntryPaperH) inboxEntryPaperH.value = entry?.paperHeightMm ?? 297;
+      if (inboxEntryImageFit) inboxEntryImageFit.value = entry?.imageFit ?? "contain";
+      if (inboxEntryLandscape) inboxEntryLandscape.checked = !!entry?.paperLandscape;
+      const scale = entry?.imageScalePercent ?? 100;
+      if (inboxEntryScale) inboxEntryScale.value = scale;
+      if (inboxEntryScaleLabel) inboxEntryScaleLabel.textContent = `${scale}%`;
+      toggleCustomPaperRow();
+      inboxEntryPaperSize?.dispatchEvent(new Event("change"));
+      _openingDetail = false;
+      setEntryStatus("");
+      await loadPrinterOptions(entry?.printerName ?? "");
+      if (inboxDetail) inboxDetail.classList.remove("hidden");
+    }
+    function closeDetail() {
+      _selectedId = null;
+      _entryDirty = false;
+      if (inboxDetail) inboxDetail.classList.add("hidden");
+    }
+    function renderCards() {
+      if (!inboxCards) return;
+      if (!_entries.length) {
+        inboxCards.innerHTML = `<p class="text-sm text-mist">Nenhuma impressora cadastrada. Clique em <strong class="text-paper/80">+ Nova</strong> para come\xE7ar.</p>`;
         return;
       }
-      try {
-        state.applied = await api2("/api/settings", {
-          method: "PUT",
-          body: JSON.stringify(
-            buildSettingsPayload({
-              inboxFolder: inboxFolder?.value.trim() || "",
-              inboxEnabled: !!inboxEnabled?.checked,
-              deleteInboxAfterPrint: !!deleteInboxAfterPrint?.checked
-            })
-          )
+      inboxCards.innerHTML = _entries.map((e) => {
+        const active = e.id === _selectedId ? "border-sea bg-sea/10" : "border-ink-line bg-ink hover:bg-ink-line/50";
+        const paper = e.paperSize ? `<span class="text-[11px] text-mist/70">${escapeHtml(e.paperSize.toUpperCase())}</span>` : "";
+        const printerHint = e.printerName ? `<span class="text-[11px] text-sea-glow truncate">${escapeHtml(e.printerName)}</span>` : `<span class="text-[11px] text-mist">impressora padr\xE3o</span>`;
+        const ps = _printerStatuses[e.printerName];
+        const dotColor = !e.printerName ? "bg-mist/40" : ps?.isOffline ? "bg-bad animate-pulse" : ps ? "bg-good" : "bg-warn/70";
+        const dotTitle = !e.printerName ? "impressora padr\xE3o do sistema" : ps?.isOffline ? "offline" : ps ? "online" : "n\xE3o encontrada";
+        const fileCount = e.fileCount || 0;
+        const fileBadge = fileCount > 0 ? `<span class="ml-auto shrink-0 rounded-full bg-sea/20 text-sea-glow text-[10px] px-1.5 py-0.5 leading-none">${fileCount}</span>` : "";
+        return `<button type="button" data-entry-id="${e.id}"
+        class="inbox-card flex flex-col gap-1 rounded-xl border ${active} px-4 py-3 text-left transition-colors min-w-[140px] max-w-[220px]">
+        <div class="flex items-center gap-1.5 w-full min-w-0">
+          <span class="w-2 h-2 rounded-full shrink-0 ${dotColor}" title="${dotTitle}"></span>
+          <span class="font-medium text-sm text-paper truncate">${escapeHtml(e.label || "Sem nome")}</span>
+          ${fileBadge}
+        </div>
+        ${printerHint}
+        ${paper}
+      </button>`;
+      }).join("");
+      inboxCards.querySelectorAll(".inbox-card").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const entry = _entries.find((e) => e.id === btn.dataset.entryId);
+          if (entry) openDetail(entry);
         });
-        state.inboxDirty = false;
-        applyInboxFromSettings();
-        await refreshInbox();
-        if (inboxStatus) {
-          inboxStatus.textContent = inboxSaveMessage(state.applied);
-          inboxStatus.className = "text-sm text-sea-glow min-h-[1.25rem]";
-        }
-      } catch (err) {
-        feedback(err.message, true);
+      });
+    }
+    function renderFolderList() {
+      if (!inboxFolderList) return;
+      if (inboxFolderList.contains(document.activeElement)) return;
+      if (!_entries.length) {
+        inboxFolderList.innerHTML = `<p class="text-sm text-mist">Nenhuma impressora cadastrada ainda. Adicione em "Suas impressoras".</p>`;
+        return;
       }
-    });
-    function applyInboxFromSettings() {
-      if (!state.applied || state.inboxDirty) return;
-      if (inboxFolder) inboxFolder.value = state.applied.inboxFolder || "";
-      if (inboxEnabled) inboxEnabled.checked = !!state.applied.inboxEnabled;
-      if (deleteInboxAfterPrint) deleteInboxAfterPrint.checked = !!state.applied.deleteInboxAfterPrint;
+      inboxFolderList.innerHTML = _entries.map((e) => {
+        const folderVal = escapeHtml(e.folder || "");
+        const enabledChk = e.enabled ? "checked" : "";
+        const deleteChk = e.deleteAfterPrint ? "checked" : "";
+        const hasFolder = !!e.folder;
+        const badge = e.enabled && hasFolder ? `<span class="text-[10px] rounded-full bg-good/15 text-good px-2 py-0.5">Ativa</span>` : hasFolder ? `<span class="text-[10px] rounded-full bg-warn/15 text-warn px-2 py-0.5">Com pasta</span>` : `<span class="text-[10px] rounded-full bg-ink-line text-mist px-2 py-0.5">Sem pasta</span>`;
+        const ps = _printerStatuses[e.printerName];
+        const printerDotColor = !e.printerName ? "bg-mist/40" : ps?.isOffline ? "bg-bad animate-pulse" : ps ? "bg-good" : "bg-warn/70";
+        const printerDotTitle = !e.printerName ? "padr\xE3o" : ps?.isOffline ? "offline" : ps ? "online" : "n\xE3o encontrada";
+        const files = Array.isArray(e.files) ? e.files : [];
+        const filesHtml = files.length ? `<div class="border-t border-ink-line/40 pt-2 space-y-1">
+            <p class="text-[10px] uppercase tracking-wider text-mist mb-1">${files.length} arquivo(s) na pasta</p>
+            ${files.slice(0, 10).map((f) => {
+          const si = inboxStatusInfo(f.status);
+          return `<div class="flex items-center gap-2 min-w-0">
+                <span class="shrink-0 rounded-full text-[10px] px-1.5 py-0.5 leading-none ${si.css}">${si.label}</span>
+                <span class="truncate text-xs text-paper/80">${escapeHtml(f.name)}</span>
+                <span class="ml-auto shrink-0 text-[10px] text-mist tabular-nums">${formatBytes(f.size)}</span>
+              </div>`;
+        }).join("")}
+            ${files.length > 10 ? `<p class="text-[10px] text-mist">+ ${files.length - 10} arquivo(s)\u2026</p>` : ""}
+          </div>` : "";
+        return `<div class="rounded-xl border border-ink-line bg-ink/40 p-3 space-y-2" data-folder-id="${e.id}">
+        <div class="flex items-center gap-2 flex-wrap">
+          ${badge}
+          <span class="font-medium text-sm text-paper">${escapeHtml(e.label || "Sem nome")}</span>
+          <span class="w-1.5 h-1.5 rounded-full shrink-0 ${printerDotColor}" title="Impressora: ${escapeHtml(printerDotTitle)}"></span>
+          <span class="text-[11px] text-mist">${escapeHtml(e.printerName || "impressora padr\xE3o")}</span>
+        </div>
+        <div class="flex gap-2">
+          <input type="text" value="${folderVal}" placeholder="C:\\caminho\\para\\pasta"
+            class="folder-path-input flex-1 min-w-0 rounded-lg bg-ink border border-ink-line px-3 py-1.5 text-sm" />
+          <button type="button" class="btn-browse-folder shrink-0 rounded-lg bg-ink-line hover:bg-ink-line/70 px-3 py-1.5 text-sm">Escolher\u2026</button>
+          <button type="button" class="btn-open-folder shrink-0 rounded-lg bg-ink-line hover:bg-ink-line/70 px-3 py-1.5 text-sm${hasFolder ? "" : " hidden"}">Abrir</button>
+        </div>
+        <div class="flex flex-wrap items-center gap-4 text-sm">
+          <label class="inline-flex items-center gap-2"><input type="checkbox" class="folder-enabled accent-sea" ${enabledChk} /> Vigiar e imprimir</label>
+          <label class="inline-flex items-center gap-2"><input type="checkbox" class="folder-delete accent-sea" ${deleteChk} /> Apagar ap\xF3s imprimir</label>
+          <button type="button" class="btn-save-folder ml-auto rounded-lg bg-sea hover:bg-sea-deep text-white font-semibold px-4 py-1.5 text-sm">Salvar</button>
+          <span class="folder-status text-xs text-mist min-h-[1rem]"></span>
+        </div>
+        ${filesHtml}
+      </div>`;
+      }).join("");
+      inboxFolderList.querySelectorAll("[data-folder-id]").forEach((row) => {
+        const id = row.dataset.folderId;
+        const entry = _entries.find((e) => e.id === id);
+        if (!entry) return;
+        const pathInput = row.querySelector(".folder-path-input");
+        const enabledChk = row.querySelector(".folder-enabled");
+        const deleteChk = row.querySelector(".folder-delete");
+        const saveBtn = row.querySelector(".btn-save-folder");
+        const statusEl = row.querySelector(".folder-status");
+        const browseBtn = row.querySelector(".btn-browse-folder");
+        const openBtn = row.querySelector(".btn-open-folder");
+        function setStatus(msg, isError = false) {
+          if (statusEl) {
+            statusEl.textContent = msg;
+            statusEl.className = `folder-status text-xs min-h-[1rem] ${isError ? "text-bad" : "text-sea-glow"}`;
+          }
+        }
+        saveBtn?.addEventListener("click", async () => {
+          const body = {
+            id: entry.id,
+            label: entry.label,
+            printerName: entry.printerName || "",
+            folder: pathInput?.value.trim() || "",
+            enabled: !!enabledChk?.checked,
+            deleteAfterPrint: !!deleteChk?.checked,
+            expectedRevision: getRevision(),
+            hasCustomSettings: true,
+            imageFit: entry.imageFit || "contain",
+            imageScalePercent: entry.imageScalePercent ?? 100,
+            paperSize: entry.paperSize || "a4",
+            paperWidthMm: entry.paperWidthMm ?? 210,
+            paperHeightMm: entry.paperHeightMm ?? 297,
+            paperLandscape: !!entry.paperLandscape
+          };
+          try {
+            const saved = await api2(`/api/inbox/entries/${entry.id}`, { method: "PUT", body: JSON.stringify(body) });
+            if (saved?.revision && state.applied) state.applied.revision = saved.revision;
+            setStatus("Salvo.");
+            await refreshInbox();
+            const rebuiltRow = inboxFolderList?.querySelector(`[data-folder-id="${entry.id}"]`);
+            const rebuiltStatus = rebuiltRow?.querySelector(".folder-status");
+            if (rebuiltStatus) {
+              rebuiltStatus.textContent = "Salvo.";
+              rebuiltStatus.className = "folder-status text-xs min-h-[1rem] text-sea-glow";
+              setTimeout(() => {
+                if (rebuiltStatus.textContent === "Salvo.") rebuiltStatus.textContent = "";
+              }, 2e3);
+            }
+          } catch (err) {
+            setStatus(err.message || "Erro ao salvar.", true);
+          }
+        });
+        browseBtn?.addEventListener("click", async () => {
+          try {
+            const result = await api2(`/api/inbox/entries/${entry.id}/browse`, { method: "POST", body: "{}" });
+            if (!result.cancelled && result.folder && pathInput) pathInput.value = result.folder;
+          } catch (err) {
+            setStatus(err.message || "Falha ao selecionar pasta.", true);
+          }
+        });
+        openBtn?.addEventListener("click", async () => {
+          try {
+            await api2(`/api/inbox/entries/${entry.id}/open`, { method: "POST", body: "{}" });
+            feedback("Pasta aberta.");
+          } catch (err) {
+            feedback(err.message, true);
+          }
+        });
+      });
     }
     async function refreshInbox() {
       try {
-        const snap = await api2("/api/inbox");
-        if (!state.inboxDirty) {
-          const bits = [];
-          if (snap.enabled) bits.push("vigil\xE2ncia ativa");
-          else bits.push("vigil\xE2ncia off");
-          if (snap.deleteAfterPrint) bits.push("apaga ap\xF3s imprimir");
-          bits.push(`${snap.fileCount} arquivo(s)`);
-          inboxStatus.textContent = bits.join(" \xB7 ");
-          inboxStatus.className = "text-sm text-sea-glow min-h-[1.25rem]";
-        }
-        if (!snap.files?.length) {
-          inboxFiles.textContent = snap.folder ? "Pasta vazia \u2014 aguardando PDF/imagens." : "Nenhuma pasta configurada. Escolha e salve acima.";
-          return;
-        }
-        inboxFiles.innerHTML = snap.files.map(
-          (f) => {
-            const info2 = inboxStatusInfo(f.status);
-            const detail = f.errorReason || f.error || "";
-            return `<div class="py-1.5 border-b border-ink-line/60 last:border-0">
-              <div class="flex items-center justify-between gap-2">
-                <span class="text-paper truncate">${escapeHtml(f.name)}</span>
-                <span class="${info2.css} rounded-full px-2 py-0.5 text-[11px] shrink-0">${info2.label}</span>
-              </div>
-              <div class="text-mist text-xs">${escapeHtml(f.kind)} \xB7 ${formatBytes(f.size)}${detail ? ` \xB7 <span class="text-bad" title="${escapeHtml(detail)}">${escapeHtml(detail)}</span>` : ""}</div>
-            </div>`;
-          }
-        ).join("");
+        const [snap, printers] = await Promise.all([
+          api2("/api/inbox"),
+          api2("/api/printers").catch(() => [])
+        ]);
+        _entries = Array.isArray(snap) ? snap : [];
+        _printerStatuses = Object.fromEntries(
+          (printers || []).map((p) => [p.name, p])
+        );
+        renderCards();
+        renderFolderList();
       } catch (err) {
-        if (!state.inboxDirty) {
-          inboxStatus.textContent = err.message;
-          inboxStatus.className = "text-sm text-bad min-h-[1.25rem]";
-        }
+        if (inboxCards)
+          inboxCards.innerHTML = `<p class="text-sm text-bad">${escapeHtml(err.message || "Falha ao carregar impressoras.")}</p>`;
       }
     }
+    document.getElementById("btnNewInboxEntry")?.addEventListener("click", () => openDetail(null));
+    document.getElementById("btnCloseInboxDetail")?.addEventListener("click", closeDetail);
+    [
+      inboxEntryLabel,
+      inboxEntryPrinter,
+      inboxEntryPaperW,
+      inboxEntryPaperH,
+      inboxEntryImageFit,
+      inboxEntryLandscape
+    ].forEach((el) => {
+      el?.addEventListener("input", markDirty);
+      el?.addEventListener("change", markDirty);
+    });
+    document.getElementById("btnSaveInboxEntry")?.addEventListener("click", async () => {
+      const existing = _entries.find((e) => e.id === _selectedId);
+      const body = {
+        id: _selectedId || null,
+        label: inboxEntryLabel?.value.trim() || "",
+        printerName: inboxEntryPrinter?.value || "",
+        folder: existing?.folder ?? "",
+        enabled: existing?.enabled ?? false,
+        deleteAfterPrint: existing?.deleteAfterPrint ?? false,
+        expectedRevision: getRevision(),
+        hasCustomSettings: true,
+        imageFit: inboxEntryImageFit?.value || "contain",
+        imageScalePercent: parseInt(inboxEntryScale?.value || "100", 10),
+        paperSize: inboxEntryPaperSize?.value || "a4",
+        paperWidthMm: parseFloat(inboxEntryPaperW?.value || "210"),
+        paperHeightMm: parseFloat(inboxEntryPaperH?.value || "297"),
+        paperLandscape: !!inboxEntryLandscape?.checked
+      };
+      try {
+        let saved;
+        if (_selectedId) {
+          saved = await api2(`/api/inbox/entries/${_selectedId}`, { method: "PUT", body: JSON.stringify(body) });
+        } else {
+          saved = await api2("/api/inbox/entries", { method: "POST", body: JSON.stringify(body) });
+        }
+        if (saved?.revision && state.applied) state.applied.revision = saved.revision;
+        _entryDirty = false;
+        await refreshInbox();
+        if (!_selectedId) {
+          const newEntry = _entries.find((e) => e.label === body.label) || _entries[_entries.length - 1];
+          if (newEntry) {
+            _selectedId = newEntry.id;
+            renderCards();
+          }
+        }
+        setEntryStatus("Impressora salva.");
+      } catch (err) {
+        setEntryStatus(err.message || "Erro ao salvar.", true);
+      }
+    });
+    document.getElementById("btnRemoveInboxEntry")?.addEventListener("click", async () => {
+      if (!_selectedId) return;
+      const entry = _entries.find((e) => e.id === _selectedId);
+      if (!confirm(`Remover a impressora "${entry?.label || "esta"}"? A pasta f\xEDsica n\xE3o ser\xE1 apagada.`)) return;
+      try {
+        await api2(`/api/inbox/entries/${_selectedId}?expectedRevision=${getRevision()}`, { method: "DELETE" });
+        closeDetail();
+        await refreshInbox();
+        feedback("Impressora removida.");
+      } catch (err) {
+        setEntryStatus(err.message || "Erro ao remover.", true);
+      }
+    });
+    function applyInboxFromSettings() {
+    }
     return { applyInboxFromSettings, refreshInbox };
-  }
-  function inboxSaveMessage(applied) {
-    if (!applied?.inboxFolder) return "Pasta removida.";
-    if (applied.inboxEnabled) return "Pasta salva \u2014 vigil\xE2ncia ativa.";
-    return "Pasta salva \u2014 vigil\xE2ncia desativada.";
   }
   function formatBytes(n) {
     if (n < 1024) return `${n} B`;
@@ -33826,6 +34023,8 @@ fn fs_main(in : VertexOutput) -> @location(0) vec4<f32> {
   }
 
   // SoftPrint.Host.Windows/wwwroot/js/components/setup-wizard.js
+  init_state();
+  init_settings_payload();
   var DONE_KEY = "softprint-setup-done";
   function bindSetupWizard({ api: api2, setTab: setTab2, onRefresh, loadPrinters }) {
     const overlay = document.getElementById("setupWizard");
@@ -34274,7 +34473,7 @@ Ser\xE1 restaurada a c\xF3pia local salva antes da \xFAltima atualiza\xE7\xE3o (
   setApiHint(location.origin);
   setConnection(false);
   var tabs = [
-    { id: "config", title: "Configure a impressora", subtitle: "Impressora, simula\xE7\xE3o e Windows" },
+    { id: "config", title: "Suas impressoras", subtitle: "Impressoras, pastas e configura\xE7\xF5es de papel" },
     { id: "connect", title: "Conecte seu sistema", subtitle: "API, pasta de entrada, logs e rede" },
     { id: "monitor", title: "Acompanhe o passo a passo", subtitle: "Fila, erros e testes" },
     { id: "settings", title: "Configura\xE7\xF5es", subtitle: "Op\xE7\xF5es deste computador" }

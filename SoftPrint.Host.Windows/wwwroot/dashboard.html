@@ -42,7 +42,7 @@
       <nav class="space-y-2" aria-label="Abas do painel">
         <button id="tab-config" type="button" class="tab-btn active w-full text-left rounded-xl border border-transparent px-3 py-3">
           <span class="block text-sea-glow text-xs font-semibold tracking-wide">01</span>
-          <span class="block text-sm font-medium">Configure a impressora</span>
+          <span class="block text-sm font-medium">Suas impressoras</span>
         </button>
         <button id="tab-connect" type="button" class="tab-btn w-full text-left rounded-xl border border-transparent px-3 py-3">
           <span class="block text-sea-glow text-xs font-semibold tracking-wide">02</span>
@@ -164,94 +164,121 @@
         <section id="panel-config" class="h-full min-h-0 grid grid-cols-1 lg:grid-cols-2 gap-3">
           <div class="rounded-2xl bg-ink-soft border border-ink-line min-h-0 flex flex-col overflow-hidden">
             <div class="flex-1 min-h-0 overflow-y-auto scroll-thin p-3 space-y-2.5">
-              <div class="flex items-baseline justify-between gap-2">
+              <!-- Header -->
+              <div class="flex items-center justify-between gap-2">
                 <div>
-                  <h2 class="font-display text-base font-bold">Sua impressora</h2>
+                  <h2 class="font-display text-base font-bold">Suas impressoras</h2>
                   <p id="printerBackendHint" class="text-[11px] text-mist">USB, cabo e rede</p>
                 </div>
-                <p id="printerSummary" class="text-[11px] text-mist text-right max-w-[45%] leading-snug"></p>
+                <button id="btnNewInboxEntry" type="button" class="shrink-0 rounded-xl bg-sea hover:bg-sea-deep text-white font-semibold px-3 py-1.5 text-sm">+ Nova</button>
               </div>
-              <div class="flex gap-2">
-                <select id="printers" aria-label="Impressora" class="field flex-1 min-w-0 rounded-lg bg-ink border border-ink-line px-2.5 py-1.5 text-sm text-paper">
-                  <option value="">Selecionar impressora…</option>
-                </select>
-                <button id="btnLoadPrinters" type="button" class="shrink-0 rounded-lg bg-ink-line hover:bg-ink-line/70 px-2.5 py-1.5 text-sm">Atualizar</button>
-                <button id="btnFindNetworkPrinters" type="button" title="Procurar impressoras na rede e instalar" class="shrink-0 rounded-lg bg-ink-line hover:bg-ink-line/70 px-2.5 py-1.5 text-sm">Rede</button>
-              </div>
-              <p id="networkPrinterHint" class="text-[11px] text-mist leading-snug hidden"></p>
-              <div id="networkPrinterPanel" class="hidden rounded-xl border border-ink-line bg-ink/50 p-3 space-y-2">
-                <div class="flex flex-wrap items-center justify-between gap-2">
-                  <p class="text-xs text-mist">Marque uma ou mais e instale de uma vez.</p>
-                  <div class="flex gap-2">
-                    <button id="btnNetworkSelectAll" type="button" class="rounded-lg bg-ink-line px-2 py-1 text-xs">Todas</button>
-                    <button id="btnInstallNetworkSelected" type="button" class="rounded-lg bg-sea/90 hover:bg-sea text-white px-2.5 py-1 text-xs font-medium">Instalar selecionadas</button>
-                    <button id="btnCloseNetworkPanel" type="button" class="rounded-lg bg-ink-line hover:bg-ink-line/70 px-2 py-1 text-xs">Fechar</button>
-                  </div>
-                </div>
-                <div id="networkPrinterList" class="max-h-40 overflow-auto scroll-thin space-y-1 text-sm"></div>
-              </div>
+              <!-- Flags globais: simulação/pausa/startup (auto-save) -->
               <div class="flex flex-wrap gap-x-4 gap-y-1.5 text-sm">
                 <label class="inline-flex items-center gap-1.5"><input id="simulation" type="checkbox" class="accent-sea" checked /> Simular</label>
                 <label class="inline-flex items-center gap-1.5"><input id="paused" type="checkbox" class="accent-sea" /> Pausar fila</label>
                 <label class="inline-flex items-center gap-1.5" id="startupRow"><input id="startup" type="checkbox" class="accent-sea" /> <span id="startupLabel">Iniciar automaticamente</span></label>
               </div>
-              <div class="rounded-xl border border-ink-line bg-ink/40 p-2.5 space-y-2">
-                <p class="text-[10px] uppercase tracking-wider text-mist">Papel e imagem</p>
-                <div class="grid grid-cols-[1fr_auto] gap-2 items-end">
-                  <label class="block text-sm min-w-0">
-                    <span class="text-mist text-[11px]">Tamanho do papel</span>
-                    <select id="paperSize" class="mt-0.5 w-full rounded-lg bg-ink border border-ink-line px-2 py-1.5 text-sm">
-                      <option value="a4">A4 (210×297)</option>
-                      <option value="a5">A5 (148×210)</option>
-                      <option value="letter">Letter</option>
-                      <option value="legal">Legal</option>
-                      <option value="photo4x6">Foto 10×15</option>
-                      <option value="padrao">Padrão (200×70)</option>
-                      <option value="receipt58">Cupom 58 mm</option>
-                      <option value="receipt80">Cupom 80 mm</option>
-                      <option value="custom">Personalizado</option>
-                    </select>
-                  </label>
-                  <div class="flex flex-col gap-1.5 pb-1.5 items-end">
-                    <label class="inline-flex items-center gap-1.5 text-sm whitespace-nowrap">
-                      <input id="paperLandscape" type="checkbox" class="accent-sea" />
-                      Paisagem
-                    </label>
-                    <button id="btnPrinterPaper" type="button" title="Ler largura/altura padrão do driver da impressora"
-                            class="text-[11px] text-sea-glow hover:text-sea underline-offset-2 hover:underline whitespace-nowrap">
-                      Usar padrão da impressora
-                    </button>
+              <!-- Cards de impressoras -->
+              <div id="inboxCards" class="flex flex-wrap gap-2"></div>
+              <!-- Painel de detalhe: configura impressora (sem pasta) -->
+              <div id="inboxDetail" class="hidden rounded-xl border border-ink-line bg-ink/40 p-4 space-y-3">
+                <div class="flex items-center justify-between gap-2">
+                  <h3 id="inboxDetailTitle" class="font-semibold text-paper text-sm"></h3>
+                  <button id="btnCloseInboxDetail" type="button" class="text-mist hover:text-paper text-lg leading-none">✕</button>
+                </div>
+                <label class="block text-sm">
+                  <span class="text-mist text-xs">Nome desta impressora</span>
+                  <input id="inboxEntryLabel" type="text" placeholder="Ex: Matriz, Filial, Balcão…" class="mt-1 w-full rounded-xl bg-ink border border-ink-line px-3 py-2 text-sm" />
+                </label>
+                <!-- Driver de impressora + botões de rede -->
+                <div class="space-y-1">
+                  <span class="text-mist text-xs block">Driver de impressora Windows</span>
+                  <div class="flex gap-2">
+                    <select id="inboxEntryPrinter" class="flex-1 min-w-0 rounded-xl bg-ink border border-ink-line px-3 py-2 text-sm"></select>
+                    <button id="btnLoadPrinters" type="button" class="shrink-0 rounded-xl bg-ink-line hover:bg-ink-line/70 px-2.5 py-2 text-sm">Atualizar</button>
+                    <button id="btnFindNetworkPrinters" type="button" title="Procurar impressoras na rede e instalar" class="shrink-0 rounded-xl bg-ink-line hover:bg-ink-line/70 px-2.5 py-2 text-sm">Rede</button>
                   </div>
                 </div>
-                <div id="customPaperRow" class="grid grid-cols-2 gap-2 hidden">
+                <p id="networkPrinterHint" class="text-[11px] text-mist leading-snug hidden"></p>
+                <div id="networkPrinterPanel" class="hidden rounded-xl border border-ink-line bg-ink/50 p-3 space-y-2">
+                  <div class="flex flex-wrap items-center justify-between gap-2">
+                    <p class="text-xs text-mist">Marque uma ou mais e instale de uma vez.</p>
+                    <div class="flex gap-2">
+                      <button id="btnNetworkSelectAll" type="button" class="rounded-lg bg-ink-line px-2 py-1 text-xs">Todas</button>
+                      <button id="btnInstallNetworkSelected" type="button" class="rounded-lg bg-sea/90 hover:bg-sea text-white px-2.5 py-1 text-xs font-medium">Instalar selecionadas</button>
+                      <button id="btnCloseNetworkPanel" type="button" class="rounded-lg bg-ink-line hover:bg-ink-line/70 px-2 py-1 text-xs">Fechar</button>
+                    </div>
+                  </div>
+                  <div id="networkPrinterList" class="max-h-40 overflow-auto scroll-thin space-y-1 text-sm"></div>
+                </div>
+                <!-- Papel e imagem -->
+                <div class="rounded-xl border border-ink-line bg-ink/40 p-2.5 space-y-2">
+                  <p class="text-[10px] uppercase tracking-wider text-mist">Papel e imagem</p>
+                  <div class="grid grid-cols-[1fr_auto] gap-2 items-end">
+                    <label class="block text-sm min-w-0">
+                      <span class="text-mist text-[11px]">Tamanho do papel</span>
+                      <select id="inboxEntryPaperSize" class="mt-0.5 w-full rounded-lg bg-ink border border-ink-line px-2 py-1.5 text-sm">
+                        <option value="a4">A4 (210×297)</option>
+                        <option value="a5">A5 (148×210)</option>
+                        <option value="letter">Letter</option>
+                        <option value="legal">Legal</option>
+                        <option value="photo4x6">Foto 10×15</option>
+                        <option value="padrao">Padrão (200×70)</option>
+                        <option value="receipt58">Cupom 58 mm</option>
+                        <option value="receipt80">Cupom 80 mm</option>
+                        <option value="custom">Personalizado</option>
+                      </select>
+                    </label>
+                    <div class="flex flex-col gap-1.5 pb-1.5 items-end">
+                      <label class="inline-flex items-center gap-1.5 text-sm whitespace-nowrap">
+                        <input id="inboxEntryLandscape" type="checkbox" class="accent-sea" /> Paisagem
+                      </label>
+                      <button id="btnPrinterPaper" type="button" title="Ler largura/altura padrão do driver da impressora"
+                              class="text-[11px] text-sea-glow hover:text-sea underline-offset-2 hover:underline whitespace-nowrap">
+                        Usar padrão da impressora
+                      </button>
+                    </div>
+                  </div>
+                  <div id="inboxEntryCustomPaperRow" class="grid grid-cols-2 gap-2 hidden">
+                    <label class="block text-sm">
+                      <span class="text-mist text-[11px]">Largura (mm)</span>
+                      <input id="inboxEntryPaperW" type="number" min="20" max="1200" step="0.1" value="210" class="mt-0.5 w-full rounded-lg bg-ink border border-ink-line px-2 py-1.5 text-sm" />
+                    </label>
+                    <label class="block text-sm">
+                      <span class="text-mist text-[11px]">Altura (mm)</span>
+                      <input id="inboxEntryPaperH" type="number" min="20" max="1200" step="0.1" value="297" class="mt-0.5 w-full rounded-lg bg-ink border border-ink-line px-2 py-1.5 text-sm" />
+                    </label>
+                  </div>
                   <label class="block text-sm">
-                    <span class="text-mist text-[11px]">Largura (mm)</span>
-                    <input id="paperWidthMm" type="number" min="20" max="1200" step="0.1" value="210" class="mt-0.5 w-full rounded-lg bg-ink border border-ink-line px-2 py-1.5 text-sm" />
+                    <span class="text-mist text-[11px]">Encaixe da imagem</span>
+                    <select id="inboxEntryImageFit" class="mt-0.5 w-full rounded-lg bg-ink border border-ink-line px-2 py-1.5 text-sm">
+                      <option value="contain">Caber na página</option>
+                      <option value="cover">Preencher (recorta)</option>
+                      <option value="stretch">Esticar</option>
+                      <option value="center">Centralizar (tamanho real × %)</option>
+                    </select>
                   </label>
                   <label class="block text-sm">
-                    <span class="text-mist text-[11px]">Altura (mm)</span>
-                    <input id="paperHeightMm" type="number" min="20" max="1200" step="0.1" value="297" class="mt-0.5 w-full rounded-lg bg-ink border border-ink-line px-2 py-1.5 text-sm" />
+                    <span class="text-mist text-[11px] flex justify-between"><span>Escala</span><span id="inboxEntryScaleLabel">100%</span></span>
+                    <input id="inboxEntryScale" type="range" min="10" max="200" step="5" value="100" class="mt-1 w-full accent-sea" />
                   </label>
                 </div>
-                <label class="block text-sm">
-                  <span class="text-mist text-[11px]">Encaixe da imagem</span>
-                  <select id="imageFit" class="mt-0.5 w-full rounded-lg bg-ink border border-ink-line px-2 py-1.5 text-sm">
-                    <option value="contain">Caber na página</option>
-                    <option value="cover">Preencher (recorta)</option>
-                    <option value="stretch">Esticar</option>
-                    <option value="center">Centralizar (tamanho real × %)</option>
-                  </select>
-                </label>
-                <label class="block text-sm">
-                  <span class="text-mist text-[11px] flex justify-between"><span>Escala</span><span id="imageScaleLabel">100%</span></span>
-                  <input id="imageScale" type="range" min="10" max="200" step="5" value="100" class="mt-1 w-full accent-sea" />
-                </label>
+                <!-- Ações -->
+                <div class="flex flex-wrap gap-2 items-center">
+                  <button id="btnSaveInboxEntry" type="button" class="rounded-xl bg-sea hover:bg-sea-deep text-white font-semibold px-5 py-2">Salvar impressora</button>
+                  <button id="btnRemoveInboxEntry" type="button" class="rounded-xl bg-bad/20 hover:bg-bad/30 text-bad px-4 py-2 text-sm">Remover</button>
+                  <p id="inboxEntryStatus" class="text-sm text-mist min-h-[1.25rem]"></p>
+                </div>
               </div>
             </div>
-            <div class="shrink-0 border-t border-ink-line p-3 space-y-1.5 bg-ink-soft">
-              <button id="btnSaveSettings" type="button" class="btn-primary w-full rounded-xl bg-sea hover:bg-sea-deep text-white font-semibold px-3 py-2.5">Salvar configurações</button>
+            <div class="shrink-0 border-t border-ink-line p-3 bg-ink-soft">
               <p id="settingsMsg" class="text-xs text-sea-glow leading-snug min-h-[1rem]"></p>
             </div>
+          </div>
+          <!-- Elementos ocultos de compat para printer-tab.js -->
+          <div class="hidden" aria-hidden="true">
+            <select id="printers"><option value="">Selecionar impressora…</option></select>
+            <p id="printerSummary"></p>
           </div>
 
           <div class="rounded-2xl bg-ink-soft border border-ink-line p-3 flex flex-col gap-2 min-h-0 overflow-hidden">
@@ -287,69 +314,60 @@
         </section>
 
         <!-- ABA 02 -->
-        <section id="panel-connect" class="panel-hidden max-w-3xl space-y-4 h-full overflow-y-auto scroll-thin">
-          <div class="rounded-2xl bg-ink-soft border border-ink-line p-6 space-y-4">
-            <div>
-              <h2 class="font-display text-xl font-bold">Conectar seu sistema</h2>
-              <p class="text-sm text-mist mt-1 leading-relaxed">Use o endereço e a chave no sistema que enviará os pedidos. Sem webhook, os eventos vão para a pasta logs.</p>
-            </div>
-            <input id="endpoint" readonly aria-label="Endereço da API" class="w-full rounded-xl bg-ink border border-ink-line px-3 py-2.5 text-sm" />
-            <div class="flex flex-wrap gap-2">
-              <button id="btnCopyEndpoint" type="button" class="rounded-xl bg-ink-line px-4 py-2.5 text-sm">Copiar endereço</button>
-              <button id="btnCopyKey" type="button" class="rounded-xl bg-ink-line px-4 py-2.5 text-sm">Copiar chave</button>
-              <button id="btnRotateKey" type="button" class="rounded-xl bg-ink-line px-4 py-2.5 text-sm">Nova chave</button>
-              <button id="btnOpenLogs" type="button" class="rounded-xl bg-ink-line px-4 py-2.5 text-sm">Abrir pasta logs</button>
-              <button id="btnEvents" type="button" class="rounded-xl bg-ink-line px-4 py-2.5 text-sm">Eventos do dia</button>
-              <button id="btnDiscover" type="button" class="rounded-xl bg-ink-line px-4 py-2.5 text-sm">Buscar rede</button>
-            </div>
-            <p class="text-xs text-mist leading-relaxed">Webhook vazio → <code class="text-paper/80">logs/events-yyyy-MM-dd.log</code>. Busca de rede varre portas 9100 / 515 / 631.</p>
-            <div class="rounded-xl border border-ink-line bg-ink/50 overflow-hidden">
-              <div class="px-3 py-2.5 border-b border-ink-line flex flex-wrap gap-2 items-end bg-ink-soft/80">
-                <label class="text-xs text-mist">Dia
-                  <input id="eventsDay" type="date" class="mt-1 block rounded-lg bg-ink border border-ink-line px-2.5 py-1.5 text-sm text-paper" />
-                </label>
-                <label class="text-xs text-mist flex-1 min-w-[10rem]">Buscar
-                  <input id="eventsFilter" type="search" placeholder="pedido, impressora, erro…" class="mt-1 w-full rounded-lg bg-ink border border-ink-line px-2.5 py-1.5 text-sm text-paper" />
-                </label>
-                <fieldset class="flex gap-1.5 flex-wrap border-0 p-0 m-0 min-w-0" id="eventsStatusChips">
-                  <legend class="sr-only">Filtrar por situação</legend>
-                  <button type="button" data-status="" class="events-chip active rounded-lg px-2.5 py-1.5 text-xs border border-sea/50 bg-sea/15 text-sea-glow">Todos</button>
-                  <button type="button" data-status="ok" class="events-chip rounded-lg px-2.5 py-1.5 text-xs border border-ink-line text-mist hover:border-sea/40">OK</button>
-                  <button type="button" data-status="uncertain" class="events-chip rounded-lg px-2.5 py-1.5 text-xs border border-ink-line text-mist hover:border-bad/40">Conferir</button>
-                </fieldset>
-                <button id="btnLoadEventsPanel" type="button" class="rounded-lg bg-sea/90 hover:bg-sea text-white px-3 py-2 text-sm font-medium">Atualizar</button>
+        <section id="panel-connect" class="panel-hidden h-full min-h-0 grid grid-cols-1 lg:grid-cols-2 gap-3 overflow-hidden">
+
+          <!-- Coluna esquerda: conexão + eventos -->
+          <div class="min-h-0 overflow-y-auto scroll-thin pb-3">
+            <div class="rounded-2xl bg-ink-soft border border-ink-line p-5 space-y-4">
+              <div>
+                <h2 class="font-display text-xl font-bold">Conectar seu sistema</h2>
+                <p class="text-sm text-mist mt-1 leading-relaxed">Use o endereço e a chave no sistema que enviará os pedidos. Sem webhook, os eventos vão para a pasta logs.</p>
               </div>
-              <div id="eventsPanelSummary" class="hidden px-3 py-2 border-b border-ink-line/80 flex flex-wrap gap-2 text-[11px]"></div>
-              <div id="eventsPanelList" class="max-h-[22rem] overflow-auto scroll-thin p-2 space-y-1.5 text-xs text-mist">
-                <p class="px-2 py-6 text-center text-mist">Carregando eventos…</p>
+              <input id="endpoint" readonly aria-label="Endereço da API" class="w-full rounded-xl bg-ink border border-ink-line px-3 py-2.5 text-sm" />
+              <div class="flex flex-wrap gap-2">
+                <button id="btnCopyEndpoint" type="button" class="rounded-xl bg-ink-line px-4 py-2.5 text-sm">Copiar endereço</button>
+                <button id="btnCopyKey" type="button" class="rounded-xl bg-ink-line px-4 py-2.5 text-sm">Copiar chave</button>
+                <button id="btnRotateKey" type="button" class="rounded-xl bg-ink-line px-4 py-2.5 text-sm">Nova chave</button>
+                <button id="btnOpenLogs" type="button" class="rounded-xl bg-ink-line px-4 py-2.5 text-sm">Abrir pasta logs</button>
+                <button id="btnEvents" type="button" class="rounded-xl bg-ink-line px-4 py-2.5 text-sm">Eventos do dia</button>
+                <button id="btnDiscover" type="button" class="rounded-xl bg-ink-line px-4 py-2.5 text-sm">Buscar rede</button>
+              </div>
+              <p class="text-xs text-mist leading-relaxed">Webhook vazio → <code class="text-paper/80">logs/events-yyyy-MM-dd.log</code>. Busca de rede varre portas 9100 / 515 / 631.</p>
+              <div class="rounded-xl border border-ink-line bg-ink/50 overflow-hidden">
+                <div class="px-3 py-2.5 border-b border-ink-line flex flex-wrap gap-2 items-end bg-ink-soft/80">
+                  <label class="text-xs text-mist">Dia
+                    <input id="eventsDay" type="date" class="mt-1 block rounded-lg bg-ink border border-ink-line px-2.5 py-1.5 text-sm text-paper" />
+                  </label>
+                  <label class="text-xs text-mist flex-1 min-w-[10rem]">Buscar
+                    <input id="eventsFilter" type="search" placeholder="pedido, impressora, erro…" class="mt-1 w-full rounded-lg bg-ink border border-ink-line px-2.5 py-1.5 text-sm text-paper" />
+                  </label>
+                  <fieldset class="flex gap-1.5 flex-wrap border-0 p-0 m-0 min-w-0" id="eventsStatusChips">
+                    <legend class="sr-only">Filtrar por situação</legend>
+                    <button type="button" data-status="" class="events-chip active rounded-lg px-2.5 py-1.5 text-xs border border-sea/50 bg-sea/15 text-sea-glow">Todos</button>
+                    <button type="button" data-status="ok" class="events-chip rounded-lg px-2.5 py-1.5 text-xs border border-ink-line text-mist hover:border-sea/40">OK</button>
+                    <button type="button" data-status="uncertain" class="events-chip rounded-lg px-2.5 py-1.5 text-xs border border-ink-line text-mist hover:border-bad/40">Conferir</button>
+                  </fieldset>
+                  <button id="btnLoadEventsPanel" type="button" class="rounded-lg bg-sea/90 hover:bg-sea text-white px-3 py-2 text-sm font-medium">Atualizar</button>
+                </div>
+                <div id="eventsPanelSummary" class="hidden px-3 py-2 border-b border-ink-line/80 flex flex-wrap gap-2 text-[11px]"></div>
+                <div id="eventsPanelList" class="max-h-64 overflow-auto scroll-thin p-2 space-y-1.5 text-xs text-mist">
+                  <p class="px-2 py-6 text-center text-mist">Carregando eventos…</p>
+                </div>
               </div>
             </div>
           </div>
 
-          <div class="rounded-2xl bg-ink-soft border border-ink-line p-6 space-y-4">
-            <div>
-              <h2 class="font-display text-xl font-bold">Pasta de entrada</h2>
-              <p class="text-sm text-mist mt-1 leading-relaxed">Onde o sistema web grava PDF/imagens. O SoftPrint vigia essa pasta e imprime o que aparecer.</p>
-            </div>
-            <label class="block text-sm">
-              <span class="text-mist text-xs">Caminho da pasta</span>
-              <div class="mt-1 flex gap-2">
-                <input id="inboxFolder" type="text" placeholder="C:\caminho\para\pasta" class="flex-1 min-w-0 rounded-xl bg-ink border border-ink-line px-3 py-2.5 text-sm" />
-                <button id="btnBrowseInbox" type="button" class="shrink-0 rounded-xl bg-ink-line hover:bg-ink-line/70 px-4 py-2.5 text-sm">Escolher…</button>
-                <button id="btnClearInbox" type="button" class="shrink-0 rounded-xl bg-ink-line hover:bg-ink-line/70 px-4 py-2.5 text-sm">Limpar</button>
+          <!-- Coluna direita: pastas de entrada por impressora -->
+          <div class="min-h-0 overflow-y-auto scroll-thin pb-3">
+            <div class="rounded-2xl bg-ink-soft border border-ink-line p-5 space-y-4">
+              <div>
+                <h2 class="font-display text-xl font-bold">Pastas de entrada</h2>
+                <p class="text-sm text-mist mt-1 leading-relaxed">Associe uma pasta vigiada a cada impressora. Cadastre impressoras na aba "Suas impressoras".</p>
               </div>
-            </label>
-            <div class="flex flex-wrap gap-x-5 gap-y-2 text-sm">
-              <label class="inline-flex items-center gap-2"><input id="inboxEnabled" type="checkbox" class="accent-sea" /> Vigiar pasta e imprimir</label>
-              <label class="inline-flex items-center gap-2"><input id="deleteInboxAfterPrint" type="checkbox" class="accent-sea" /> Apagar da pasta só depois de imprimir</label>
+              <div id="inboxFolderList" class="space-y-3">
+                <p class="text-sm text-mist">Nenhuma impressora cadastrada ainda.</p>
+              </div>
             </div>
-            <p class="text-xs text-mist leading-relaxed">Se a impressão falhar ou estiver em simulação, o arquivo <strong class="text-paper/80 font-medium">não</strong> é apagado.</p>
-            <div class="flex flex-wrap gap-2 items-center">
-              <button id="btnSaveInbox" type="button" class="rounded-xl bg-sea hover:bg-sea-deep text-white font-semibold px-5 py-2.5">Salvar pasta</button>
-              <button id="btnOpenInbox" type="button" class="rounded-xl bg-ink-line px-4 py-2.5 text-sm">Abrir pasta</button>
-              <p id="inboxStatus" class="text-sm text-mist min-h-[1.25rem]"></p>
-            </div>
-            <div id="inboxFiles" class="rounded-xl border border-ink-line bg-ink/40 p-3 text-sm text-mist max-h-40 overflow-auto scroll-thin">Nenhum arquivo na pasta.</div>
           </div>
         </section>
 
@@ -453,74 +471,88 @@ Teste de impressão de texto.</textarea>
           </div>
         </section>
 
-        <section id="panel-settings" class="panel-hidden space-y-4 h-full overflow-y-auto scroll-thin">
-          <div class="rounded-2xl bg-ink-soft border border-sea/40 p-5 max-w-4xl">
-            <p class="text-xs uppercase tracking-wider text-sea-glow font-semibold">Sobre</p>
-            <p class="font-display text-2xl font-bold text-white mt-1">SoftPrint <span id="settingsVersion" class="text-sea-glow">v{{APP_VERSION}}</span></p>
-            <p class="text-sm text-mist mt-2">Versão instalada neste computador. Se houver atualização, o aviso aparece no topo do painel.</p>
-            <div id="updateHistoryBox" class="mt-4 rounded-xl border border-ink-line bg-ink/60 p-4 space-y-1.5 text-sm">
-              <p class="text-xs uppercase tracking-wider text-mist">Histórico de atualização</p>
-              <p id="updateHistoryCheck" class="text-mist">Última verificação: —</p>
-              <p id="updateHistoryApply" class="text-mist">Última instalação: —</p>
+        <section id="panel-settings" class="panel-hidden h-full min-h-0 grid grid-cols-1 lg:grid-cols-2 gap-3 overflow-hidden">
+
+          <!-- Coluna esquerda: Sobre + Diagnóstico -->
+          <div class="min-h-0 overflow-y-auto scroll-thin pb-3 space-y-3">
+            <div class="rounded-2xl bg-ink-soft border border-sea/40 p-5">
+              <p class="text-xs uppercase tracking-wider text-sea-glow font-semibold">Sobre</p>
+              <p class="font-display text-2xl font-bold text-white mt-1">SoftPrint <span id="settingsVersion" class="text-sea-glow">v{{APP_VERSION}}</span></p>
+              <p class="text-sm text-mist mt-2">Versão instalada neste computador. Se houver atualização, o aviso aparece no topo do painel.</p>
+              <div id="updateHistoryBox" class="mt-4 rounded-xl border border-ink-line bg-ink/60 p-4 space-y-1.5 text-sm">
+                <p class="text-xs uppercase tracking-wider text-mist">Histórico de atualização</p>
+                <p id="updateHistoryCheck" class="text-mist">Última verificação: —</p>
+                <p id="updateHistoryApply" class="text-mist">Última instalação: —</p>
+              </div>
+              <div id="rollbackBox" class="mt-4 hidden rounded-xl border border-warn/50 bg-warn/10 p-4 space-y-2">
+                <p class="text-sm text-paper/95 font-medium">Versão anterior disponível neste PC</p>
+                <p class="text-sm text-paper/90">Se a atualização der problema, volte à instalação anterior (só a última — não acumula várias).</p>
+                <p id="rollbackHint" class="text-xs text-mist"></p>
+                <button id="btnRollback" type="button"
+                        class="px-4 py-2 rounded-lg bg-warn/90 hover:bg-warn text-ink font-semibold text-sm">
+                  Retroceder para versão anterior
+                </button>
+              </div>
             </div>
-            <div id="rollbackBox" class="mt-4 hidden rounded-xl border border-warn/50 bg-warn/10 p-4 space-y-2">
-              <p class="text-sm text-paper/95 font-medium">Versão anterior disponível neste PC</p>
-              <p class="text-sm text-paper/90">Se a atualização der problema, volte à instalação anterior (só a última — não acumula várias).</p>
-              <p id="rollbackHint" class="text-xs text-mist"></p>
-              <button id="btnRollback" type="button"
-                      class="px-4 py-2 rounded-lg bg-warn/90 hover:bg-warn text-ink font-semibold text-sm">
-                Retroceder para versão anterior
-              </button>
-            </div>
-          </div>
-          <div class="rounded-2xl bg-ink-soft border border-ink-line p-5 space-y-4 max-w-4xl">
-            <div>
-              <h2 class="font-display text-xl font-bold">Configurações deste computador</h2>
-              <p class="text-sm text-mist mt-1">Salvas no perfil do usuário. O arquivo .env é opcional e reservado para administração.</p>
-            </div>
-            <div class="grid md:grid-cols-3 gap-3">
-              <label class="text-sm">Intervalo da fila (ms)<input id="sysPoll" type="number" min="100" max="60000" class="mt-1 w-full rounded-lg bg-ink border border-ink-line px-3 py-2" /></label>
-              <label class="text-sm">Retenção de pedidos (dias)<input id="sysRetention" type="number" min="1" max="3650" class="mt-1 w-full rounded-lg bg-ink border border-ink-line px-3 py-2" /></label>
-              <label class="text-sm">Backup (minutos)<input id="sysBackup" type="number" min="5" max="1440" class="mt-1 w-full rounded-lg bg-ink border border-ink-line px-3 py-2" /></label>
-              <label class="text-sm">Timeout webhook (ms)<input id="sysWebhookTimeout" type="number" min="500" max="120000" class="mt-1 w-full rounded-lg bg-ink border border-ink-line px-3 py-2" /></label>
-              <label class="text-sm">Repetir webhook (segundos)<input id="sysWebhookRetry" type="number" min="1" max="3600" class="mt-1 w-full rounded-lg bg-ink border border-ink-line px-3 py-2" /></label>
-              <label class="text-sm">Máximo de tentativas<input id="sysWebhookMax" type="number" min="0" max="100" class="mt-1 w-full rounded-lg bg-ink border border-ink-line px-3 py-2" /></label>
-              <label class="text-sm">Retenção de logs (dias)<input id="sysEventRetention" type="number" min="1" max="3650" class="mt-1 w-full rounded-lg bg-ink border border-ink-line px-3 py-2" /></label>
-              <label class="text-sm">Timeout de rede (ms)<input id="sysNetworkTimeout" type="number" min="50" max="30000" class="mt-1 w-full rounded-lg bg-ink border border-ink-line px-3 py-2" /></label>
-            </div>
-            <label class="block text-sm">URL do webhook<input id="sysWebhookUrl" type="url" class="mt-1 w-full rounded-lg bg-ink border border-ink-line px-3 py-2" /></label>
-            <label class="block text-sm">Segredo do webhook<input id="sysWebhookSecret" type="password" autocomplete="new-password" placeholder="Deixe ******** para manter o segredo atual" class="mt-1 w-full rounded-lg bg-ink border border-ink-line px-3 py-2" /></label>
-            <div class="flex flex-wrap gap-5 text-sm">
-              <label><input id="sysSound" type="checkbox" class="accent-sea" /> Notificações na bandeja</label>
-              <label><input id="sysLog" type="checkbox" class="accent-sea" /> Gravar logs em arquivo</label>
-              <label><input id="sysTelemetry" type="checkbox" class="accent-sea" /> Telemetria (falhas + heartbeat, opt-in)</label>
-            </div>
-            <label class="block text-sm">URL de telemetria<input id="sysTelemetryUrl" type="url" placeholder="https://…" class="mt-1 w-full rounded-lg bg-ink border border-ink-line px-3 py-2" /></label>
-            <p class="text-xs text-mist">Quando ativo, envia só metadados (versão, SO, fila, erro) — sem texto do pedido, caminhos ou chaves.</p>
-            <label class="block text-sm">Rotas tipo → impressora
-              <input id="sysPrinterRoutes" type="text" placeholder="farmacia=Imp Farmácia;caixa=Imp Caixa" class="mt-1 w-full rounded-lg bg-ink border border-ink-line px-3 py-2 font-mono text-xs" />
-            </label>
-            <p class="text-xs text-mist -mt-2">Formato: <code class="text-paper/80">tipo=nome da impressora</code>, separados por ponto e vírgula. O tipo do pedido (API/inbox) escolhe a impressora.</p>
-            <div class="flex flex-wrap gap-2 items-center">
-              <button id="btnSaveSystem" type="button" class="rounded-xl bg-sea hover:bg-sea-deep text-white font-semibold px-5 py-2.5">Salvar configurações</button>
-              <button id="btnExportBackup" type="button" class="rounded-xl bg-ink-line px-4 py-2.5 text-sm">Exportar backup</button>
-              <button id="btnImportBackup" type="button" class="rounded-xl bg-ink-line px-4 py-2.5 text-sm">Importar backup</button>
-              <input id="backupFile" type="file" accept="application/json,.json" class="sr-only" aria-label="Arquivo de backup" />
-              <p id="systemSettingsMsg" class="text-sm text-mist"></p>
+            <div class="rounded-2xl bg-ink-soft border border-ink-line p-5 space-y-3">
+              <div>
+                <h2 class="font-display text-xl font-bold">Diagnóstico</h2>
+                <p class="text-sm text-mist mt-1">WebView2, pasta, API, impressora e atualizações — verde/vermelho neste computador.</p>
+              </div>
+              <div id="diagnoseChecks" class="grid sm:grid-cols-2 gap-2 text-sm"></div>
+              <pre id="diagnoseReport" class="rounded-xl bg-ink border border-ink-line p-4 text-xs leading-relaxed overflow-auto scroll-thin min-h-[6rem] text-mist">Carregando diagnóstico…</pre>
+              <div class="flex flex-wrap gap-2 items-center">
+                <button id="btnDiagnose" type="button" class="rounded-xl bg-ink-line px-4 py-2.5 text-sm">Atualizar diagnóstico</button>
+                <button id="btnSupportBundle" type="button" class="rounded-xl bg-ink-line px-4 py-2.5 text-sm">Gerar pacote de suporte</button>
+              </div>
+              <p id="supportBundleMsg" class="text-xs text-mist"></p>
             </div>
           </div>
-          <div class="rounded-2xl bg-ink-soft border border-ink-line p-5 space-y-3 max-w-4xl">
-            <div>
-              <h2 class="font-display text-xl font-bold">Diagnóstico</h2>
-              <p class="text-sm text-mist mt-1">WebView2, pasta, API, impressora e atualizações — verde/vermelho neste computador.</p>
+
+          <!-- Coluna direita: Configurações deste computador -->
+          <div class="min-h-0 overflow-y-auto scroll-thin pb-3">
+            <div class="rounded-2xl bg-ink-soft border border-ink-line p-5 space-y-4">
+              <div>
+                <h2 class="font-display text-xl font-bold">Configurações deste computador</h2>
+                <p class="text-sm text-mist mt-1">Salvas no perfil do usuário. O arquivo .env é opcional e reservado para administração.</p>
+              </div>
+              <div class="grid md:grid-cols-2 gap-3">
+                <label class="text-sm">Intervalo da fila (ms)<input id="sysPoll" type="number" min="100" max="60000" class="mt-1 w-full rounded-lg bg-ink border border-ink-line px-3 py-2" /></label>
+                <label class="text-sm">Retenção de pedidos (dias)<input id="sysRetention" type="number" min="1" max="3650" class="mt-1 w-full rounded-lg bg-ink border border-ink-line px-3 py-2" /></label>
+                <label class="text-sm">Backup (minutos)<input id="sysBackup" type="number" min="5" max="1440" class="mt-1 w-full rounded-lg bg-ink border border-ink-line px-3 py-2" /></label>
+                <label class="text-sm">Timeout webhook (ms)<input id="sysWebhookTimeout" type="number" min="500" max="120000" class="mt-1 w-full rounded-lg bg-ink border border-ink-line px-3 py-2" /></label>
+                <label class="text-sm">Repetir webhook (segundos)<input id="sysWebhookRetry" type="number" min="1" max="3600" class="mt-1 w-full rounded-lg bg-ink border border-ink-line px-3 py-2" /></label>
+                <label class="text-sm">Máximo de tentativas<input id="sysWebhookMax" type="number" min="0" max="100" class="mt-1 w-full rounded-lg bg-ink border border-ink-line px-3 py-2" /></label>
+                <label class="text-sm">Retenção de logs (dias)<input id="sysEventRetention" type="number" min="1" max="3650" class="mt-1 w-full rounded-lg bg-ink border border-ink-line px-3 py-2" /></label>
+                <label class="text-sm">Timeout de rede (ms)<input id="sysNetworkTimeout" type="number" min="50" max="30000" class="mt-1 w-full rounded-lg bg-ink border border-ink-line px-3 py-2" /></label>
+              </div>
+              <div class="rounded-xl border border-ink-line bg-ink/40 p-3 space-y-3">
+                <p class="text-[10px] uppercase tracking-wider text-mist">Webhook</p>
+                <label class="block text-sm">URL<input id="sysWebhookUrl" type="url" class="mt-1 w-full rounded-lg bg-ink border border-ink-line px-3 py-2" /></label>
+                <label class="block text-sm">Segredo<input id="sysWebhookSecret" type="password" autocomplete="new-password" placeholder="Deixe ******** para manter o segredo atual" class="mt-1 w-full rounded-lg bg-ink border border-ink-line px-3 py-2" /></label>
+              </div>
+              <div class="rounded-xl border border-ink-line bg-ink/40 p-3 space-y-3">
+                <p class="text-[10px] uppercase tracking-wider text-mist">Telemetria</p>
+                <label class="flex items-center gap-2 text-sm"><input id="sysTelemetry" type="checkbox" class="accent-sea" /> Ativar (falhas + heartbeat, opt-in)</label>
+                <label class="block text-sm">URL<input id="sysTelemetryUrl" type="url" placeholder="https://…" class="mt-1 w-full rounded-lg bg-ink border border-ink-line px-3 py-2" /></label>
+                <p class="text-xs text-mist">Envia só metadados (versão, SO, fila, erro) — sem texto do pedido, caminhos ou chaves.</p>
+              </div>
+              <div class="flex flex-wrap gap-5 text-sm">
+                <label><input id="sysSound" type="checkbox" class="accent-sea" /> Notificações na bandeja</label>
+                <label><input id="sysLog" type="checkbox" class="accent-sea" /> Gravar logs em arquivo</label>
+              </div>
+              <label class="block text-sm">Rotas tipo → impressora
+                <input id="sysPrinterRoutes" type="text" placeholder="farmacia=Imp Farmácia;caixa=Imp Caixa" class="mt-1 w-full rounded-lg bg-ink border border-ink-line px-3 py-2 font-mono text-xs" />
+              </label>
+              <p class="text-xs text-mist -mt-2">Formato: <code class="text-paper/80">tipo=nome da impressora</code>, separados por ponto e vírgula.</p>
+              <div class="flex flex-wrap gap-2 items-center">
+                <button id="btnSaveSystem" type="button" class="rounded-xl bg-sea hover:bg-sea-deep text-white font-semibold px-5 py-2.5">Salvar configurações</button>
+                <button id="btnExportBackup" type="button" class="rounded-xl bg-ink-line px-4 py-2.5 text-sm">Exportar backup</button>
+                <button id="btnImportBackup" type="button" class="rounded-xl bg-ink-line px-4 py-2.5 text-sm">Importar backup</button>
+                <input id="backupFile" type="file" accept="application/json,.json" class="sr-only" aria-label="Arquivo de backup" />
+                <p id="systemSettingsMsg" class="text-sm text-mist"></p>
+              </div>
             </div>
-            <div id="diagnoseChecks" class="grid sm:grid-cols-2 gap-2 text-sm"></div>
-            <pre id="diagnoseReport" class="rounded-xl bg-ink border border-ink-line p-4 text-xs leading-relaxed overflow-auto scroll-thin min-h-[6rem] text-mist">Carregando diagnóstico…</pre>
-            <div class="flex flex-wrap gap-2 items-center">
-              <button id="btnDiagnose" type="button" class="rounded-xl bg-ink-line px-4 py-2.5 text-sm">Atualizar diagnóstico</button>
-              <button id="btnSupportBundle" type="button" class="rounded-xl bg-ink-line px-4 py-2.5 text-sm">Gerar pacote de suporte</button>
-            </div>
-            <p id="supportBundleMsg" class="text-xs text-mist"></p>
           </div>
         </section>
       </main>
@@ -552,7 +584,7 @@ Teste de impressão de texto.</textarea>
       }
     }, 4000);
   </script>
-  <script defer src="/js/app.bundle.js?v=20260924e"
+  <script defer src="/js/app.bundle.js?v=20260925a"
           onerror="document.getElementById('healthLine').textContent='Falha ao carregar o painel.'"></script>
 </body>
 </html>

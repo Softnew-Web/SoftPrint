@@ -6,18 +6,20 @@ import { loadPdfPreview } from "../pdf-preview.js";
 import { modeLabel, renderStats } from "./stats.js";
 
 export function bindPrinterTab({ api, onSaved }) {
-  const printers = document.getElementById("printers");
+  const printers = document.getElementById("printers"); // hidden compat select
+  const inboxEntryPrinter = document.getElementById("inboxEntryPrinter");
   const simulation = document.getElementById("simulation");
   const paused = document.getElementById("paused");
   const startup = document.getElementById("startup");
-  const imageFit = document.getElementById("imageFit");
-  const imageScale = document.getElementById("imageScale");
-  const imageScaleLabel = document.getElementById("imageScaleLabel");
-  const paperSize = document.getElementById("paperSize");
-  const paperWidthMm = document.getElementById("paperWidthMm");
-  const paperHeightMm = document.getElementById("paperHeightMm");
-  const paperLandscape = document.getElementById("paperLandscape");
-  const customPaperRow = document.getElementById("customPaperRow");
+  // Preview reads from entry paper fields (per-entry settings)
+  const imageFit = document.getElementById("inboxEntryImageFit");
+  const imageScale = document.getElementById("inboxEntryScale");
+  const imageScaleLabel = document.getElementById("inboxEntryScaleLabel");
+  const paperSize = document.getElementById("inboxEntryPaperSize");
+  const paperWidthMm = document.getElementById("inboxEntryPaperW");
+  const paperHeightMm = document.getElementById("inboxEntryPaperH");
+  const paperLandscape = document.getElementById("inboxEntryLandscape");
+  const customPaperRow = document.getElementById("inboxEntryCustomPaperRow");
   const msg = document.getElementById("settingsMsg");
   const summary = document.getElementById("printerSummary");
   const previewMeta = document.getElementById("previewMeta");
@@ -68,7 +70,7 @@ export function bindPrinterTab({ api, onSaved }) {
   };
 
   const loadDefaultPaper = async (apiFn, { silent = false } = {}) => {
-    const name = printers?.value || "";
+    const name = inboxEntryPrinter?.value || printers?.value || "";
     if (!name) {
       if (!silent) feedback("Selecione uma impressora primeiro.", true);
       return false;
@@ -88,32 +90,53 @@ export function bindPrinterTab({ api, onSaved }) {
   };
 
   const markDirty = () => {
-    state.dirty = true;
-    if (msg) {
-      msg.textContent = "Alterações ainda não salvas.";
-      msg.className = "text-sm text-warn leading-relaxed";
-    }
-    syncCustomRow();
     syncModeStat();
-    redrawPreview();
-    refreshPreviewMargins();
+    // Auto-save simulation and paused changes
+    if (!state.applied) return;
+    const { buildSettingsPayload: bp } = { buildSettingsPayload: (x) => x };
+    import("../settings-payload.js").then(({ buildSettingsPayload }) => {
+      api("/api/settings", {
+        method: "PUT",
+        body: JSON.stringify(buildSettingsPayload({
+          printerName: state.applied.printerName || "",
+          simulation: !!simulation?.checked,
+          paused: !!paused?.checked,
+          imageFit: state.applied.imageFit || "contain",
+          imageScalePercent: state.applied.imageScalePercent ?? 100,
+          paperSize: state.applied.paperSize || "a4",
+          paperWidthMm: state.applied.paperWidthMm ?? 210,
+          paperHeightMm: state.applied.paperHeightMm ?? 297,
+          paperLandscape: !!state.applied.paperLandscape,
+        })),
+      }).then((saved) => {
+        state.applied = saved;
+        state.dirty = false;
+        if (msg) {
+          msg.textContent = `v${saved.revision}`;
+          msg.className = "text-xs text-sea-glow leading-relaxed";
+        }
+        onSaved?.();
+      }).catch((err) => feedback(err.message, true));
+    });
   };
 
-  ["simulation", "paused", "imageFit", "paperSize", "paperLandscape"].forEach((id) => {
+  // Auto-save simulation/paused on change
+  ["simulation", "paused"].forEach((id) => {
     const el = document.getElementById(id);
     if (el) el.addEventListener("change", markDirty);
   });
-  if (printers) {
-    printers.addEventListener("change", async () => {
-      markDirty();
+  // Redraw preview when entry paper fields change (managed by connect-tab.js for dirty tracking)
+  if (paperSize) paperSize.addEventListener("change", () => { syncCustomRow(); redrawPreview(); refreshPreviewMargins(); });
+  if (paperLandscape) paperLandscape.addEventListener("change", () => { redrawPreview(); refreshPreviewMargins(); });
+  if (imageFit) imageFit.addEventListener("change", () => redrawPreview());
+  if (paperWidthMm) paperWidthMm.addEventListener("input", () => { redrawPreview(); refreshPreviewMargins(); });
+  if (paperHeightMm) paperHeightMm.addEventListener("input", () => { redrawPreview(); refreshPreviewMargins(); });
+  if (inboxEntryPrinter) {
+    inboxEntryPrinter.addEventListener("change", async () => {
       await loadDefaultPaper(api, { silent: true });
-      markDirty();
+      redrawPreview();
     });
   }
-  ["paperWidthMm", "paperHeightMm"].forEach((id) => {
-    const el = document.getElementById(id);
-    if (el) el.addEventListener("input", markDirty);
-  });
 
   document.getElementById("btnPrinterPaper")?.addEventListener("click", async () => {
     if (await loadDefaultPaper(api)) markDirty();
@@ -335,44 +358,6 @@ export function bindPrinterTab({ api, onSaved }) {
   });
 
 
-  const btnSave = document.getElementById("btnSaveSettings");
-  if (btnSave) {
-    btnSave.addEventListener("click", async () => {
-      if (!state.applied) {
-        if (msg) {
-          msg.textContent = "Configurações ainda não carregadas. Clique em Atualizar.";
-          msg.className = "text-sm text-bad leading-relaxed";
-        }
-        return;
-      }
-      try {
-        state.applied = await api("/api/settings", {
-          method: "PUT",
-          body: JSON.stringify(
-            buildSettingsPayload({
-              printerName: printers?.value || "",
-              simulation: !!simulation?.checked,
-              paused: !!paused?.checked,
-              imageFit: imageFit?.value || "contain",
-              imageScalePercent: Number(imageScale?.value || 100),
-              paperSize: paperSize?.value || "a4",
-              paperWidthMm: Number(paperWidthMm?.value || 210),
-              paperHeightMm: Number(paperHeightMm?.value || 297),
-              paperLandscape: !!paperLandscape?.checked,
-            })
-          ),
-        });
-        state.dirty = false;
-        applySettingsToForm();
-        syncModeStat();
-        feedback("Configuração salva.");
-        onSaved?.();
-      } catch (err) {
-        feedback(err.message, true);
-      }
-    });
-  }
-
   function currentPaper() {
     const requested = resolvePaperMm(
       paperSize?.value || "a4",
@@ -389,7 +374,7 @@ export function bindPrinterTab({ api, onSaved }) {
       requestedW: requested.w,
       requestedH: requested.h,
       honored: previewMargins?.matchesRequest !== false,
-      margins: previewMargins,
+      margins: previewMargins ?? undefined,
     };
   }
 
@@ -397,7 +382,7 @@ export function bindPrinterTab({ api, onSaved }) {
     const request = ++marginRequest;
     try {
       const query = new URLSearchParams({
-        printerName: printers?.value || "",
+        printerName: inboxEntryPrinter?.value || printers?.value || "",
         paperSize: paperSize?.value || "a4",
         widthMm: paperWidthMm?.value || "210",
         heightMm: paperHeightMm?.value || "297",
@@ -482,22 +467,10 @@ export function bindPrinterTab({ api, onSaved }) {
     if (simulation) simulation.checked = !!state.applied.simulation;
     if (paused) paused.checked = !!state.applied.paused;
     if (state.applied.printerName && printers) printers.value = state.applied.printerName;
-    if (imageFit) imageFit.value = state.applied.imageFit || "contain";
-    const scale = state.applied.imageScalePercent ?? 100;
-    if (imageScale) imageScale.value = String(scale);
-    if (imageScaleLabel) imageScaleLabel.textContent = `${scale}%`;
-    if (paperSize) paperSize.value = state.applied.paperSize || "a4";
-    if (paperWidthMm) paperWidthMm.value = String(state.applied.paperWidthMm ?? 210);
-    if (paperHeightMm) paperHeightMm.value = String(state.applied.paperHeightMm ?? 297);
-    if (paperLandscape) paperLandscape.checked = !!state.applied.paperLandscape;
-    syncCustomRow();
     syncModeStat();
-    refreshPreviewMargins();
     if (msg) {
-      msg.textContent = `v${state.applied.revision} · ${
-        state.applied.printerName || "Nenhuma impressora"
-      }`;
-      msg.className = "text-sm text-sea-glow leading-relaxed";
+      msg.textContent = `v${state.applied.revision}`;
+      msg.className = "text-xs text-sea-glow leading-relaxed";
     }
     redrawPreview();
   }

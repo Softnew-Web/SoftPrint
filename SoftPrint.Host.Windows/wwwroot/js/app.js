@@ -15,7 +15,7 @@ setApiHint(location.origin);
 setConnection(false);
 
 const tabs = [
-  { id: "config", title: "Configure a impressora", subtitle: "Impressora, simulação e Windows" },
+  { id: "config", title: "Suas impressoras", subtitle: "Impressoras, pastas e configurações de papel" },
   { id: "connect", title: "Conecte seu sistema", subtitle: "API, pasta de entrada, logs e rede" },
   { id: "monitor", title: "Acompanhe o passo a passo", subtitle: "Fila, erros e testes" },
   { id: "settings", title: "Configurações", subtitle: "Opções deste computador" },
