@@ -42,6 +42,20 @@ public static class JobEndpoints
                 return Results.BadRequest(new { error = ex.Message });
             }
         });
+        app.MapPost("/api/jobs/reorder", async (HttpRequest request, JobQueueService jobs) =>
+        {
+            try
+            {
+                var body = await request.ReadFromJsonAsync<ReorderRequest>().ConfigureAwait(false);
+                var ids = body?.Ids ?? [];
+                jobs.Reorder(ids);
+                return Results.Ok(new { reordered = true, count = ids.Length });
+            }
+            catch (Exception ex)
+            {
+                return Results.BadRequest(new { error = ex.Message });
+            }
+        });
 
         return app;
     }
@@ -362,7 +376,9 @@ public static class SettingsEndpoints
                     Folder = request.Folder?.Trim() ?? "",
                     Enabled = request.Enabled,
                     DeleteAfterPrint = request.DeleteAfterPrint,
-                    CustomSettings = BuildCustomSettings(request)
+                    CustomSettings = BuildCustomSettings(request),
+                    Copies = Math.Clamp(request.Copies, 1, 99),
+                    WebhookUrl = string.IsNullOrWhiteSpace(request.WebhookUrl) ? null : request.WebhookUrl.Trim()
                 };
                 return Results.Ok(settings.UpsertInboxEntry(entry, request.ExpectedRevision).ToDto());
             }
@@ -381,7 +397,9 @@ public static class SettingsEndpoints
                     Folder = request.Folder?.Trim() ?? "",
                     Enabled = request.Enabled,
                     DeleteAfterPrint = request.DeleteAfterPrint,
-                    CustomSettings = BuildCustomSettings(request)
+                    CustomSettings = BuildCustomSettings(request),
+                    Copies = Math.Clamp(request.Copies, 1, 99),
+                    WebhookUrl = string.IsNullOrWhiteSpace(request.WebhookUrl) ? null : request.WebhookUrl.Trim()
                 };
                 return Results.Ok(settings.UpsertInboxEntry(entry, request.ExpectedRevision).ToDto());
             }

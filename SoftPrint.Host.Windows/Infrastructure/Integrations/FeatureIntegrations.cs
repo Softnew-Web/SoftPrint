@@ -31,7 +31,16 @@ public sealed class TrayAppNotifier(ISystemSettingsRepository settings) : IAppNo
 
     public void NotifyCompleted(PrintJob job)
     {
-        // Sucesso silencioso — só falhas e updates sobem na bandeja.
+        // Sucesso silencioso — a notificação agrupada é feita via NotifyPrintBatch.
+    }
+
+    public void NotifyPrintBatch(string printerName, int count)
+    {
+        ShowBalloonTip(
+            4000,
+            "SoftPrint — impressão concluída",
+            $"{printerName} — {count} arquivo{(count == 1 ? "" : "s")} impresso{(count == 1 ? "" : "s")}",
+            ToolTipIcon.Info);
     }
 
     public void NotifyUpdateAvailable(string currentVersion, string latestVersion, bool mandatory)

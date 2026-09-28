@@ -84,6 +84,8 @@ public sealed class InboxService(
             paperWidthMm = entry.CustomSettings?.PaperWidthMm,
             paperHeightMm = entry.CustomSettings?.PaperHeightMm,
             paperLandscape = entry.CustomSettings?.PaperLandscape,
+            copies = entry.Copies,
+            webhookUrl = entry.WebhookUrl,
         };
     }
 

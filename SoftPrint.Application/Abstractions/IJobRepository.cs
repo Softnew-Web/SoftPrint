@@ -17,6 +17,8 @@ public interface IJobRepository
     void AppendSteps(Guid id, IReadOnlyList<JobStepDraft> steps);
     void Finish(Guid id, JobStatus status, string? error = null, string? errorReason = null, string? errorWhere = null);
     int PurgeOlderThan(DateTimeOffset cutoff);
+    /// <summary>Reordena os jobs pendentes segundo a sequência de IDs fornecida.</summary>
+    void ReorderPending(IEnumerable<Guid> ids) { }
 }
 
 public readonly record struct JobStepDraft(

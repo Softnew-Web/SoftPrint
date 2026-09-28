@@ -18,7 +18,9 @@ public sealed class WindowsPrintStrategy : IPrintStrategy
 
     public Task<JobStatus> ExecuteAsync(PrintJob job, PrintOptions settings, CancellationToken cancellationToken)
     {
-        TextPrintEngine.Print(job.Text, settings, job.Reference);
+        var copies = Math.Clamp(settings.Copies, 1, 99);
+        for (var i = 0; i < copies; i++)
+            TextPrintEngine.Print(job.Text, settings, job.Reference);
         return Task.FromResult(JobStatus.Sent);
     }
 }
@@ -35,26 +37,30 @@ public sealed class ImagePrintStrategy : IPrintStrategy
 
         // GDI direto — evita decode Skia + encode PNG desnecessários.
         using var image = GdiImageLoader.LoadUnlocked(job.SourcePath);
-        using var document = new PrintDocument();
-        document.PrinterSettings.PrinterName = settings.PrinterName;
-        if (!document.PrinterSettings.IsValid)
-            throw new InvalidOperationException($"Impressora não encontrada: '{settings.PrinterName}'.");
-        PrintPageSetup.Apply(document, settings);
-        document.DocumentName = $"SoftPrint {job.Reference}";
-        document.PrintController = new StandardPrintController();
-        document.PrintPage += (_, page) =>
+        var copies = Math.Clamp(settings.Copies, 1, 99);
+        for (var copy = 0; copy < copies; copy++)
         {
-            var area = PrintSurface.ContentBounds(page);
-            var dest = ImageLayoutCalculator.ComputeDestination(
-                area.X, area.Y, area.Width, area.Height,
-                image.Width, image.Height,
-                settings.ImageFit,
-                settings.ImageScalePercent);
-            var graphics = page.Graphics ?? throw new InvalidOperationException("Impressora sem área gráfica.");
-            FastDraw.Image(graphics, image, area, dest, settings);
-            page.HasMorePages = false;
-        };
-        document.Print();
+            using var document = new PrintDocument();
+            document.PrinterSettings.PrinterName = settings.PrinterName;
+            if (!document.PrinterSettings.IsValid)
+                throw new InvalidOperationException($"Impressora não encontrada: '{settings.PrinterName}'.");
+            PrintPageSetup.Apply(document, settings);
+            document.DocumentName = $"SoftPrint {job.Reference}";
+            document.PrintController = new StandardPrintController();
+            document.PrintPage += (_, page) =>
+            {
+                var area = PrintSurface.ContentBounds(page);
+                var dest = ImageLayoutCalculator.ComputeDestination(
+                    area.X, area.Y, area.Width, area.Height,
+                    image.Width, image.Height,
+                    settings.ImageFit,
+                    settings.ImageScalePercent);
+                var graphics = page.Graphics ?? throw new InvalidOperationException("Impressora sem área gráfica.");
+                FastDraw.Image(graphics, image, area, dest, settings);
+                page.HasMorePages = false;
+            };
+            document.Print();
+        }
         return Task.FromResult(JobStatus.Sent);
     }
 }
@@ -69,43 +75,47 @@ public sealed class PdfPrintStrategy : IPrintStrategy
         if (string.IsNullOrWhiteSpace(job.SourcePath) || !File.Exists(job.SourcePath))
             throw new InvalidOperationException("Arquivo PDF não encontrado.");
 
-        using var stream = File.OpenRead(job.SourcePath);
-        // Sem anotações/formulários: cupons comuns ficam bem mais rápidos.
-        // DPI sobe só quando o papel é grande (A4/foto).
-        var renderOptions = new RenderOptions(
-            Dpi: ResolveRenderDpi(settings),
-            WithAnnotations: false,
-            WithFormFill: false,
-            BackgroundColor: SKColors.White);
-        using var pages = Conversion.ToImages(stream, leaveOpen: true, options: renderOptions).GetEnumerator();
-
-        bool hasPage;
-        try { hasPage = pages.MoveNext(); }
-        catch (Exception ex) { throw new InvalidOperationException($"PDF inválido, protegido ou não suportado: {ex.Message}", ex); }
-        if (!hasPage)
-            throw new InvalidOperationException("O PDF não possui páginas imprimíveis.");
-
-        using var document = new PrintDocument();
-        document.PrinterSettings.PrinterName = settings.PrinterName;
-        if (!document.PrinterSettings.IsValid)
-            throw new InvalidOperationException($"Impressora não encontrada: '{settings.PrinterName}'.");
-        PrintPageSetup.Apply(document, settings);
-        document.DocumentName = $"SoftPrint {job.Reference}";
-        document.PrintController = new StandardPrintController();
-        document.PrintPage += (_, page) =>
+        var copies = Math.Clamp(settings.Copies, 1, 99);
+        for (var copy = 0; copy < copies; copy++)
         {
-            cancellationToken.ThrowIfCancellationRequested();
-            using var rendered = pages.Current;
-            using var image = SkiaGdiBridge.ToBitmap(rendered);
-            var area = PrintSurface.ContentBounds(page);
-            var dest = ImageLayoutCalculator.ComputeDestination(
-                area.X, area.Y, area.Width, area.Height,
-                image.Width, image.Height, settings.ImageFit, settings.ImageScalePercent);
-            var graphics = page.Graphics ?? throw new InvalidOperationException("Impressora sem área gráfica.");
-            FastDraw.Image(graphics, image, area, dest, settings);
-            page.HasMorePages = pages.MoveNext();
-        };
-        document.Print();
+            using var stream = File.OpenRead(job.SourcePath);
+            // Sem anotações/formulários: cupons comuns ficam bem mais rápidos.
+            // DPI sobe só quando o papel é grande (A4/foto).
+            var renderOptions = new RenderOptions(
+                Dpi: ResolveRenderDpi(settings),
+                WithAnnotations: false,
+                WithFormFill: false,
+                BackgroundColor: SKColors.White);
+            using var pages = Conversion.ToImages(stream, leaveOpen: true, options: renderOptions).GetEnumerator();
+
+            bool hasPage;
+            try { hasPage = pages.MoveNext(); }
+            catch (Exception ex) { throw new InvalidOperationException($"PDF inválido, protegido ou não suportado: {ex.Message}", ex); }
+            if (!hasPage)
+                throw new InvalidOperationException("O PDF não possui páginas imprimíveis.");
+
+            using var document = new PrintDocument();
+            document.PrinterSettings.PrinterName = settings.PrinterName;
+            if (!document.PrinterSettings.IsValid)
+                throw new InvalidOperationException($"Impressora não encontrada: '{settings.PrinterName}'.");
+            PrintPageSetup.Apply(document, settings);
+            document.DocumentName = $"SoftPrint {job.Reference}";
+            document.PrintController = new StandardPrintController();
+            document.PrintPage += (_, page) =>
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                using var rendered = pages.Current;
+                using var image = SkiaGdiBridge.ToBitmap(rendered);
+                var area = PrintSurface.ContentBounds(page);
+                var dest = ImageLayoutCalculator.ComputeDestination(
+                    area.X, area.Y, area.Width, area.Height,
+                    image.Width, image.Height, settings.ImageFit, settings.ImageScalePercent);
+                var graphics = page.Graphics ?? throw new InvalidOperationException("Impressora sem área gráfica.");
+                FastDraw.Image(graphics, image, area, dest, settings);
+                page.HasMorePages = pages.MoveNext();
+            };
+            document.Print();
+        }
 
         return Task.FromResult(JobStatus.Sent);
     }

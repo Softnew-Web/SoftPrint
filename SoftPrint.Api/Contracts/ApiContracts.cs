@@ -34,7 +34,9 @@ public record InboxEntryRequest(
     string? PaperSize = null,
     double? PaperWidthMm = null,
     double? PaperHeightMm = null,
-    bool? PaperLandscape = null);
+    bool? PaperLandscape = null,
+    int Copies = 1,
+    string? WebhookUrl = null);
 
 public record InboxEntryDto(
     Guid Id,
@@ -49,7 +51,9 @@ public record InboxEntryDto(
     string? PaperSize = null,
     double? PaperWidthMm = null,
     double? PaperHeightMm = null,
-    bool? PaperLandscape = null);
+    bool? PaperLandscape = null,
+    int Copies = 1,
+    string? WebhookUrl = null);
 
 public record StartupRequest(bool Enabled);
 
@@ -206,3 +210,5 @@ public record DiagnoseResponse(
     int PrinterCount,
     PlatformCapabilitiesDto Capabilities,
     IReadOnlyList<DiagnoseCheckDto> Checks);
+
+public record ReorderRequest(Guid[]? Ids = null);

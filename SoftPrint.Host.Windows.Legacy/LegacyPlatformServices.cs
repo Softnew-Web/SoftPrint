@@ -46,6 +46,7 @@ public sealed class LegacyNoOpNotifier : IAppNotifier
 {
     public void NotifyCompleted(PrintJob job) { }
     public void NotifyUncertain(PrintJob job) { }
+    public void NotifyPrintBatch(string printerName, int count) { }
     public void NotifyUpdateAvailable(string currentVersion, string latestVersion, bool mandatory) { }
     public void NotifyUpdateFailed(string message) { }
     public void NotifyQueueAlert(string title, string message) { }

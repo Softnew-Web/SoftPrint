@@ -9,4 +9,6 @@ public sealed class InboxEntry
     public bool Enabled { get; init; }
     public bool DeleteAfterPrint { get; init; }
     public PrintJobSettings? CustomSettings { get; init; }
+    public int Copies { get; init; } = 1;
+    public string? WebhookUrl { get; init; }
 }

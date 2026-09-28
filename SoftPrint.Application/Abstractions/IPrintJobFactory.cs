@@ -36,6 +36,8 @@ public interface IAppNotifier
 {
     void NotifyUncertain(PrintJob job);
     void NotifyCompleted(PrintJob job);
+    /// <summary>Balloon agrupado: N arquivos impressos na impressora X.</summary>
+    void NotifyPrintBatch(string printerName, int count) { }
     void NotifyUpdateAvailable(string currentVersion, string latestVersion, bool mandatory);
     void NotifyUpdateFailed(string message);
     void NotifyQueueAlert(string title, string message);

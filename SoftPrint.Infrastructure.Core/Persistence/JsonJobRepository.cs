@@ -163,6 +163,33 @@ public sealed class JsonJobRepository : IJobRepository
         }
     }
 
+    public void ReorderPending(IEnumerable<Guid> ids)
+    {
+        var ordered = ids.ToList();
+        if (ordered.Count == 0) return;
+        lock (_gate)
+        {
+            var pending = _jobs.Where(j => j.Status == JobStatus.Pending).ToList();
+            var nonPending = _jobs.Where(j => j.Status != JobStatus.Pending).ToList();
+            var idSet = new HashSet<Guid>(ordered);
+            var reordered = ordered
+                .Select(id => pending.FirstOrDefault(j => j.Id == id))
+                .Where(j => j is not null)
+                .Cast<PrintJob>()
+                .ToList();
+            // Append any pending jobs not mentioned in the ids list (keep their relative order)
+            foreach (var job in pending)
+            {
+                if (!idSet.Contains(job.Id))
+                    reordered.Add(job);
+            }
+            _jobs.Clear();
+            _jobs.AddRange(nonPending);
+            _jobs.AddRange(reordered);
+            Save();
+        }
+    }
+
     private void Save()
     {
         var temporary = _path + ".tmp";

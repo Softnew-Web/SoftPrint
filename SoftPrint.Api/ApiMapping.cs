@@ -27,7 +27,9 @@ public static class ApiMapping
                     e.CustomSettings?.PaperSize.ToWire(),
                     e.CustomSettings?.PaperWidthMm,
                     e.CustomSettings?.PaperHeightMm,
-                    e.CustomSettings?.PaperLandscape))
+                    e.CustomSettings?.PaperLandscape,
+                    e.Copies,
+                    e.WebhookUrl))
                 .ToArray());
 
     public static PrintJobDto ToDto(this PrintJob job) =>

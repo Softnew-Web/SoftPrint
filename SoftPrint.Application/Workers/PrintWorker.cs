@@ -1,3 +1,7 @@
+using System.Collections.Concurrent;
+using System.Net.Http;
+using System.Text;
+using System.Text.Json;
 using SoftPrint.Application;
 using SoftPrint.Application.Abstractions;
 using SoftPrint.Application.Services;
@@ -19,6 +23,17 @@ public sealed class PrintWorker(
     IOptions<SoftPrintFeatureOptions> features,
     ILogger<PrintWorker> logger) : BackgroundService
 {
+    private static readonly HttpClient _webhookClient = new() { Timeout = TimeSpan.FromSeconds(10) };
+    private static readonly JsonSerializerOptions _jsonOptions = new()
+    {
+        WriteIndented = false,
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+    };
+
+    // Balloon grouping: printer name → (count, timestamp of first success in window)
+    private readonly ConcurrentDictionary<string, (int Count, DateTimeOffset FirstAt)> _balloonGroups = new();
+    private readonly object _balloonGate = new();
+
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         await Task.Yield();
@@ -60,6 +75,9 @@ public sealed class PrintWorker(
             try
             {
                 var eff = pending.SettingsOverride;
+                var matchingEntry = options.InboxEntries.FirstOrDefault(e =>
+                    InboxFileRules.IsUnderInbox(pending.SourcePath, e.Folder));
+                var copies = matchingEntry is not null ? Math.Clamp(matchingEntry.Copies, 1, 99) : 1;
                 var printOptions = new PrintOptions
                 {
                     PrinterName = printer,
@@ -72,7 +90,8 @@ public sealed class PrintWorker(
                     PaperSize = eff?.PaperSize ?? options.PaperSize,
                     PaperWidthMm = eff?.PaperWidthMm ?? options.PaperWidthMm,
                     PaperHeightMm = eff?.PaperHeightMm ?? options.PaperHeightMm,
-                    PaperLandscape = eff?.PaperLandscape ?? options.PaperLandscape
+                    PaperLandscape = eff?.PaperLandscape ?? options.PaperLandscape,
+                    Copies = copies
                 };
 
                 if (!printOptions.Simulation && IsPrinterUnavailable(printer, out var printerDetail))
@@ -166,8 +185,79 @@ public sealed class PrintWorker(
                 notifier.NotifyUncertain(finished);
                 _ = telemetry.ReportPrintFailureAsync(finished, CancellationToken.None);
             }
-            else notifier.NotifyCompleted(finished);
+            else
+            {
+                NotifyCompletedGrouped(finished, printer);
+            }
             _ = webhook.NotifyFinishedAsync(finished, CancellationToken.None);
+
+            var entryForWebhook = options.InboxEntries.FirstOrDefault(e =>
+                InboxFileRules.IsUnderInbox(finished.SourcePath, e.Folder));
+            if (!string.IsNullOrWhiteSpace(entryForWebhook?.WebhookUrl))
+                _ = TryFireEntryWebhookAsync(entryForWebhook!.WebhookUrl!, finished, status);
+        }
+    }
+
+    private void NotifyCompletedGrouped(PrintJob job, string printerName)
+    {
+        var now = DateTimeOffset.UtcNow;
+        const double windowSeconds = 5.0;
+
+        lock (_balloonGate)
+        {
+            if (_balloonGroups.TryGetValue(printerName, out var existing))
+            {
+                if ((now - existing.FirstAt).TotalSeconds <= windowSeconds)
+                {
+                    _balloonGroups[printerName] = (existing.Count + 1, existing.FirstAt);
+                    return;
+                }
+            }
+
+            _balloonGroups[printerName] = (1, now);
+        }
+
+        // Schedule the flush after the grouping window
+        _ = Task.Run(async () =>
+        {
+            await Task.Delay(TimeSpan.FromSeconds(windowSeconds));
+            int count;
+            lock (_balloonGate)
+            {
+                if (!_balloonGroups.TryGetValue(printerName, out var g))
+                    return;
+                count = g.Count;
+                _balloonGroups.TryRemove(printerName, out _);
+            }
+            var label = string.IsNullOrWhiteSpace(printerName) ? "impressora" : printerName;
+            notifier.NotifyPrintBatch(label, count);
+        });
+    }
+
+    private async Task TryFireEntryWebhookAsync(string url, PrintJob job, JobStatus jobStatus)
+    {
+        try
+        {
+            var statusStr = jobStatus == JobStatus.Uncertain ? "failure" : "success";
+            var errorStr = jobStatus == JobStatus.Uncertain ? (job.Error ?? job.ErrorReason) : null;
+            var payload = new
+            {
+                jobId = job.Id,
+                file = job.SourcePath ?? job.Reference,
+                printer = job.PrinterName ?? "",
+                status = statusStr,
+                error = errorStr,
+                timestamp = DateTimeOffset.UtcNow
+            };
+            var json = JsonSerializer.Serialize(payload, _jsonOptions);
+            using var content = new StringContent(json, Encoding.UTF8, "application/json");
+            using var response = await _webhookClient.PostAsync(url, content).ConfigureAwait(false);
+            if (!response.IsSuccessStatusCode)
+                logger.LogWarning("Webhook de entrada retornou HTTP {Code} para job {JobId}", (int)response.StatusCode, job.Id);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Falha no webhook de entrada para job {JobId}", job.Id);
         }
     }
 

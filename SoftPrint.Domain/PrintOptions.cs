@@ -14,6 +14,7 @@ public sealed class PrintOptions
     public double PaperHeightMm { get; init; } = 297;
     public bool PaperLandscape { get; init; }
     public IReadOnlyList<InboxEntry> InboxEntries { get; init; } = [];
+    public int Copies { get; init; } = 1;
 
     public (double WidthMm, double HeightMm) EffectivePaperMm()
     {

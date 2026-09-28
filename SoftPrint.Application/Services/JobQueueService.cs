@@ -110,6 +110,8 @@ public sealed class JobQueueService(
         return repository.Add(factory.Create(reference, payload, type, kind, sourcePath, templateName, null, requestedPrinterName, settingsOverride));
     }
 
+    public void Reorder(IEnumerable<Guid> ids) => repository.ReorderPending(ids);
+
     public PrintJob Reprint(Guid id)
     {
         var original = repository.FindById(id)
