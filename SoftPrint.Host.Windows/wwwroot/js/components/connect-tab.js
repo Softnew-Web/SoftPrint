@@ -175,6 +175,8 @@ export function bindConnectTab({ api }) {
   const inboxEntryLandscape = document.getElementById("inboxEntryLandscape");
   const inboxEntryScale = document.getElementById("inboxEntryScale");
   const inboxEntryScaleLabel = document.getElementById("inboxEntryScaleLabel");
+  const inboxEntryCopies = document.getElementById("inboxEntryCopies");
+  const inboxEntryWebhookUrl = document.getElementById("inboxEntryWebhookUrl");
   const inboxFolderList = document.getElementById("inboxFolderList");
 
   let _entries = [];
@@ -237,6 +239,8 @@ export function bindConnectTab({ api }) {
     const scale = entry?.imageScalePercent ?? 100;
     if (inboxEntryScale) inboxEntryScale.value = scale;
     if (inboxEntryScaleLabel) inboxEntryScaleLabel.textContent = `${scale}%`;
+    if (inboxEntryCopies) inboxEntryCopies.value = entry?.copies ?? 1;
+    if (inboxEntryWebhookUrl) inboxEntryWebhookUrl.value = entry?.webhookUrl ?? "";
     toggleCustomPaperRow();
     // Dispara change depois de todos os campos preenchidos para redrawPreview
     inboxEntryPaperSize?.dispatchEvent(new Event("change"));
@@ -409,6 +413,8 @@ export function bindConnectTab({ api }) {
           paperWidthMm: entry.paperWidthMm ?? 210,
           paperHeightMm: entry.paperHeightMm ?? 297,
           paperLandscape: !!entry.paperLandscape,
+          copies: entry.copies ?? 1,
+          webhookUrl: entry.webhookUrl ?? null,
         };
         try {
           const saved = await api(`/api/inbox/entries/${entry.id}`, { method: "PUT", body: JSON.stringify(body) });
@@ -468,7 +474,8 @@ export function bindConnectTab({ api }) {
   document.getElementById("btnCloseInboxDetail")?.addEventListener("click", closeDetail);
 
   [inboxEntryLabel, inboxEntryPrinter,
-   inboxEntryPaperW, inboxEntryPaperH, inboxEntryImageFit, inboxEntryLandscape].forEach((el) => {
+   inboxEntryPaperW, inboxEntryPaperH, inboxEntryImageFit, inboxEntryLandscape,
+   inboxEntryCopies, inboxEntryWebhookUrl].forEach((el) => {
     el?.addEventListener("input", markDirty);
     el?.addEventListener("change", markDirty);
   });
@@ -491,6 +498,8 @@ export function bindConnectTab({ api }) {
       paperWidthMm: parseFloat(inboxEntryPaperW?.value || "210"),
       paperHeightMm: parseFloat(inboxEntryPaperH?.value || "297"),
       paperLandscape: !!inboxEntryLandscape?.checked,
+      copies: Math.max(1, Math.min(99, parseInt(inboxEntryCopies?.value || "1", 10))),
+      webhookUrl: inboxEntryWebhookUrl?.value.trim() || null,
     };
     try {
       let saved;

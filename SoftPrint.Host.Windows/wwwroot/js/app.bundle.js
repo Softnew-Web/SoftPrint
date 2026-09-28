@@ -9,7 +9,7 @@
       __defProp(target, name, { get: all[name], enumerable: true });
   };
 
-  // SoftPrint.Host.Windows/wwwroot/js/state.js
+  // js/state.js
   function feedback(msg, err = false) {
     const el = document.getElementById("feedback");
     if (!el) return;
@@ -38,7 +38,7 @@
   }
   var state;
   var init_state = __esm({
-    "SoftPrint.Host.Windows/wwwroot/js/state.js"() {
+    "js/state.js"() {
       state = {
         jobs: [],
         selectedId: null,
@@ -49,7 +49,7 @@
     }
   });
 
-  // SoftPrint.Host.Windows/wwwroot/js/settings-payload.js
+  // js/settings-payload.js
   var settings_payload_exports = {};
   __export(settings_payload_exports, {
     buildSettingsPayload: () => buildSettingsPayload
@@ -71,12 +71,12 @@
     };
   }
   var init_settings_payload = __esm({
-    "SoftPrint.Host.Windows/wwwroot/js/settings-payload.js"() {
+    "js/settings-payload.js"() {
       init_state();
     }
   });
 
-  // SoftPrint.Host.Windows/wwwroot/js/api.js
+  // js/api.js
   function createApi(key = "") {
     const baseHeaders = {
       "Content-Type": "application/json"
@@ -119,10 +119,10 @@
     );
   }
 
-  // SoftPrint.Host.Windows/wwwroot/js/app.js
+  // js/app.js
   init_state();
 
-  // SoftPrint.Host.Windows/wwwroot/js/components/stats.js
+  // js/components/stats.js
   async function refreshHeaderPrinterStatus(api2, settings) {
     const targets = [
       document.getElementById("headerPrinterStatus"),
@@ -197,10 +197,10 @@
     }
   }
 
-  // SoftPrint.Host.Windows/wwwroot/js/components/printer-tab.js
+  // js/components/printer-tab.js
   init_state();
 
-  // SoftPrint.Host.Windows/wwwroot/js/image-layout.js
+  // js/image-layout.js
   var PAPER_PRESETS = {
     a4: { w: 210, h: 297, label: "A4" },
     a5: { w: 148, h: 210, label: "A5" },
@@ -470,10 +470,10 @@
     return Number.isInteger(v) ? String(v) : v.toFixed(1);
   }
 
-  // SoftPrint.Host.Windows/wwwroot/js/components/printer-tab.js
+  // js/components/printer-tab.js
   init_settings_payload();
 
-  // node_modules/pdfjs-dist/legacy/build/pdf.mjs
+  // ../../node_modules/pdfjs-dist/legacy/build/pdf.mjs
   var import_meta = {};
   var __webpack_modules__ = {
     /***/
@@ -32213,7 +32213,7 @@ fn fs_main(in : VertexOutput) -> @location(0) vec4<f32> {
     XfaLayer
   };
 
-  // SoftPrint.Host.Windows/wwwroot/js/pdf-preview.js
+  // js/pdf-preview.js
   GlobalWorkerOptions.workerSrc = "/js/pdf.worker.min.mjs";
   async function loadPdfPreview(file) {
     const bytes = new Uint8Array(await file.arrayBuffer());
@@ -32241,7 +32241,7 @@ fn fs_main(in : VertexOutput) -> @location(0) vec4<f32> {
     };
   }
 
-  // SoftPrint.Host.Windows/wwwroot/js/components/printer-tab.js
+  // js/components/printer-tab.js
   function bindPrinterTab({ api: api2, onSaved }) {
     const printers = document.getElementById("printers");
     const inboxEntryPrinter = document.getElementById("inboxEntryPrinter");
@@ -32696,7 +32696,7 @@ fn fs_main(in : VertexOutput) -> @location(0) vec4<f32> {
     return [...byHost.values()];
   }
 
-  // SoftPrint.Host.Windows/wwwroot/js/components/monitor-tab.js
+  // js/components/monitor-tab.js
   init_state();
   init_settings_payload();
   var STATUS_OPTIONS = [
@@ -32768,6 +32768,7 @@ fn fs_main(in : VertexOutput) -> @location(0) vec4<f32> {
         el.checked = on;
       });
     });
+    let _dragSrcId = null;
     function renderJobs() {
       const statuses = selectedStatuses();
       const rf = document.getElementById("refFilter").value.trim().toLowerCase();
@@ -32775,23 +32776,74 @@ fn fs_main(in : VertexOutput) -> @location(0) vec4<f32> {
         (j) => (!statuses.length || statuses.includes(j.status)) && (!rf || (j.reference || "").toLowerCase().includes(rf))
       );
       body.innerHTML = filtered.slice().reverse().map(
-        (j) => `
-      <tr data-id="${j.id}" class="job-row border-t border-ink-line cursor-pointer hover:bg-ink/60 ${state.selectedId === j.id ? "bg-ink" : ""} ${j.status === "uncertain" ? "text-bad" : ""}">
+        (j) => {
+          const isPending = j.status === "pending";
+          const dragAttrs = isPending ? `draggable="true" data-drag-id="${j.id}"` : "";
+          const dragHandle = isPending ? `<span class="drag-handle select-none cursor-grab text-mist/50 hover:text-mist px-1" title="Arrastar para reordenar">\u283F</span>` : `<span class="px-1 opacity-0 select-none">\u283F</span>`;
+          return `
+      <tr ${dragAttrs} data-id="${j.id}" class="job-row border-t border-ink-line cursor-pointer hover:bg-ink/60 ${state.selectedId === j.id ? "bg-ink" : ""} ${j.status === "uncertain" ? "text-bad" : ""}">
         <td class="px-3 py-2.5" onclick="event.stopPropagation()">
-          <input type="checkbox" class="job-check accent-sea" data-id="${j.id}" aria-label="Selecionar ${escapeHtml(
-          j.reference
-        )}" />
+          <div class="flex items-center gap-1">
+            ${dragHandle}
+            <input type="checkbox" class="job-check accent-sea" data-id="${j.id}" aria-label="Selecionar ${escapeHtml(
+            j.reference
+          )}" />
+          </div>
         </td>
         <td class="px-3 py-2.5 font-medium">${escapeHtml(j.reference)}</td>
         <td class="px-3 py-2.5 text-mist">${escapeHtml(j.jobType || "default")}</td>
         <td class="px-3 py-2.5">${escapeHtml(statusLabel[j.status] || j.status)}</td>
         <td class="px-3 py-2.5 text-mist text-xs">${new Date(j.createdAt).toLocaleString()}</td>
-      </tr>`
+      </tr>`;
+        }
       ).join("") || `<tr><td colspan="5" class="px-3 py-8 text-mist text-center">Nenhum pedido nesta aba.</td></tr>`;
       body.querySelectorAll(".job-row").forEach((row) => {
         row.addEventListener("click", () => {
           state.selectedId = row.dataset.id;
           renderJobs();
+        });
+        if (!row.dataset.dragId) return;
+        row.addEventListener("dragstart", (e) => {
+          _dragSrcId = row.dataset.dragId;
+          e.dataTransfer.effectAllowed = "move";
+          row.classList.add("opacity-50");
+        });
+        row.addEventListener("dragend", () => {
+          row.classList.remove("opacity-50");
+        });
+        row.addEventListener("dragover", (e) => {
+          e.preventDefault();
+          e.dataTransfer.dropEffect = "move";
+          row.classList.add("outline", "outline-sea/50");
+        });
+        row.addEventListener("dragleave", () => {
+          row.classList.remove("outline", "outline-sea/50");
+        });
+        row.addEventListener("drop", async (e) => {
+          e.preventDefault();
+          row.classList.remove("outline", "outline-sea/50");
+          const srcId = _dragSrcId;
+          const dstId = row.dataset.dragId;
+          if (!srcId || srcId === dstId) return;
+          const allPending = state.jobs.filter((j) => j.status === "pending").map((j) => j.id);
+          const srcIdx = allPending.indexOf(srcId);
+          const dstIdx = allPending.indexOf(dstId);
+          if (srcIdx < 0 || dstIdx < 0) return;
+          allPending.splice(srcIdx, 1);
+          allPending.splice(dstIdx, 0, srcId);
+          const pendingJobs = state.jobs.filter((j) => j.status === "pending");
+          const rest = state.jobs.filter((j) => j.status !== "pending");
+          const reordered = allPending.map((id) => pendingJobs.find((j) => j.id === id)).filter(Boolean);
+          state.jobs = [...rest, ...reordered];
+          renderJobs();
+          try {
+            await api2("/api/jobs/reorder", {
+              method: "POST",
+              body: JSON.stringify({ ids: allPending })
+            });
+          } catch (err2) {
+            feedback(err2.message || "Falha ao reordenar.", true);
+          }
         });
       });
       const sel = state.jobs.find((j) => j.id === state.selectedId) || filtered.at(-1) || null;
@@ -33211,7 +33263,7 @@ fn fs_main(in : VertexOutput) -> @location(0) vec4<f32> {
     return [key, value];
   }
 
-  // SoftPrint.Host.Windows/wwwroot/js/components/connect-tab.js
+  // js/components/connect-tab.js
   init_state();
   init_settings_payload();
   function bindConnectTab({ api: api2 }) {
@@ -33382,6 +33434,8 @@ fn fs_main(in : VertexOutput) -> @location(0) vec4<f32> {
     const inboxEntryLandscape = document.getElementById("inboxEntryLandscape");
     const inboxEntryScale = document.getElementById("inboxEntryScale");
     const inboxEntryScaleLabel = document.getElementById("inboxEntryScaleLabel");
+    const inboxEntryCopies = document.getElementById("inboxEntryCopies");
+    const inboxEntryWebhookUrl = document.getElementById("inboxEntryWebhookUrl");
     const inboxFolderList = document.getElementById("inboxFolderList");
     let _entries = [];
     let _printerStatuses = {};
@@ -33437,6 +33491,8 @@ fn fs_main(in : VertexOutput) -> @location(0) vec4<f32> {
       const scale = entry?.imageScalePercent ?? 100;
       if (inboxEntryScale) inboxEntryScale.value = scale;
       if (inboxEntryScaleLabel) inboxEntryScaleLabel.textContent = `${scale}%`;
+      if (inboxEntryCopies) inboxEntryCopies.value = entry?.copies ?? 1;
+      if (inboxEntryWebhookUrl) inboxEntryWebhookUrl.value = entry?.webhookUrl ?? "";
       toggleCustomPaperRow();
       inboxEntryPaperSize?.dispatchEvent(new Event("change"));
       _openingDetail = false;
@@ -33565,7 +33621,9 @@ fn fs_main(in : VertexOutput) -> @location(0) vec4<f32> {
             paperSize: entry.paperSize || "a4",
             paperWidthMm: entry.paperWidthMm ?? 210,
             paperHeightMm: entry.paperHeightMm ?? 297,
-            paperLandscape: !!entry.paperLandscape
+            paperLandscape: !!entry.paperLandscape,
+            copies: entry.copies ?? 1,
+            webhookUrl: entry.webhookUrl ?? null
           };
           try {
             const saved = await api2(`/api/inbox/entries/${entry.id}`, { method: "PUT", body: JSON.stringify(body) });
@@ -33628,7 +33686,9 @@ fn fs_main(in : VertexOutput) -> @location(0) vec4<f32> {
       inboxEntryPaperW,
       inboxEntryPaperH,
       inboxEntryImageFit,
-      inboxEntryLandscape
+      inboxEntryLandscape,
+      inboxEntryCopies,
+      inboxEntryWebhookUrl
     ].forEach((el) => {
       el?.addEventListener("input", markDirty);
       el?.addEventListener("change", markDirty);
@@ -33649,7 +33709,9 @@ fn fs_main(in : VertexOutput) -> @location(0) vec4<f32> {
         paperSize: inboxEntryPaperSize?.value || "a4",
         paperWidthMm: parseFloat(inboxEntryPaperW?.value || "210"),
         paperHeightMm: parseFloat(inboxEntryPaperH?.value || "297"),
-        paperLandscape: !!inboxEntryLandscape?.checked
+        paperLandscape: !!inboxEntryLandscape?.checked,
+        copies: Math.max(1, Math.min(99, parseInt(inboxEntryCopies?.value || "1", 10))),
+        webhookUrl: inboxEntryWebhookUrl?.value.trim() || null
       };
       try {
         let saved;
@@ -33881,7 +33943,7 @@ fn fs_main(in : VertexOutput) -> @location(0) vec4<f32> {
     return `<span class="log-meta-chip truncate" title="${title}"><span class="text-mist/70">${escapeHtml(kind)}</span> ${escapeHtml(text)}</span>`;
   }
 
-  // SoftPrint.Host.Windows/wwwroot/js/components/system-settings-tab.js
+  // js/components/system-settings-tab.js
   function bindSystemSettingsTab({ api: api2 }) {
     const byId = (id) => document.getElementById(id);
     const message = byId("systemSettingsMsg");
@@ -34022,7 +34084,7 @@ fn fs_main(in : VertexOutput) -> @location(0) vec4<f32> {
     return { load };
   }
 
-  // SoftPrint.Host.Windows/wwwroot/js/components/setup-wizard.js
+  // js/components/setup-wizard.js
   init_state();
   init_settings_payload();
   var DONE_KEY = "softprint-setup-done";
@@ -34233,7 +34295,7 @@ fn fs_main(in : VertexOutput) -> @location(0) vec4<f32> {
     return escapeHtml2(value).replaceAll("'", "&#39;");
   }
 
-  // SoftPrint.Host.Windows/wwwroot/js/components/update-banner.js
+  // js/components/update-banner.js
   var DISMISS_KEY = "softprint-update-dismissed";
   var applyBound = false;
   var rollbackBound = false;
@@ -34467,7 +34529,7 @@ Ser\xE1 restaurada a c\xF3pia local salva antes da \xFAltima atualiza\xE7\xE3o (
     }
   }
 
-  // SoftPrint.Host.Windows/wwwroot/js/app.js
+  // js/app.js
   var KEY = "";
   var { api } = createApi(KEY);
   setApiHint(location.origin);

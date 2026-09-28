@@ -263,6 +263,18 @@
                     <input id="inboxEntryScale" type="range" min="10" max="200" step="5" value="100" class="mt-1 w-full accent-sea" />
                   </label>
                 </div>
+                <!-- Cópias e webhook -->
+                <div class="rounded-xl border border-ink-line bg-ink/40 p-2.5 space-y-2">
+                  <p class="text-[10px] uppercase tracking-wider text-mist">Avançado</p>
+                  <label class="block text-sm">
+                    <span class="text-mist text-[11px]">Cópias por arquivo</span>
+                    <input id="inboxEntryCopies" type="number" min="1" max="99" value="1" class="mt-0.5 w-full rounded-lg bg-ink border border-ink-line px-2 py-1.5 text-sm" />
+                  </label>
+                  <label class="block text-sm">
+                    <span class="text-mist text-[11px]">Webhook URL (opcional — POST ao imprimir)</span>
+                    <input id="inboxEntryWebhookUrl" type="url" placeholder="https://exemplo.com/hook" class="mt-0.5 w-full rounded-lg bg-ink border border-ink-line px-2 py-1.5 text-sm" />
+                  </label>
+                </div>
                 <!-- Ações -->
                 <div class="flex flex-wrap gap-2 items-center">
                   <button id="btnSaveInboxEntry" type="button" class="rounded-xl bg-sea hover:bg-sea-deep text-white font-semibold px-5 py-2">Salvar impressora</button>

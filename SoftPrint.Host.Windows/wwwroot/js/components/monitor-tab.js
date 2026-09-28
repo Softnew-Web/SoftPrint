@@ -79,6 +79,8 @@ export function bindMonitorTab({ api, onChanged }) {
     });
   });
 
+  let _dragSrcId = null;
+
   function renderJobs() {
     const statuses = selectedStatuses();
     const rf = document.getElementById("refFilter").value.trim().toLowerCase();
@@ -93,20 +95,32 @@ export function bindMonitorTab({ api, onChanged }) {
         .slice()
         .reverse()
         .map(
-          (j) => `
-      <tr data-id="${j.id}" class="job-row border-t border-ink-line cursor-pointer hover:bg-ink/60 ${
-            state.selectedId === j.id ? "bg-ink" : ""
-          } ${j.status === "uncertain" ? "text-bad" : ""}">
+          (j) => {
+            const isPending = j.status === "pending";
+            const dragAttrs = isPending
+              ? `draggable="true" data-drag-id="${j.id}"`
+              : "";
+            const dragHandle = isPending
+              ? `<span class="drag-handle select-none cursor-grab text-mist/50 hover:text-mist px-1" title="Arrastar para reordenar">⠿</span>`
+              : `<span class="px-1 opacity-0 select-none">⠿</span>`;
+            return `
+      <tr ${dragAttrs} data-id="${j.id}" class="job-row border-t border-ink-line cursor-pointer hover:bg-ink/60 ${
+              state.selectedId === j.id ? "bg-ink" : ""
+            } ${j.status === "uncertain" ? "text-bad" : ""}">
         <td class="px-3 py-2.5" onclick="event.stopPropagation()">
-          <input type="checkbox" class="job-check accent-sea" data-id="${j.id}" aria-label="Selecionar ${escapeHtml(
-            j.reference
-          )}" />
+          <div class="flex items-center gap-1">
+            ${dragHandle}
+            <input type="checkbox" class="job-check accent-sea" data-id="${j.id}" aria-label="Selecionar ${escapeHtml(
+              j.reference
+            )}" />
+          </div>
         </td>
         <td class="px-3 py-2.5 font-medium">${escapeHtml(j.reference)}</td>
         <td class="px-3 py-2.5 text-mist">${escapeHtml(j.jobType || "default")}</td>
         <td class="px-3 py-2.5">${escapeHtml(statusLabel[j.status] || j.status)}</td>
         <td class="px-3 py-2.5 text-mist text-xs">${new Date(j.createdAt).toLocaleString()}</td>
-      </tr>`
+      </tr>`;
+          }
         )
         .join("") ||
       `<tr><td colspan="5" class="px-3 py-8 text-mist text-center">Nenhum pedido nesta aba.</td></tr>`;
@@ -115,6 +129,59 @@ export function bindMonitorTab({ api, onChanged }) {
       row.addEventListener("click", () => {
         state.selectedId = row.dataset.id;
         renderJobs();
+      });
+
+      if (!row.dataset.dragId) return;
+
+      row.addEventListener("dragstart", (e) => {
+        _dragSrcId = row.dataset.dragId;
+        e.dataTransfer.effectAllowed = "move";
+        row.classList.add("opacity-50");
+      });
+      row.addEventListener("dragend", () => {
+        row.classList.remove("opacity-50");
+      });
+      row.addEventListener("dragover", (e) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = "move";
+        row.classList.add("outline", "outline-sea/50");
+      });
+      row.addEventListener("dragleave", () => {
+        row.classList.remove("outline", "outline-sea/50");
+      });
+      row.addEventListener("drop", async (e) => {
+        e.preventDefault();
+        row.classList.remove("outline", "outline-sea/50");
+        const srcId = _dragSrcId;
+        const dstId = row.dataset.dragId;
+        if (!srcId || srcId === dstId) return;
+
+        const allPending = state.jobs
+          .filter((j) => j.status === "pending")
+          .map((j) => j.id);
+
+        const srcIdx = allPending.indexOf(srcId);
+        const dstIdx = allPending.indexOf(dstId);
+        if (srcIdx < 0 || dstIdx < 0) return;
+
+        allPending.splice(srcIdx, 1);
+        allPending.splice(dstIdx, 0, srcId);
+
+        // Optimistic reorder in state
+        const pendingJobs = state.jobs.filter((j) => j.status === "pending");
+        const rest = state.jobs.filter((j) => j.status !== "pending");
+        const reordered = allPending.map((id) => pendingJobs.find((j) => j.id === id)).filter(Boolean);
+        state.jobs = [...rest, ...reordered];
+        renderJobs();
+
+        try {
+          await api("/api/jobs/reorder", {
+            method: "POST",
+            body: JSON.stringify({ ids: allPending }),
+          });
+        } catch (err) {
+          feedback(err.message || "Falha ao reordenar.", true);
+        }
       });
     });
 
