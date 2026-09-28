@@ -738,6 +738,17 @@ public static class SettingsEndpoints
                 lines.Add($"if exist \"{dataRoot}\" rd \"{dataRoot}\" 2>nul");
             }
 
+            // Baixar o instalador mais recente para a Área de Trabalho antes de desinstalar.
+            if (opts.SaveInstaller)
+            {
+                var desktop = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
+                var destExe = Path.Combine(desktop, "SoftPrint-Setup.exe");
+                var downloadUrl = "https://github.com/Softnew-Web/SoftPrint/releases/latest/download/SoftPrint-Setup.exe";
+                lines.Add($"echo Baixando instalador SoftPrint para a Area de Trabalho...");
+                lines.Add($"powershell -NoProfile -NonInteractive -Command \"Invoke-WebRequest -Uri '{downloadUrl}' -OutFile '{destExe}' -UseBasicParsing\" >nul 2>nul");
+                lines.Add($"if not exist \"{destExe}\" echo Falha no download do instalador >> \"%TEMP%\\softprint-uninstall-log.txt\"");
+            }
+
             lines.Add($"\"{uninsPath}\" /VERYSILENT /NORESTART /SUPPRESSMSGBOXES");
             lines.Add("endlocal");
 

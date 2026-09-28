@@ -128,10 +128,11 @@ export function bindSystemSettingsTab({ api }) {
       await api("/api/settings/uninstall", {
         method: "POST",
         body: JSON.stringify({
-          keepConfig:   document.getElementById("uninstall-keep-config")?.checked !== false,
-          keepJobs:     document.getElementById("uninstall-keep-jobs")?.checked === true,
-          keepLogs:     document.getElementById("uninstall-keep-logs")?.checked === true,
-          keepWebView:  document.getElementById("uninstall-keep-webview")?.checked === true,
+          keepConfig:     document.getElementById("uninstall-keep-config")?.checked !== false,
+          keepJobs:       document.getElementById("uninstall-keep-jobs")?.checked === true,
+          keepLogs:       document.getElementById("uninstall-keep-logs")?.checked === true,
+          keepWebView:    document.getElementById("uninstall-keep-webview")?.checked === true,
+          saveInstaller:  document.getElementById("uninstall-save-installer")?.checked !== false,
         }),
         headers: { "Content-Type": "application/json" },
       });

@@ -191,7 +191,8 @@ public record UninstallRequest(
     bool KeepConfig = true,
     bool KeepJobs = false,
     bool KeepLogs = false,
-    bool KeepWebView = false);
+    bool KeepWebView = false,
+    bool SaveInstaller = false);
 
 public record ReprintBulkRequest(Guid[]? Ids = null);
 

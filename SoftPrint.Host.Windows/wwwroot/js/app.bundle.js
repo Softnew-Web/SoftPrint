@@ -34060,7 +34060,8 @@ fn fs_main(in : VertexOutput) -> @location(0) vec4<f32> {
             keepConfig: document.getElementById("uninstall-keep-config")?.checked !== false,
             keepJobs: document.getElementById("uninstall-keep-jobs")?.checked === true,
             keepLogs: document.getElementById("uninstall-keep-logs")?.checked === true,
-            keepWebView: document.getElementById("uninstall-keep-webview")?.checked === true
+            keepWebView: document.getElementById("uninstall-keep-webview")?.checked === true,
+            saveInstaller: document.getElementById("uninstall-save-installer")?.checked !== false
           }),
           headers: { "Content-Type": "application/json" }
         });
