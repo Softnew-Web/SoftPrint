@@ -34035,6 +34035,39 @@ fn fs_main(in : VertexOutput) -> @location(0) vec4<f32> {
       }
     });
     byId("btnDiagnose")?.addEventListener("click", () => loadDiagnose());
+    const modalUninstall = document.getElementById("modal-uninstall");
+    byId("btn-uninstall")?.addEventListener("click", () => {
+      if (modalUninstall) {
+        modalUninstall.classList.remove("hidden");
+        modalUninstall.classList.add("flex");
+      }
+    });
+    byId("btn-uninstall-cancel")?.addEventListener("click", () => {
+      if (modalUninstall) {
+        modalUninstall.classList.add("hidden");
+        modalUninstall.classList.remove("flex");
+      }
+    });
+    byId("btn-uninstall-confirm")?.addEventListener("click", async () => {
+      const btn = byId("btn-uninstall-confirm");
+      if (!btn) return;
+      btn.disabled = true;
+      btn.textContent = "Desinstalando\u2026";
+      try {
+        await api2("/api/settings/uninstall", {
+          method: "POST",
+          body: JSON.stringify({
+            keepConfig: document.getElementById("uninstall-keep-config")?.checked !== false,
+            keepJobs: document.getElementById("uninstall-keep-jobs")?.checked === true,
+            keepLogs: document.getElementById("uninstall-keep-logs")?.checked === true,
+            keepWebView: document.getElementById("uninstall-keep-webview")?.checked === true
+          }),
+          headers: { "Content-Type": "application/json" }
+        });
+      } catch {
+      }
+      btn.textContent = "Encerrando\u2026";
+    });
     byId("btnSupportBundle")?.addEventListener("click", async () => {
       const msg = byId("supportBundleMsg") || message;
       try {

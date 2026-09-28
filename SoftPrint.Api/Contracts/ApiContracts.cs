@@ -187,6 +187,12 @@ public record UpdateInfoDto(
 
 public record ApplyUpdateRequest(bool Rollback = false, string? Version = null);
 
+public record UninstallRequest(
+    bool KeepConfig = true,
+    bool KeepJobs = false,
+    bool KeepLogs = false,
+    bool KeepWebView = false);
+
 public record ReprintBulkRequest(Guid[]? Ids = null);
 
 public record PlatformCapabilitiesDto(

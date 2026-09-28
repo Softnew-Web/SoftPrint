@@ -4,6 +4,7 @@ using SoftPrint.Application;
 using SoftPrint.Application.Abstractions;
 using SoftPrint.Application.Services;
 using SoftPrint.Domain;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using System.Text.Json;
 
@@ -666,6 +667,100 @@ public static class SettingsEndpoints
         {
             startup.ApplyFromOptions(request.Enabled);
             return Results.Ok(new { startWithWindows = startup.IsEnabled });
+        });
+        app.MapPost("/api/settings/uninstall", async (HttpRequest request, IHostApplicationLifetime lifetime) =>
+        {
+            if (!OperatingSystem.IsWindows())
+                return Results.BadRequest(new { error = "O desinstalador automático só está disponível no Windows." });
+
+            UninstallRequest opts = new();
+            try
+            {
+                if (request.ContentLength is > 0)
+                    opts = await request.ReadFromJsonAsync<UninstallRequest>().ConfigureAwait(false) ?? opts;
+            }
+            catch { /* body inválido = defaults */ }
+
+            var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+            var uninsPath = Path.Combine(localAppData, "Programs", "SoftPrint", "unins000.exe");
+            if (!File.Exists(uninsPath))
+                return Results.NotFound(new { error = "Desinstalador não encontrado. Talvez o SoftPrint não tenha sido instalado via Inno Setup." });
+
+            var configRoot = Path.Combine(localAppData, "SoftPrint");
+            var dataRoot   = Path.Combine(configRoot, "data");
+            var pid = Environment.ProcessId;
+            var scriptPath = Path.Combine(Path.GetTempPath(), "SoftPrintUninstall.cmd");
+
+            var lines = new List<string>
+            {
+                "@echo off",
+                "setlocal",
+                ":waitpid",
+                $"tasklist /FI \"PID eq {pid}\" 2>NUL | find \"{pid}\" >NUL",
+                "if not errorlevel 1 (",
+                "  timeout /t 1 /nobreak >nul",
+                "  goto waitpid",
+                ")",
+                "taskkill /F /IM SoftPrint.exe >nul 2>nul",
+                "taskkill /F /IM SoftPrint.Legacy.exe >nul 2>nul",
+                "timeout /t 1 /nobreak >nul"
+            };
+
+            // Sempre removidos — não fazem sentido após desinstalar.
+            foreach (var sub in new[] { "previous", "backups" })
+                lines.Add($"if exist \"{Path.Combine(configRoot, sub)}\" rmdir /s /q \"{Path.Combine(configRoot, sub)}\"");
+            foreach (var f in new[] { "pending-update.json", "update-history.json", "last-update-error.txt" })
+                lines.Add($"if exist \"{Path.Combine(configRoot, f)}\" del /f /q \"{Path.Combine(configRoot, f)}\"");
+
+            // Cache WebView2 — controlado pelo usuário.
+            if (!opts.KeepWebView)
+                lines.Add($"if exist \"{Path.Combine(configRoot, "WebView2")}\" rmdir /s /q \"{Path.Combine(configRoot, "WebView2")}\"");
+
+            // Logs — data/logs/ + logs/ legado.
+            if (!opts.KeepLogs)
+            {
+                lines.Add($"if exist \"{Path.Combine(dataRoot, "logs")}\" rmdir /s /q \"{Path.Combine(dataRoot, "logs")}\"");
+                lines.Add($"if exist \"{Path.Combine(configRoot, "logs")}\" rmdir /s /q \"{Path.Combine(configRoot, "logs")}\"");
+            }
+
+            // Histórico de jobs — data/jobs.json.
+            if (!opts.KeepJobs)
+                lines.Add($"if exist \"{Path.Combine(dataRoot, "jobs.json")}\" del /f /q \"{Path.Combine(dataRoot, "jobs.json")}\"");
+
+            // Configurações (settings.json, api-key.txt, system-settings.json).
+            if (!opts.KeepConfig)
+            {
+                lines.Add($"if exist \"{configRoot}\" rmdir /s /q \"{configRoot}\"");
+            }
+            else if (!opts.KeepJobs && !opts.KeepLogs)
+            {
+                // data/ pode ter ficado vazia — limpa se for o caso.
+                lines.Add($"if exist \"{dataRoot}\" rd \"{dataRoot}\" 2>nul");
+            }
+
+            lines.Add($"\"{uninsPath}\" /VERYSILENT /NORESTART /SUPPRESSMSGBOXES");
+            lines.Add("endlocal");
+
+            File.WriteAllLines(scriptPath, lines);
+
+            var psi = new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = "cmd.exe",
+                Arguments = $"/c \"{scriptPath}\"",
+                UseShellExecute = true,
+                CreateNoWindow = true,
+                WindowStyle = System.Diagnostics.ProcessWindowStyle.Hidden,
+                WorkingDirectory = Path.GetTempPath()
+            };
+            System.Diagnostics.Process.Start(psi);
+
+            _ = Task.Run(async () =>
+            {
+                await Task.Delay(500).ConfigureAwait(false);
+                lifetime.StopApplication();
+            });
+
+            return Results.Ok(new { ok = true });
         });
         app.MapPost("/api/support/bundle", (ISupportBundleService support, IFolderOperations folders) =>
         {

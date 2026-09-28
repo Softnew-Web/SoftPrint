@@ -519,6 +519,14 @@ Teste de impressão de texto.</textarea>
               </div>
               <p id="supportBundleMsg" class="text-xs text-mist"></p>
             </div>
+            <div class="rounded-xl border border-bad/30 bg-ink p-4">
+              <p class="text-xs font-semibold uppercase tracking-wider text-bad mb-3">Desinstalar</p>
+              <p class="text-xs text-mist mb-3">Remove o SoftPrint deste computador. O desinstalador do Windows será executado automaticamente.</p>
+              <button id="btn-uninstall" type="button"
+                class="rounded-lg border border-bad/40 px-3 py-2 text-xs font-medium text-bad hover:bg-bad/10 transition-colors">
+                Desinstalar SoftPrint…
+              </button>
+            </div>
           </div>
 
           <!-- Coluna direita: Configurações deste computador -->
@@ -578,6 +586,59 @@ Teste de impressão de texto.</textarea>
     </div>
     <div id="dlgBody" class="p-5 text-sm whitespace-pre-wrap overflow-auto max-h-[70vh] scroll-thin leading-relaxed"></div>
   </dialog>
+
+  <div id="modal-uninstall" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/60 backdrop-blur-sm">
+    <div class="bg-ink-soft border border-ink-line rounded-2xl p-6 w-full max-w-md mx-4 shadow-2xl">
+      <p class="font-display text-lg font-bold text-white mb-1">Desinstalar SoftPrint?</p>
+      <p class="text-xs text-mist mb-4">O programa será removido. Escolha o que manter no computador:</p>
+
+      <div class="space-y-3 mb-5">
+        <label class="flex items-start gap-3 cursor-pointer">
+          <input id="uninstall-keep-config" type="checkbox" checked
+            class="mt-0.5 shrink-0 accent-sea-glow w-4 h-4 cursor-pointer" />
+          <span>
+            <span class="block text-sm font-medium text-paper">Configurações</span>
+            <span class="block text-xs text-mist">Impressoras, pastas de entrada e chave de API. Ao reinstalar, tudo já vem configurado.</span>
+          </span>
+        </label>
+        <label class="flex items-start gap-3 cursor-pointer">
+          <input id="uninstall-keep-jobs" type="checkbox"
+            class="mt-0.5 shrink-0 accent-sea-glow w-4 h-4 cursor-pointer" />
+          <span>
+            <span class="block text-sm font-medium text-paper">Histórico de jobs</span>
+            <span class="block text-xs text-mist">Registro de arquivos impressos, com status e erros.</span>
+          </span>
+        </label>
+        <label class="flex items-start gap-3 cursor-pointer">
+          <input id="uninstall-keep-logs" type="checkbox"
+            class="mt-0.5 shrink-0 accent-sea-glow w-4 h-4 cursor-pointer" />
+          <span>
+            <span class="block text-sm font-medium text-paper">Logs do sistema</span>
+            <span class="block text-xs text-mist">Arquivos de log para diagnóstico. Raramente necessário após desinstalar.</span>
+          </span>
+        </label>
+        <label class="flex items-start gap-3 cursor-pointer">
+          <input id="uninstall-keep-webview" type="checkbox"
+            class="mt-0.5 shrink-0 accent-sea-glow w-4 h-4 cursor-pointer" />
+          <span>
+            <span class="block text-sm font-medium text-paper">Cache do navegador embutido</span>
+            <span class="block text-xs text-mist">Cache WebView2 (~50–200 MB). Pode ser apagado com segurança.</span>
+          </span>
+        </label>
+      </div>
+
+      <div class="flex gap-3 justify-end">
+        <button id="btn-uninstall-cancel" type="button"
+          class="rounded-lg border border-ink-line px-4 py-2 text-xs font-medium text-mist hover:text-paper transition-colors">
+          Cancelar
+        </button>
+        <button id="btn-uninstall-confirm" type="button"
+          class="rounded-lg bg-bad/90 hover:bg-bad px-4 py-2 text-xs font-bold text-white transition-colors">
+          Desinstalar
+        </button>
+      </div>
+    </div>
+  </div>
 
   <script>
     window.SOFTPRINT_KEY = ""; // chave não é mais embutida — cookie HttpOnly + /api/connect/key
