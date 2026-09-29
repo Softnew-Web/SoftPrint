@@ -25,6 +25,10 @@ namespace SoftPrint.Host.Windows.Legacy
     {
         public static async Task Main(string[] args)
         {
+            // Garante TLS 1.2 no Win7 (necessário para o update checker funcionar via GitHub API)
+            System.Net.ServicePointManager.SecurityProtocol =
+                System.Net.SecurityProtocolType.Tls12 | System.Net.SecurityProtocolType.Tls11;
+
             if (Array.IndexOf(args, "--diagnose") >= 0)
             {
                 LegacyBackgroundHost.EnsureConsole();
