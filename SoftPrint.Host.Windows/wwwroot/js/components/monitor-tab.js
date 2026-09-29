@@ -81,6 +81,51 @@ export function bindMonitorTab({ api, onChanged }) {
 
   let _dragSrcId = null;
 
+  function updateVolumeChart() {
+    const canvas = document.getElementById("volumeChart");
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    const now = new Date();
+    const hours = Array.from({ length: 24 }, (_, i) => {
+      const h = new Date(now);
+      h.setMinutes(0, 0, 0);
+      h.setHours(h.getHours() - 23 + i);
+      return h;
+    });
+    const counts = hours.map((h) => {
+      const next = new Date(h.getTime() + 3600_000);
+      return state.jobs.filter((j) => {
+        const at = new Date(j.finishedAt || j.createdAt);
+        return at >= h && at < next && (j.status === "sent" || j.status === "simulated");
+      }).length;
+    });
+    const total = counts.reduce((a, b) => a + b, 0);
+    const label = document.getElementById("chartTotalLabel");
+    if (label) label.textContent = `${total} impressão${total === 1 ? "" : "ões"}`;
+
+    const W = canvas.offsetWidth || 400;
+    const H = canvas.height;
+    canvas.width = W;
+    ctx.clearRect(0, 0, W, H);
+    const max = Math.max(...counts, 1);
+    const barW = Math.floor(W / 24) - 2;
+    counts.forEach((c, i) => {
+      const x = i * (barW + 2);
+      const h = Math.max(2, Math.floor((c / max) * (H - 16)));
+      const isNow = i === 23;
+      ctx.fillStyle = isNow ? "#14b8a6" : c > 0 ? "#0d9488" : "#2a3644";
+      ctx.beginPath();
+      ctx.roundRect(x, H - h, barW, h, 3);
+      ctx.fill();
+      if (isNow && c > 0) {
+        ctx.fillStyle = "#9aabbc";
+        ctx.font = "10px sans-serif";
+        ctx.textAlign = "center";
+        ctx.fillText(c, x + barW / 2, H - h - 4);
+      }
+    });
+  }
+
   function renderJobs() {
     const statuses = selectedStatuses();
     const rf = document.getElementById("refFilter").value.trim().toLowerCase();
@@ -103,6 +148,13 @@ export function bindMonitorTab({ api, onChanged }) {
             const dragHandle = isPending
               ? `<span class="drag-handle select-none cursor-grab text-mist/50 hover:text-mist px-1" title="Arrastar para reordenar">⠿</span>`
               : `<span class="px-1 opacity-0 select-none">⠿</span>`;
+            const prioBtn = j.status === "pending"
+              ? `<button class="job-prio-btn text-xs px-1 rounded ${j.priority === 1 ? 'text-warn' : 'text-mist/40 hover:text-warn'}"
+                   data-id="${j.id}" data-prio="${j.priority === 1 ? 0 : 1}" title="${j.priority === 1 ? 'Remover urgência' : 'Marcar como urgente'}">⚡</button>`
+              : `<span class="px-1 w-5 inline-block"></span>`;
+            const urgentBadge = j.priority === 1
+              ? `<span class="text-warn text-xs mr-1" title="Urgente">⚡</span>`
+              : "";
             return `
       <tr ${dragAttrs} data-id="${j.id}" class="job-row border-t border-ink-line cursor-pointer hover:bg-ink/60 ${
               state.selectedId === j.id ? "bg-ink" : ""
@@ -110,12 +162,13 @@ export function bindMonitorTab({ api, onChanged }) {
         <td class="px-3 py-2.5" onclick="event.stopPropagation()">
           <div class="flex items-center gap-1">
             ${dragHandle}
+            ${prioBtn}
             <input type="checkbox" class="job-check accent-sea" data-id="${j.id}" aria-label="Selecionar ${escapeHtml(
               j.reference
             )}" />
           </div>
         </td>
-        <td class="px-3 py-2.5 font-medium">${escapeHtml(j.reference)}</td>
+        <td class="px-3 py-2.5 font-medium">${urgentBadge}${escapeHtml(j.reference)}</td>
         <td class="px-3 py-2.5 text-mist">${escapeHtml(j.jobType || "default")}</td>
         <td class="px-3 py-2.5">${escapeHtml(statusLabel[j.status] || j.status)}</td>
         <td class="px-3 py-2.5 text-mist text-xs">${new Date(j.createdAt).toLocaleString()}</td>
@@ -124,6 +177,23 @@ export function bindMonitorTab({ api, onChanged }) {
         )
         .join("") ||
       `<tr><td colspan="5" class="px-3 py-8 text-mist text-center">Nenhum pedido nesta aba.</td></tr>`;
+
+    body.querySelectorAll(".job-prio-btn").forEach((btn) => {
+      btn.addEventListener("click", async (e) => {
+        e.stopPropagation();
+        const id = btn.dataset.id;
+        const prio = Number(btn.dataset.prio);
+        try {
+          await api(`/api/jobs/${id}/priority`, {
+            method: "PUT",
+            body: JSON.stringify({ priority: prio }),
+          });
+          onChanged?.();
+        } catch (err) {
+          feedback(err.message || "Falha ao alterar prioridade.", true);
+        }
+      });
+    });
 
     body.querySelectorAll(".job-row").forEach((row) => {
       row.addEventListener("click", () => {
@@ -191,6 +261,7 @@ export function bindMonitorTab({ api, onChanged }) {
       null;
     if (sel) state.selectedId = sel.id;
     showTrace(sel);
+    updateVolumeChart();
   }
 
   syncFilterLabel();
@@ -404,7 +475,7 @@ export function bindMonitorTab({ api, onChanged }) {
     a.click();
   }
 
-  return { renderJobs, updatePipeline };
+  return { renderJobs, updatePipeline, updateVolumeChart };
 }
 
 function showFullExplanation() {

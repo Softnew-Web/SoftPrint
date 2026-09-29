@@ -41,11 +41,11 @@ public sealed class AppLifecycleLogger(IAppPaths paths, IEventLogStore events) :
                     "Possíveis causas: crash, Gerenciador de tarefas, falta de energia ou reinício forçado.");
             }
 
-            WriteSession(new SessionState("running", DateTimeOffset.Now, Environment.ProcessId, SoftPrintVersion.Current, null, null));
+            WriteSession(new SessionState("running", DateTimeOffset.Now, GetPid(), SoftPrintVersion.Current, null, null));
             WriteLifecycle(
                 "started",
                 "SoftPrint iniciado.",
-                $"PID {Environment.ProcessId} · v{SoftPrintVersion.Current}");
+                $"PID {GetPid()} · v{SoftPrintVersion.Current}");
         }
     }
 
@@ -75,7 +75,7 @@ public sealed class AppLifecycleLogger(IAppPaths paths, IEventLogStore events) :
             WriteSession(new SessionState(
                 "stopped",
                 DateTimeOffset.Now,
-                Environment.ProcessId,
+                GetPid(),
                 SoftPrintVersion.Current,
                 reason,
                 DateTimeOffset.Now));
@@ -92,7 +92,7 @@ public sealed class AppLifecycleLogger(IAppPaths paths, IEventLogStore events) :
 
     public void OnCrash(Exception exception, string? context = null)
     {
-        ArgumentNullException.ThrowIfNull(exception);
+        if (exception is null) throw new ArgumentNullException(nameof(exception));
         lock (_gate)
         {
             var (title, detail) = FormatException(exception, context);
@@ -113,7 +113,7 @@ public sealed class AppLifecycleLogger(IAppPaths paths, IEventLogStore events) :
             WriteSession(new SessionState(
                 "crashed",
                 DateTimeOffset.Now,
-                Environment.ProcessId,
+                GetPid(),
                 SoftPrintVersion.Current,
                 AppExitReasons.Crashed,
                 DateTimeOffset.Now));
@@ -268,6 +268,15 @@ public sealed class AppLifecycleLogger(IAppPaths paths, IEventLogStore events) :
         {
             /* ignore */
         }
+    }
+
+    private static int GetPid()
+    {
+#if NET5_0_OR_GREATER
+        return Environment.ProcessId;
+#else
+        return System.Diagnostics.Process.GetCurrentProcess().Id;
+#endif
     }
 
     private sealed record SessionState(

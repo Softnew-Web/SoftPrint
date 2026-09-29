@@ -11,7 +11,11 @@ public static class PackageIntegrity
         using var stream = File.OpenRead(filePath);
         using var sha = SHA256.Create();
         var hash = sha.ComputeHash(stream);
+#if NET5_0_OR_GREATER
         return Convert.ToHexString(hash).ToLowerInvariant();
+#else
+        return BitConverter.ToString(hash).Replace("-", "").ToLowerInvariant();
+#endif
     }
 
     /// <summary>Exige SHA256 — sem hash ou mismatch = falha (fail-closed).</summary>
@@ -38,7 +42,11 @@ public static class PackageIntegrity
     /// </summary>
     public static void EnsureAuthenticode(string exePath, bool requireSigned)
     {
+#if NET5_0_OR_GREATER
         if (!OperatingSystem.IsWindows()) return;
+#else
+        if (!SoftPrint.Infrastructure.Compat.OsHelper.IsWindows()) return;
+#endif
         if (!File.Exists(exePath)) return;
 
         try
@@ -74,14 +82,14 @@ public static class PackageIntegrity
         if (string.IsNullOrWhiteSpace(checksumsFileContent) || string.IsNullOrWhiteSpace(fileName))
             return null;
 
-        foreach (var raw in checksumsFileContent.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries))
+        foreach (var raw in checksumsFileContent.Split(new char[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries))
         {
             var line = raw.Trim();
             if (line.Length == 0 || line.StartsWith('#')) continue;
             var parts = line.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
             if (parts.Length < 2) continue;
             var hash = Normalize(parts[0]);
-            var name = parts[^1].TrimStart('*');
+            var name = parts[parts.Length - 1].TrimStart('*');
             if (hash.Length == 64 &&
                 string.Equals(name, fileName, StringComparison.OrdinalIgnoreCase))
                 return hash;
@@ -91,5 +99,5 @@ public static class PackageIntegrity
     }
 
     private static string Normalize(string value) =>
-        value.Trim().ToLowerInvariant().Replace("-", "", StringComparison.Ordinal);
+        value.Trim().ToLowerInvariant().Replace("-", "");
 }

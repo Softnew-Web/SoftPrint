@@ -1,79 +1,94 @@
+using System;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
+using System.Threading;
+using System.Windows.Forms;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 
-namespace SoftPrint.Host.Windows.Legacy;
-
-internal static class LegacyBackgroundHost
+namespace SoftPrint.Host.Windows.Legacy
 {
-    [DllImport("kernel32.dll")]
-    private static extern bool AllocConsole();
-
-    public static void EnsureConsole() => AllocConsole();
-
-    public static void StartTray(WebApplication app, bool startHidden)
+    internal static class LegacyBackgroundHost
     {
-        app.Lifetime.ApplicationStarted.Register(() =>
+        [DllImport("kernel32.dll")]
+        private static extern bool AllocConsole();
+
+        public static void EnsureConsole() => AllocConsole();
+
+        public static void StartTray(IHostApplicationLifetime lifetime, IServiceProvider services, string address, bool startHidden)
         {
-            var address = (app.Urls.FirstOrDefault() ?? "http://127.0.0.1:5178").TrimEnd('/');
-            var thread = new Thread(() =>
+            lifetime.ApplicationStarted.Register(() =>
             {
-                System.Windows.Forms.Application.SetHighDpiMode(HighDpiMode.PerMonitorV2);
-                System.Windows.Forms.Application.EnableVisualStyles();
-                System.Windows.Forms.Application.SetCompatibleTextRenderingDefault(false);
-                using var notify = new NotifyIcon
+                var thread = new Thread(() =>
                 {
-                    Visible = true,
-                    Text = "SoftPrint Legacy — em segundo plano",
-                    Icon = SystemIcons.Application,
-                    BalloonTipTitle = "SoftPrint"
-                };
-                using var menu = new ContextMenuStrip();
-                menu.Items.Add("Abrir painel", null, (_, _) => OpenDashboard(address));
-                menu.Items.Add("Sair", null, (_, _) => app.Lifetime.StopApplication());
-                notify.ContextMenuStrip = menu;
-                notify.DoubleClick += (_, _) => OpenDashboard(address);
-                notify.MouseClick += (_, e) =>
-                {
-                    if (e.Button == MouseButtons.Left)
-                        OpenDashboard(address);
-                };
-                app.Lifetime.ApplicationStopping.Register(() =>
-                {
-                    try { notify.Visible = false; System.Windows.Forms.Application.Exit(); }
-                    catch { /* ignore */ }
-                });
-                if (!startHidden)
-                    OpenDashboard(address);
-                else
-                {
-                    var alerts = app.Services.GetService<SoftPrint.Application.Abstractions.ISystemSettingsRepository>()
-                        ?.Current.SoundEnabled != false;
-                    if (alerts)
+#if NET5_0_OR_GREATER
+                    System.Windows.Forms.Application.SetHighDpiMode(HighDpiMode.PerMonitorV2);
+#endif
+                    System.Windows.Forms.Application.EnableVisualStyles();
+                    System.Windows.Forms.Application.SetCompatibleTextRenderingDefault(false);
+                    using (var notify = new NotifyIcon
                     {
-                        notify.ShowBalloonTip(
-                            4000,
-                            "SoftPrint",
-                            "Impressão em segundo plano. Clique no ícone da bandeja para abrir o painel.",
-                            ToolTipIcon.Info);
+                        Visible = true,
+                        Text = "SoftPrint Legacy — em segundo plano",
+                        Icon = SystemIcons.Application,
+                        BalloonTipTitle = "SoftPrint"
+                    })
+                    using (var menu = new ContextMenuStrip())
+                    {
+                        menu.Items.Add("Abrir painel", null, (sender1, e1) => OpenDashboard(address));
+                        menu.Items.Add("Sair", null, (sender2, e2) => lifetime.StopApplication());
+                        notify.ContextMenuStrip = menu;
+                        notify.DoubleClick += (sender3, e3) => OpenDashboard(address);
+                        notify.MouseClick += (s, e) =>
+                        {
+                            if (e.Button == MouseButtons.Left)
+                                OpenDashboard(address);
+                        };
+                        lifetime.ApplicationStopping.Register(() =>
+                        {
+                            try
+                            {
+                                notify.Visible = false;
+                                System.Windows.Forms.Application.Exit();
+                            }
+                            catch { /* ignore */ }
+                        });
+                        if (!startHidden)
+                        {
+                            OpenDashboard(address);
+                        }
+                        else
+                        {
+                            var sysRepo = services.GetService<SoftPrint.Application.Abstractions.ISystemSettingsRepository>();
+                            var alerts = sysRepo?.Current.SoundEnabled != false;
+                            if (alerts)
+                            {
+                                notify.ShowBalloonTip(
+                                    4000,
+                                    "SoftPrint",
+                                    "Impressão em segundo plano. Clique no ícone da bandeja para abrir o painel.",
+                                    ToolTipIcon.Info);
+                            }
+                        }
+                        System.Windows.Forms.Application.Run();
                     }
-                }
-                System.Windows.Forms.Application.Run();
+                });
+                thread.SetApartmentState(ApartmentState.STA);
+                thread.IsBackground = true;
+                thread.Start();
             });
-            thread.SetApartmentState(ApartmentState.STA);
-            thread.IsBackground = true;
-            thread.Start();
-        });
-    }
-
-    private static void OpenDashboard(string address)
-    {
-        try
-        {
-            Process.Start(new ProcessStartInfo($"{address}/dashboard") { UseShellExecute = true });
         }
-        catch
+
+        private static void OpenDashboard(string address)
         {
-            /* ignore */
+            try
+            {
+                Process.Start(new ProcessStartInfo($"{address}/dashboard") { UseShellExecute = true });
+            }
+            catch
+            {
+                /* ignore */
+            }
         }
     }
 }

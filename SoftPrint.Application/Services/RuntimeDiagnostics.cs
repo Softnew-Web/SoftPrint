@@ -2,6 +2,15 @@ using System.Runtime.InteropServices;
 
 namespace SoftPrint.Application.Services;
 
+#if !NET5_0_OR_GREATER
+// Alias local para RuntimeInformation helpers usados no polyfill de OperatingSystem
+// (netcoreapp3.1 tem System.OperatingSystem mas sem IsWindows/IsLinux/etc.)
+internal static class OsHelper
+{
+    public static bool IsWindows() => RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
+}
+#endif
+
 public sealed record DiagnoseCheck(string Name, bool Available, string? Detail = null);
 
 public sealed record DiagnoseReport(
@@ -26,7 +35,7 @@ public static class RuntimeDiagnostics
             $"Runtime: {report.Runtime}",
             $"Printing backend: {report.PrintingBackend}"
         }.Concat(report.Checks.Select(check =>
-            $"{check.Name}: {(check.Available ? "available" : "unavailable")}{(check.Detail is { Length: > 0 } detail ? $" ({detail})" : "")}")));
+            $"{check.Name}: {(check.Available ? "available" : "unavailable")}{(!string.IsNullOrEmpty(check.Detail) ? $" ({check.Detail})" : "")}")));
     }
 
     public static DiagnoseReport Create(
@@ -37,11 +46,15 @@ public static class RuntimeDiagnostics
             new("PDFium/Skia", TypeAvailable("PDFtoImage.Conversion, PDFtoImage")),
             new("User config root", Directory.Exists(
                 Environment.GetEnvironmentVariable("SOFTPRINT_CONFIG_ROOT")
+#if NET5_0_OR_GREATER
                 ?? (OperatingSystem.IsWindows()
+#else
+                ?? (OsHelper.IsWindows()
+#endif
                     ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SoftPrint")
                     : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".config", "softprint"))))
         };
-        if (extra is not null) checks.AddRange(extra);
+        if (extra != null) checks.AddRange(extra);
         return new DiagnoseReport(
             edition,
             RuntimeInformation.OSDescription,
@@ -53,7 +66,7 @@ public static class RuntimeDiagnostics
 
     private static bool TypeAvailable(string displayName)
     {
-        try { return Type.GetType(displayName, throwOnError: false) is not null; }
+        try { return Type.GetType(displayName, throwOnError: false) != null; }
         catch { return false; }
     }
 }

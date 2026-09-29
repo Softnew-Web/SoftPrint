@@ -58,7 +58,11 @@ public sealed class PrinterRouter(
     {
         var map = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         if (string.IsNullOrWhiteSpace(raw)) return map;
+#if NET5_0_OR_GREATER
         foreach (var part in raw.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+#else
+        foreach (var part in raw.Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries).Select(p => p.Trim()).Where(p => p.Length > 0))
+#endif
         {
             var idx = part.IndexOf('=');
             if (idx <= 0) continue;
@@ -112,6 +116,11 @@ public sealed class JobQueueService(
 
     public void Reorder(IEnumerable<Guid> ids) => repository.ReorderPending(ids);
 
+    public void SetPriority(Guid id, int priority)
+    {
+        repository.SetJobPriority(id, priority);
+    }
+
     public PrintJob Reprint(Guid id)
     {
         var original = repository.FindById(id)
@@ -119,7 +128,11 @@ public sealed class JobQueueService(
         if (original.Status is JobStatus.Pending or JobStatus.Processing)
             throw new ArgumentException("Aguarde o pedido atual terminar antes de reimprimir.");
 
+#if NET6_0_OR_GREATER
         var reference = $"reprint-{original.Reference}-{DateTimeOffset.UtcNow:HHmmss}-{Random.Shared.Next(100, 999)}";
+#else
+        var reference = $"reprint-{original.Reference}-{DateTimeOffset.UtcNow:HHmmss}-{new Random().Next(100, 999)}";
+#endif
         if (reference.Length > 120) reference = reference[..120];
 
         return repository.Add(factory.Create(

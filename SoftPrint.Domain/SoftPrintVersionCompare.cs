@@ -30,7 +30,12 @@ public static class SoftPrintVersionCompare
 
     private static string Pad(string version)
     {
+#if NET5_0_OR_GREATER
         var parts = version.Split('.', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+#else
+        var parts = version.Split(new[] { '.' }, StringSplitOptions.RemoveEmptyEntries)
+            .Select(p => p.Trim()).Where(p => p.Length > 0).ToArray();
+#endif
         while (parts.Length < 3)
             parts = parts.Append("0").ToArray();
         return string.Join('.', parts.Take(4));

@@ -19,6 +19,7 @@ public interface IJobRepository
     int PurgeOlderThan(DateTimeOffset cutoff);
     /// <summary>Reordena os jobs pendentes segundo a sequência de IDs fornecida.</summary>
     void ReorderPending(IEnumerable<Guid> ids) { }
+    void SetJobPriority(Guid id, int priority) { }
 }
 
 public readonly record struct JobStepDraft(

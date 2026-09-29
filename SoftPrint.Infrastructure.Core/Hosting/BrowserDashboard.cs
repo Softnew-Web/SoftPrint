@@ -2,6 +2,7 @@ using System.Diagnostics;
 
 namespace SoftPrint.Infrastructure.Hosting;
 
+#if NET6_0_OR_GREATER
 public static class BrowserDashboard
 {
     public static void OpenWhenReady(WebApplication app, string[] args)
@@ -31,3 +32,4 @@ public static class BrowserDashboard
         });
     }
 }
+#endif

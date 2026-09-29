@@ -3,6 +3,9 @@ using System.Security.AccessControl;
 using System.Security.Cryptography;
 using System.Security.Principal;
 using SoftPrint.Application.Abstractions;
+#if !NET5_0_OR_GREATER
+using SoftPrint.Infrastructure.Compat;
+#endif
 
 namespace SoftPrint.Infrastructure.Persistence;
 
@@ -45,7 +48,14 @@ public sealed class FileApiKeyProvider : IApiKeyProvider
 
     private void WriteNewKeyUnlocked()
     {
+#if NET6_0_OR_GREATER
         var raw = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
+#else
+        var keyBytes = new byte[32];
+        using (var rng = RandomNumberGenerator.Create())
+            rng.GetBytes(keyBytes);
+        var raw = BitConverter.ToString(keyBytes).Replace("-", "");
+#endif
         File.WriteAllText(_keyPath, raw + Environment.NewLine);
     }
 
@@ -55,7 +65,11 @@ public sealed class FileApiKeyProvider : IApiKeyProvider
     {
         try
         {
+#if NET5_0_OR_GREATER
             if (OperatingSystem.IsWindows())
+#else
+            if (OsHelper.IsWindows())
+#endif
                 HardenWindowsAcl(path);
 #if NET7_0_OR_GREATER
             else if (OperatingSystem.IsLinux() || OperatingSystem.IsMacOS())

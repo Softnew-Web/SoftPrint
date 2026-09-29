@@ -9,6 +9,25 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@500;700;800&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/css/app.css" />
+  <style>
+    body.light-mode {
+      --color-ink: #f1f5f9;
+      --color-ink-soft: #e2e8f0;
+      --color-ink-line: #cbd5e1;
+      --color-paper: #0f172a;
+      --color-mist: #64748b;
+    }
+    body.light-mode { background-color: #f1f5f9; color: #0f172a; }
+    body.light-mode .bg-ink { background-color: #f1f5f9 !important; }
+    body.light-mode .bg-ink-soft { background-color: #e2e8f0 !important; }
+    body.light-mode .border-ink-line { border-color: #cbd5e1 !important; }
+    body.light-mode .text-paper { color: #0f172a !important; }
+    body.light-mode .text-mist { color: #475569 !important; }
+    body.light-mode .text-white { color: #0f172a !important; }
+    body.light-mode .hover\:bg-ink\/60:hover { background-color: rgba(241,245,249,0.6) !important; }
+    body.light-mode .bg-ink\/40, body.light-mode .bg-ink\/60, body.light-mode .bg-ink\/70 { background-color: #e2e8f0 !important; }
+    body.light-mode canvas { filter: invert(1) hue-rotate(180deg); }
+  </style>
   <script>
     tailwind.config = {
       theme: {
@@ -57,6 +76,12 @@
           <span class="block text-sm font-medium">Configurações</span>
         </button>
       </nav>
+
+      <button id="btnToggleTheme" type="button"
+        class="w-full text-left rounded-xl px-3 py-2 text-xs text-mist hover:text-paper hover:bg-ink-line/50 flex items-center gap-2 transition-colors">
+        <span id="themeIcon">☀️</span>
+        <span id="themeLabel">Modo claro</span>
+      </button>
 
       <div class="mt-auto text-xs text-mist/80 leading-relaxed">
         <span id="closeHint">Fechar o painel deixa o SoftPrint imprimindo na bandeja.<br /></span>
@@ -270,6 +295,12 @@
                     <span class="text-mist text-[11px]">Cópias por arquivo</span>
                     <input id="inboxEntryCopies" type="number" min="1" max="99" value="1" class="mt-0.5 w-full rounded-lg bg-ink border border-ink-line px-2 py-1.5 text-sm" />
                   </label>
+                  <div>
+                    <label class="block text-xs text-mist mb-1">Limite por minuto</label>
+                    <input id="inboxEntryRateLimit" type="number" min="0" max="1000" value="0"
+                      class="w-full rounded-lg bg-ink border border-ink-line px-3 py-2 text-sm focus:outline-none focus:border-sea" />
+                    <p class="text-[11px] text-mist mt-1">0 = sem limite. Máx de impressões por minuto por esta pasta.</p>
+                  </div>
                   <label class="block text-sm">
                     <span class="text-mist text-[11px]">Webhook URL (opcional — POST ao imprimir)</span>
                     <input id="inboxEntryWebhookUrl" type="url" placeholder="https://exemplo.com/hook" class="mt-0.5 w-full rounded-lg bg-ink border border-ink-line px-2 py-1.5 text-sm" />
@@ -385,6 +416,13 @@
 
         <!-- ABA 03 -->
         <section id="panel-monitor" class="panel-hidden space-y-4 h-full overflow-y-auto scroll-thin">
+          <div class="rounded-xl border border-ink-line bg-ink-soft p-4 mb-4 shrink-0">
+            <div class="flex items-center justify-between mb-3">
+              <p class="text-xs font-semibold uppercase tracking-wide text-mist">Volume — últimas 24h</p>
+              <p id="chartTotalLabel" class="text-xs text-sea-glow font-semibold"></p>
+            </div>
+            <canvas id="volumeChart" height="64" class="w-full"></canvas>
+          </div>
           <div class="rounded-2xl bg-ink-soft border border-ink-line p-5 space-y-4">
             <div class="flex flex-wrap items-start justify-between gap-3">
               <div class="min-w-0">
@@ -670,5 +708,28 @@ Teste de impressão de texto.</textarea>
   </script>
   <script defer src="/js/app.bundle.js?v=20260925a"
           onerror="document.getElementById('healthLine').textContent='Falha ao carregar o painel.'"></script>
+  <script>
+    // Theme toggle
+    (function() {
+      const stored = localStorage.getItem('softprint-theme');
+      if (stored === 'light') document.body.classList.add('light-mode');
+      document.getElementById('btnToggleTheme')?.addEventListener('click', () => {
+        const isLight = document.body.classList.toggle('light-mode');
+        localStorage.setItem('softprint-theme', isLight ? 'light' : 'dark');
+        const icon = document.getElementById('themeIcon');
+        const lbl = document.getElementById('themeLabel');
+        if (icon) icon.textContent = isLight ? '🌙' : '☀️';
+        if (lbl) lbl.textContent = isLight ? 'Modo escuro' : 'Modo claro';
+      });
+      // Init button state
+      const isLight = document.body.classList.contains('light-mode');
+      setTimeout(() => {
+        const icon = document.getElementById('themeIcon');
+        const lbl = document.getElementById('themeLabel');
+        if (icon) icon.textContent = isLight ? '🌙' : '☀️';
+        if (lbl) lbl.textContent = isLight ? 'Modo escuro' : 'Modo claro';
+      }, 0);
+    })();
+  </script>
 </body>
 </html>

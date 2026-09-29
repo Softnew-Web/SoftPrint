@@ -60,7 +60,11 @@ public sealed class SoftPrintUpdateApplier : IUpdateApplier
 
     private bool TryStartCore(string? targetVersion, bool rollback, out string? error)
     {
+#if NET5_0_OR_GREATER
         if (!OperatingSystem.IsWindows())
+#else
+        if (!SoftPrint.Infrastructure.Compat.OsHelper.IsWindows())
+#endif
         {
             error = "Atualização automática disponível apenas no Windows. Use o pacote Linux.";
             return false;
@@ -347,10 +351,18 @@ public sealed class SoftPrintUpdateApplier : IUpdateApplier
         var currentVersion = SoftPrintVersion.Current;
         var modern = Path.Combine(installDir, "SoftPrint.exe");
         var legacy = Path.Combine(installDir, "SoftPrint.Legacy.exe");
+#if NET6_0_OR_GREATER
         var current = Environment.ProcessPath ?? "";
+#else
+        var current = System.Diagnostics.Process.GetCurrentProcess().MainModule?.FileName ?? "";
+#endif
         var preferLegacy = current.Contains("Legacy", StringComparison.OrdinalIgnoreCase);
         var fallback = File.Exists(current) ? current : modern;
+#if NET5_0_OR_GREATER
         var pid = Environment.ProcessId;
+#else
+        var pid = System.Diagnostics.Process.GetCurrentProcess().Id;
+#endif
         var hpatch = Path.Combine(extractDir, "hpatchz.exe");
         if (!File.Exists(hpatch))
             hpatch = Path.Combine(extractDir, "hpatchz");
@@ -411,10 +423,18 @@ public sealed class SoftPrintUpdateApplier : IUpdateApplier
         var installDir = LocalPreviousVersionStore.InstallDirectory;
         var modern = Path.Combine(installDir, "SoftPrint.exe");
         var legacy = Path.Combine(installDir, "SoftPrint.Legacy.exe");
+#if NET6_0_OR_GREATER
         var current = Environment.ProcessPath ?? "";
+#else
+        var current = System.Diagnostics.Process.GetCurrentProcess().MainModule?.FileName ?? "";
+#endif
         var preferLegacy = current.Contains("Legacy", StringComparison.OrdinalIgnoreCase);
         var fallback = File.Exists(current) ? current : modern;
+#if NET5_0_OR_GREATER
         var pid = Environment.ProcessId;
+#else
+        var pid = System.Diagnostics.Process.GetCurrentProcess().Id;
+#endif
 
         var lines = new List<string>
         {
@@ -464,10 +484,18 @@ public sealed class SoftPrintUpdateApplier : IUpdateApplier
         var currentVersion = SoftPrintVersion.Current;
         var modern = Path.Combine(installDir, "SoftPrint.exe");
         var legacy = Path.Combine(installDir, "SoftPrint.Legacy.exe");
+#if NET6_0_OR_GREATER
         var current = Environment.ProcessPath ?? "";
+#else
+        var current = System.Diagnostics.Process.GetCurrentProcess().MainModule?.FileName ?? "";
+#endif
         var preferLegacy = current.Contains("Legacy", StringComparison.OrdinalIgnoreCase);
         var fallback = File.Exists(current) ? current : modern;
+#if NET5_0_OR_GREATER
         var pid = Environment.ProcessId;
+#else
+        var pid = System.Diagnostics.Process.GetCurrentProcess().Id;
+#endif
 
         var lines = new[]
         {

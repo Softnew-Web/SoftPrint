@@ -29,7 +29,8 @@ public static class ApiMapping
                     e.CustomSettings?.PaperHeightMm,
                     e.CustomSettings?.PaperLandscape,
                     e.Copies,
-                    e.WebhookUrl))
+                    e.WebhookUrl,
+                    e.RateLimitPerMinute))
                 .ToArray());
 
     public static PrintJobDto ToDto(this PrintJob job) =>
@@ -50,5 +51,6 @@ public static class ApiMapping
             job.ContentKind.ToWire(),
             job.SourcePath,
             job.TemplateName,
-            job.ReprintedFromId);
+            job.ReprintedFromId,
+            job.Priority);
 }

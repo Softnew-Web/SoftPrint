@@ -7,7 +7,11 @@ public static class JobStatusTypeCatalogFactory
     public static JobStatusTypeCatalog FromConfiguration(IConfiguration configuration)
     {
         var map = JobStatusTypeCatalog.CreateDefaults();
+#if NET5_0_OR_GREATER
         foreach (var status in Enum.GetValues<JobStatus>())
+#else
+        foreach (JobStatus status in Enum.GetValues(typeof(JobStatus)))
+#endif
         {
             var section = configuration.GetSection($"SoftPrint:Statuses:{status}");
             var wire = section["Wire"];

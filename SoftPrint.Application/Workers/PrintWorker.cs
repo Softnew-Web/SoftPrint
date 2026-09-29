@@ -34,6 +34,9 @@ public sealed class PrintWorker(
     private readonly ConcurrentDictionary<string, (int Count, DateTimeOffset FirstAt)> _balloonGroups = new();
     private readonly object _balloonGate = new();
 
+    // Rate limiting: inbox entry id → sliding window of print timestamps
+    private readonly ConcurrentDictionary<Guid, Queue<DateTimeOffset>> _rateWindows = new();
+
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         await Task.Yield();
@@ -50,6 +53,15 @@ public sealed class PrintWorker(
 
             var pending = jobs.PeekNextPending();
             if (pending is null)
+            {
+                await Task.Delay(pollInterval, stoppingToken);
+                continue;
+            }
+
+            // Rate limit check: if the inbox entry for this job is rate-limited, skip without dequeuing
+            var matchingEntryForPeek = options.InboxEntries.FirstOrDefault(e =>
+                InboxFileRules.IsUnderInbox(pending.SourcePath, e.Folder));
+            if (matchingEntryForPeek is not null && IsRateLimited(matchingEntryForPeek))
             {
                 await Task.Delay(pollInterval, stoppingToken);
                 continue;
@@ -195,6 +207,23 @@ public sealed class PrintWorker(
                 InboxFileRules.IsUnderInbox(finished.SourcePath, e.Folder));
             if (!string.IsNullOrWhiteSpace(entryForWebhook?.WebhookUrl))
                 _ = TryFireEntryWebhookAsync(entryForWebhook!.WebhookUrl!, finished, status);
+        }
+    }
+
+    private bool IsRateLimited(InboxEntry entry)
+    {
+        if (entry.RateLimitPerMinute <= 0) return false;
+        var now = DateTimeOffset.UtcNow;
+        var cutoff = now.AddMinutes(-1);
+        var window = _rateWindows.GetOrAdd(entry.Id, _ => new Queue<DateTimeOffset>());
+        lock (window)
+        {
+            while (window.Count > 0 && window.Peek() < cutoff)
+                window.Dequeue();
+            if (window.Count >= entry.RateLimitPerMinute)
+                return true;
+            window.Enqueue(now);
+            return false;
         }
     }
 

@@ -57,6 +57,18 @@ public static class JobEndpoints
                 return Results.BadRequest(new { error = ex.Message });
             }
         });
+        app.MapPut("/api/jobs/{id:guid}/priority", (Guid id, SetPriorityRequest req, JobQueueService jobs) =>
+        {
+            try
+            {
+                jobs.SetPriority(id, req.Priority);
+                return Results.Ok(new { id, priority = req.Priority });
+            }
+            catch (Exception ex)
+            {
+                return Results.BadRequest(new { error = ex.Message });
+            }
+        });
 
         return app;
     }
@@ -379,7 +391,8 @@ public static class SettingsEndpoints
                     DeleteAfterPrint = request.DeleteAfterPrint,
                     CustomSettings = BuildCustomSettings(request),
                     Copies = Math.Clamp(request.Copies, 1, 99),
-                    WebhookUrl = string.IsNullOrWhiteSpace(request.WebhookUrl) ? null : request.WebhookUrl.Trim()
+                    WebhookUrl = string.IsNullOrWhiteSpace(request.WebhookUrl) ? null : request.WebhookUrl.Trim(),
+                    RateLimitPerMinute = Math.Clamp(request.RateLimitPerMinute, 0, 1000),
                 };
                 return Results.Ok(settings.UpsertInboxEntry(entry, request.ExpectedRevision).ToDto());
             }
@@ -400,7 +413,8 @@ public static class SettingsEndpoints
                     DeleteAfterPrint = request.DeleteAfterPrint,
                     CustomSettings = BuildCustomSettings(request),
                     Copies = Math.Clamp(request.Copies, 1, 99),
-                    WebhookUrl = string.IsNullOrWhiteSpace(request.WebhookUrl) ? null : request.WebhookUrl.Trim()
+                    WebhookUrl = string.IsNullOrWhiteSpace(request.WebhookUrl) ? null : request.WebhookUrl.Trim(),
+                    RateLimitPerMinute = Math.Clamp(request.RateLimitPerMinute, 0, 1000),
                 };
                 return Results.Ok(settings.UpsertInboxEntry(entry, request.ExpectedRevision).ToDto());
             }

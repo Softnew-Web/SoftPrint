@@ -102,7 +102,12 @@ public sealed class WindowsNetworkPrinterInstaller : INetworkPrinterInstaller
 
         var stdoutTask = process.StandardOutput.ReadToEndAsync();
         var stderrTask = process.StandardError.ReadToEndAsync();
+#if NET5_0_OR_GREATER
         await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
+#else
+        // netcoreapp3.1: WaitForExitAsync não disponível — executar de forma síncrona em thread pool
+        await Task.Run(() => process.WaitForExit(), cancellationToken).ConfigureAwait(false);
+#endif
         return (process.ExitCode, await stdoutTask.ConfigureAwait(false), await stderrTask.ConfigureAwait(false));
     }
 

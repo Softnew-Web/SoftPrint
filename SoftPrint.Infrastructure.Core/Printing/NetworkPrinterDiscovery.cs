@@ -30,8 +30,13 @@ public sealed class NetworkPrinterDiscovery(IOptions<SoftPrintFeatureOptions> op
             }
         }
 
+#if NET6_0_OR_GREATER
         foreach (var batch in tasks.Chunk(64))
             await Task.WhenAll(batch);
+#else
+        foreach (var batch in ChunkFallback(tasks, 64))
+            await Task.WhenAll(batch);
+#endif
 
         return results.Values
             .OrderBy(r => r.Address)
@@ -47,9 +52,20 @@ public sealed class NetworkPrinterDiscovery(IOptions<SoftPrintFeatureOptions> op
         try
         {
             using var client = new TcpClient();
+#if NET5_0_OR_GREATER
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             cts.CancelAfter(timeoutMs);
             await client.ConnectAsync(IPAddress.Parse(ip), port, cts.Token);
+#else
+            // netcoreapp3.1: ConnectAsync sem CancellationToken — usar Task.WhenAny com delay
+            cancellationToken.ThrowIfCancellationRequested();
+            var connectTask = client.ConnectAsync(IPAddress.Parse(ip), port);
+            var delayTask = Task.Delay(timeoutMs, cancellationToken);
+            var completed = await Task.WhenAny(connectTask, delayTask);
+            if (completed != connectTask || !connectTask.IsCompletedSuccessfully)
+                return; // timeout ou cancelamento
+            await connectTask; // propaga exceção de connect se houver
+#endif
             if (client.Connected)
             {
                 var item = new DiscoveredNetworkPrinter(
@@ -70,6 +86,19 @@ public sealed class NetworkPrinterDiscovery(IOptions<SoftPrintFeatureOptions> op
             // host offline / porta fechada
         }
     }
+
+#if !NET6_0_OR_GREATER
+    private static IEnumerable<IEnumerable<T>> ChunkFallback<T>(IEnumerable<T> source, int size)
+    {
+        var list = new List<T>();
+        foreach (var item in source)
+        {
+            list.Add(item);
+            if (list.Count == size) { yield return list; list = new List<T>(); }
+        }
+        if (list.Count > 0) yield return list;
+    }
+#endif
 
     private static IReadOnlyList<string> GetLocalPrefixes()
     {

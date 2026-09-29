@@ -69,7 +69,11 @@ public sealed class SoftPrintFeatureOptions
     public IReadOnlyDictionary<string, string> ParseRoutes()
     {
         var map = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+#if NET5_0_OR_GREATER
         foreach (var part in PrinterRoutes.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+#else
+        foreach (var part in PrinterRoutes.Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries).Select(p => p.Trim()).Where(p => p.Length > 0))
+#endif
         {
             var idx = part.IndexOf('=');
             if (idx <= 0) continue;
@@ -81,7 +85,11 @@ public sealed class SoftPrintFeatureOptions
     public IReadOnlyDictionary<string, string> ParseTemplates()
     {
         var map = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+#if NET5_0_OR_GREATER
         foreach (var part in Templates.Split("||", StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+#else
+        foreach (var part in Templates.Split(new[] { "||" }, StringSplitOptions.RemoveEmptyEntries).Select(p => p.Trim()).Where(p => p.Length > 0))
+#endif
         {
             var idx = part.IndexOf('=');
             if (idx <= 0) continue;

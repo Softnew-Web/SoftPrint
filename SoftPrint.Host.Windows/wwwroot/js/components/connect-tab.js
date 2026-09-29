@@ -176,6 +176,7 @@ export function bindConnectTab({ api }) {
   const inboxEntryScale = document.getElementById("inboxEntryScale");
   const inboxEntryScaleLabel = document.getElementById("inboxEntryScaleLabel");
   const inboxEntryCopies = document.getElementById("inboxEntryCopies");
+  const inboxEntryRateLimit = document.getElementById("inboxEntryRateLimit");
   const inboxEntryWebhookUrl = document.getElementById("inboxEntryWebhookUrl");
   const inboxFolderList = document.getElementById("inboxFolderList");
 
@@ -240,6 +241,7 @@ export function bindConnectTab({ api }) {
     if (inboxEntryScale) inboxEntryScale.value = scale;
     if (inboxEntryScaleLabel) inboxEntryScaleLabel.textContent = `${scale}%`;
     if (inboxEntryCopies) inboxEntryCopies.value = entry?.copies ?? 1;
+    if (inboxEntryRateLimit) inboxEntryRateLimit.value = entry?.rateLimitPerMinute ?? 0;
     if (inboxEntryWebhookUrl) inboxEntryWebhookUrl.value = entry?.webhookUrl ?? "";
     toggleCustomPaperRow();
     // Dispara change depois de todos os campos preenchidos para redrawPreview
@@ -475,7 +477,7 @@ export function bindConnectTab({ api }) {
 
   [inboxEntryLabel, inboxEntryPrinter,
    inboxEntryPaperW, inboxEntryPaperH, inboxEntryImageFit, inboxEntryLandscape,
-   inboxEntryCopies, inboxEntryWebhookUrl].forEach((el) => {
+   inboxEntryCopies, inboxEntryRateLimit, inboxEntryWebhookUrl].forEach((el) => {
     el?.addEventListener("input", markDirty);
     el?.addEventListener("change", markDirty);
   });
@@ -499,6 +501,7 @@ export function bindConnectTab({ api }) {
       paperHeightMm: parseFloat(inboxEntryPaperH?.value || "297"),
       paperLandscape: !!inboxEntryLandscape?.checked,
       copies: Math.max(1, Math.min(99, parseInt(inboxEntryCopies?.value || "1", 10))),
+      rateLimitPerMinute: Math.max(0, Math.min(1000, parseInt(inboxEntryRateLimit?.value || "0", 10))),
       webhookUrl: inboxEntryWebhookUrl?.value.trim() || null,
     };
     try {
