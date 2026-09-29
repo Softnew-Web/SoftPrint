@@ -36,7 +36,8 @@ public record InboxEntryRequest(
     double? PaperHeightMm = null,
     bool? PaperLandscape = null,
     int Copies = 1,
-    string? WebhookUrl = null);
+    string? WebhookUrl = null,
+    int RateLimitPerMinute = 0);
 
 public record InboxEntryDto(
     Guid Id,
@@ -53,7 +54,8 @@ public record InboxEntryDto(
     double? PaperHeightMm = null,
     bool? PaperLandscape = null,
     int Copies = 1,
-    string? WebhookUrl = null);
+    string? WebhookUrl = null,
+    int RateLimitPerMinute = 0);
 
 public record StartupRequest(bool Enabled);
 
@@ -113,7 +115,10 @@ public record PrintJobDto(
     string ContentKind = "text",
     string? SourcePath = null,
     string? TemplateName = null,
-    Guid? ReprintedFromId = null);
+    Guid? ReprintedFromId = null,
+    int Priority = 0);
+
+public record SetPriorityRequest(int Priority);
 
 public record PrinterDeviceDto(
     string Name,

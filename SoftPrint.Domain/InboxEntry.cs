@@ -11,4 +11,5 @@ public sealed class InboxEntry
     public PrintJobSettings? CustomSettings { get; init; }
     public int Copies { get; init; } = 1;
     public string? WebhookUrl { get; init; }
+    public int RateLimitPerMinute { get; init; } = 0;
 }

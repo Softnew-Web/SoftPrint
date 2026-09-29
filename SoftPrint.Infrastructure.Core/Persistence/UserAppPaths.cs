@@ -1,4 +1,7 @@
 using SoftPrint.Application.Abstractions;
+#if !NET5_0_OR_GREATER
+using SoftPrint.Infrastructure.Compat;
+#endif
 
 namespace SoftPrint.Infrastructure.Persistence;
 
@@ -20,7 +23,11 @@ public sealed class UserAppPaths : IAppPaths
     {
         if (Environment.GetEnvironmentVariable("SOFTPRINT_CONFIG_ROOT") is { Length: > 0 } configOverride)
             return Path.GetFullPath(configOverride);
+#if NET5_0_OR_GREATER
         if (OperatingSystem.IsWindows())
+#else
+        if (OsHelper.IsWindows())
+#endif
             return Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
                 "SoftPrint");
@@ -34,7 +41,11 @@ public sealed class UserAppPaths : IAppPaths
     {
         if (Environment.GetEnvironmentVariable("SOFTPRINT_DATA_ROOT") is { Length: > 0 } overrideRoot)
             return Path.GetFullPath(overrideRoot);
+#if NET5_0_OR_GREATER
         if (OperatingSystem.IsWindows())
+#else
+        if (OsHelper.IsWindows())
+#endif
             return Path.Combine(ResolveConfigRoot(), "data");
 
         var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
@@ -48,7 +59,11 @@ public sealed class UserAppPaths : IAppPaths
         CopyTree(Path.Combine(contentRoot, "data"), DataRoot);
         CopyTree(Path.Combine(contentRoot, "logs"), Path.Combine(DataRoot, "logs"));
 
+#if NET5_0_OR_GREATER
         if (OperatingSystem.IsWindows())
+#else
+        if (OsHelper.IsWindows())
+#endif
         {
             var local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
             var autoPrint = Path.Combine(local, "AutoPrint");

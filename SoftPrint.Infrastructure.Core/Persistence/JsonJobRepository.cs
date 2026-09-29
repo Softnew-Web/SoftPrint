@@ -35,7 +35,7 @@ public sealed class JsonJobRepository : IJobRepository
     {
         lock (_gate)
         {
-            var job = _jobs.FirstOrDefault(j => j.Status == JobStatus.Pending);
+            var job = _jobs.Where(j => j.Status == JobStatus.Pending).OrderByDescending(j => j.Priority).FirstOrDefault();
             return job is null ? null : Clone(job);
         }
     }
@@ -80,8 +80,9 @@ public sealed class JsonJobRepository : IJobRepository
     {
         lock (_gate)
         {
-            var index = _jobs.FindIndex(j => j.Status == JobStatus.Pending);
-            if (index < 0) return null;
+            var job = _jobs.Where(j => j.Status == JobStatus.Pending).OrderByDescending(j => j.Priority).FirstOrDefault();
+            if (job is null) return null;
+            var index = _jobs.IndexOf(job);
 
             var original = Clone(_jobs[index]);
             try
@@ -102,8 +103,9 @@ public sealed class JsonJobRepository : IJobRepository
     {
         lock (_gate)
         {
-            var index = _jobs.FindIndex(j => j.Status == JobStatus.Pending);
-            if (index < 0) return null;
+            var job = _jobs.Where(j => j.Status == JobStatus.Pending).OrderByDescending(j => j.Priority).FirstOrDefault();
+            if (job is null) return null;
+            var index = _jobs.IndexOf(job);
 
             var original = Clone(_jobs[index]);
             try
@@ -117,6 +119,17 @@ public sealed class JsonJobRepository : IJobRepository
                 _jobs[index] = original;
                 throw;
             }
+        }
+    }
+
+    public void SetJobPriority(Guid id, int priority)
+    {
+        lock (_gate)
+        {
+            var job = _jobs.FirstOrDefault(j => j.Id == id);
+            if (job is null) throw new ArgumentException($"Job {id} não encontrado.");
+            job.SetPriority(priority);
+            Save();
         }
     }
 
@@ -202,7 +215,8 @@ public sealed class JsonJobRepository : IJobRepository
         job.Id, job.Reference, job.Text, job.Status, job.CreatedAt,
         job.FinishedAt, job.Error, job.PrinterName, job.SettingsRevision,
         job.Steps.ToArray(), job.ErrorReason, job.ErrorWhere,
-        job.JobType, job.ContentKind, job.SourcePath, job.TemplateName, job.ReprintedFromId);
+        job.JobType, job.ContentKind, job.SourcePath, job.TemplateName, job.ReprintedFromId,
+        priority: job.Priority);
 
     private static PrintJob ToDomain(JobRecord record) => new(
         record.Id, record.Reference, record.Text, JobStatusExtensions.FromWire(record.Status),
@@ -211,14 +225,15 @@ public sealed class JsonJobRepository : IJobRepository
         record.ErrorReason, record.ErrorWhere,
         record.JobType ?? "default",
         JobContentKindExtensions.FromWire(record.ContentKind),
-        record.SourcePath, record.TemplateName, record.ReprintedFromId);
+        record.SourcePath, record.TemplateName, record.ReprintedFromId,
+        priority: record.Priority);
 
     private static JobRecord ToRecord(PrintJob job) => new(
         job.Id, job.Reference, job.Text, job.Status.ToWire(), job.CreatedAt,
         job.FinishedAt, job.Error, job.PrinterName, job.SettingsRevision,
         job.Steps.Select(s => new StepRecord(s.At, s.Stage, s.Where, s.Message, s.Detail, s.IsError)).ToList(),
         job.ErrorReason, job.ErrorWhere, job.JobType, job.ContentKind.ToWire(),
-        job.SourcePath, job.TemplateName, job.ReprintedFromId);
+        job.SourcePath, job.TemplateName, job.ReprintedFromId, job.Priority);
 
     private sealed record StepRecord(
         DateTimeOffset At, string Stage, string Where, string Message,
@@ -230,5 +245,6 @@ public sealed class JsonJobRepository : IJobRepository
         long? SettingsRevision = null, List<StepRecord>? Steps = null,
         string? ErrorReason = null, string? ErrorWhere = null,
         string? JobType = null, string? ContentKind = null,
-        string? SourcePath = null, string? TemplateName = null, Guid? ReprintedFromId = null);
+        string? SourcePath = null, string? TemplateName = null, Guid? ReprintedFromId = null,
+        int Priority = 0);
 }

@@ -67,7 +67,11 @@ public static class InboxFileRules
         name = new string(name.Where(ch => char.IsLetterOrDigit(ch) || ch is '-' or '_').ToArray());
         if (name.Length == 0) name = "arquivo";
         if (name.Length > 40) name = name[..40];
-        var reference = $"inbox-{name}-{DateTimeOffset.UtcNow:yyyyMMddHHmmss}-{Random.Shared.Next(100, 999)}";
+#if NET6_0_OR_GREATER
+            var reference = $"inbox-{name}-{DateTimeOffset.UtcNow:yyyyMMddHHmmss}-{Random.Shared.Next(100, 999)}";
+#else
+            var reference = $"inbox-{name}-{DateTimeOffset.UtcNow:yyyyMMddHHmmss}-{new Random().Next(100, 999)}";
+#endif
         return reference.Length <= 120 ? reference : reference[..120];
     }
 }

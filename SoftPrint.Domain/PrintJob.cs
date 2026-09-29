@@ -22,6 +22,7 @@ public sealed class PrintJob
     public string? PrinterName { get; private set; }
     public long? SettingsRevision { get; private set; }
     public Guid? ReprintedFromId { get; init; }
+    public int Priority { get; private set; } = 0;
     public IReadOnlyList<ProcessingStep> Steps => _steps;
 
     public PrintJob()
@@ -47,7 +48,8 @@ public sealed class PrintJob
         string? templateName = null,
         Guid? reprintedFromId = null,
         string? requestedPrinterName = null,
-        PrintJobSettings? settingsOverride = null)
+        PrintJobSettings? settingsOverride = null,
+        int priority = 0)
     {
         Id = id;
         Reference = reference;
@@ -67,8 +69,11 @@ public sealed class PrintJob
         PrinterName = printerName;
         SettingsRevision = settingsRevision;
         ReprintedFromId = reprintedFromId;
+        Priority = Math.Clamp(priority, 0, 1);
         if (steps is not null) _steps.AddRange(steps);
     }
+
+    public void SetPriority(int p) => Priority = Math.Clamp(p, 0, 1);
 
     public static PrintJob CreatePending(
         string reference,
@@ -79,13 +84,15 @@ public sealed class PrintJob
         string? templateName = null,
         Guid? reprintedFromId = null,
         string? requestedPrinterName = null,
-        PrintJobSettings? settingsOverride = null)
+        PrintJobSettings? settingsOverride = null,
+        int priority = 0)
     {
         var job = new PrintJob(
             Guid.NewGuid(), reference, text, JobStatus.Pending, DateTimeOffset.UtcNow,
             jobType: jobType, contentKind: contentKind, sourcePath: sourcePath,
             templateName: templateName, reprintedFromId: reprintedFromId,
-            requestedPrinterName: requestedPrinterName, settingsOverride: settingsOverride);
+            requestedPrinterName: requestedPrinterName, settingsOverride: settingsOverride,
+            priority: priority);
 
         var detail = $"Tipo: {job.JobType} • Conteúdo: {contentKind.ToWire()}"
                      + (templateName is null ? "" : $" • Template: {templateName}")

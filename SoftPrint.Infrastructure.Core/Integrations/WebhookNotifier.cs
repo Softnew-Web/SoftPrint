@@ -59,8 +59,15 @@ public sealed class WebhookNotifier(
             var secret = options.Value.WebhookSecret?.Trim();
             if (!string.IsNullOrWhiteSpace(secret))
             {
+#if NET6_0_OR_GREATER
                 var hash = HMACSHA256.HashData(Encoding.UTF8.GetBytes(secret), Encoding.UTF8.GetBytes(json));
                 var signature = "sha256=" + Convert.ToHexString(hash).ToLowerInvariant();
+#else
+                byte[] hash;
+                using (var hmac = new HMACSHA256(Encoding.UTF8.GetBytes(secret)))
+                    hash = hmac.ComputeHash(Encoding.UTF8.GetBytes(json));
+                var signature = "sha256=" + BitConverter.ToString(hash).Replace("-", "").ToLowerInvariant();
+#endif
                 request.Headers.TryAddWithoutValidation("X-SoftPrint-Signature", signature);
                 request.Headers.TryAddWithoutValidation("X-AutoPrint-Signature", signature);
             }

@@ -98,7 +98,11 @@ public sealed class GitHubReleaseUpdateChecker : IUpdateChecker
 
             if (!response.IsSuccessStatusCode)
             {
+#if NET6_0_OR_GREATER
                 var body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+#else
+                var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+#endif
                 _logger.LogWarning("Falha ao consultar releases GitHub: {Status} {Body}", (int)response.StatusCode, Truncate(body));
                 return CacheError(new UpdateCheckResult(
                     current, null, false, false, null, null, null,
@@ -209,7 +213,11 @@ public sealed class GitHubReleaseUpdateChecker : IUpdateChecker
 
             using var response = await client.SendAsync(req, cancellationToken).ConfigureAwait(false);
             if (!response.IsSuccessStatusCode) return null;
+#if NET6_0_OR_GREATER
             var text = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+#else
+            var text = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+#endif
             return PackageIntegrity.FindHashForFile(text, assetName);
         }
         catch (Exception ex)
@@ -240,11 +248,20 @@ public sealed class GitHubReleaseUpdateChecker : IUpdateChecker
 
     internal static string PreferredZipAssetName()
     {
+#if NET5_0_OR_GREATER
         if (OperatingSystem.IsLinux())
+#else
+        if (SoftPrint.Infrastructure.Compat.OsHelper.IsLinux())
+#endif
             return "softprint-linux-x64.zip";
 
+#if NET6_0_OR_GREATER
         var isLegacy = (Environment.ProcessPath ?? "")
             .Contains("Legacy", StringComparison.OrdinalIgnoreCase);
+#else
+        var isLegacy = (System.Diagnostics.Process.GetCurrentProcess().MainModule?.FileName ?? "")
+            .Contains("Legacy", StringComparison.OrdinalIgnoreCase);
+#endif
         var arch = Environment.Is64BitProcess ? "x64" : "x86";
         return isLegacy
             ? $"SoftPrint-legacy-{arch}.zip"
@@ -254,11 +271,20 @@ public sealed class GitHubReleaseUpdateChecker : IUpdateChecker
     internal static string PreferredDeltaAssetName(string currentVersion)
     {
         var ver = SoftPrintVersionCompare.Normalize(currentVersion);
+#if NET5_0_OR_GREATER
         if (OperatingSystem.IsLinux())
+#else
+        if (SoftPrint.Infrastructure.Compat.OsHelper.IsLinux())
+#endif
             return $"softprint-linux-x64-from-{ver}.zip";
 
+#if NET6_0_OR_GREATER
         var isLegacy = (Environment.ProcessPath ?? "")
             .Contains("Legacy", StringComparison.OrdinalIgnoreCase);
+#else
+        var isLegacy = (System.Diagnostics.Process.GetCurrentProcess().MainModule?.FileName ?? "")
+            .Contains("Legacy", StringComparison.OrdinalIgnoreCase);
+#endif
         var arch = Environment.Is64BitProcess ? "x64" : "x86";
         return isLegacy
             ? $"SoftPrint-legacy-{arch}-from-{ver}.zip"

@@ -1,5 +1,7 @@
 using System.Text.Json;
+#if NET6_0_OR_GREATER
 using System.Text.Json.Nodes;
+#endif
 using SoftPrint.Application;
 using SoftPrint.Application.Abstractions;
 using Microsoft.Extensions.Options;
@@ -36,12 +38,19 @@ public sealed class JsonSystemSettingsRepository : ISystemSettingsRepository
         lock (_gate)
         {
             _current = Clamp(settings);
+            Directory.CreateDirectory(Path.GetDirectoryName(_path)!);
+#if NET6_0_OR_GREATER
             var root = new JsonObject
             {
                 ["SoftPrint"] = JsonSerializer.SerializeToNode(_current, JsonOptions)
             };
-            Directory.CreateDirectory(Path.GetDirectoryName(_path)!);
             File.WriteAllText(_path, root.ToJsonString(JsonOptions));
+#else
+            // netcoreapp3.1 — JsonObject/SerializeToNode não disponíveis; construir manualmente
+            var inner = JsonSerializer.Serialize(_current, JsonOptions);
+            // Formata como {"SoftPrint": <inner>} com indentação simples
+            File.WriteAllText(_path, "{\n  \"SoftPrint\": " + inner + "\n}");
+#endif
             return _current;
         }
     }

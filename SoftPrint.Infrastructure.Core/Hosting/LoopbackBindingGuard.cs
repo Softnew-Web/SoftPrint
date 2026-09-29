@@ -7,6 +7,7 @@ namespace SoftPrint.Infrastructure.Hosting;
 /// <summary>Garante bind em loopback salvo opt-in explícito (AllowNonLoopbackBinding).</summary>
 public static class LoopbackBindingGuard
 {
+#if NET6_0_OR_GREATER
     public static void Enforce(WebApplicationBuilder builder, ILogger? log = null)
     {
         var allow = builder.Configuration.GetValue("SoftPrint:AllowNonLoopbackBinding", false)
@@ -29,10 +30,15 @@ public static class LoopbackBindingGuard
         Environment.SetEnvironmentVariable("ASPNETCORE_URLS", rewritten);
         builder.WebHost.UseSetting("urls", rewritten);
     }
+#endif
 
     internal static bool NeedsRewrite(string urls)
     {
+#if NET5_0_OR_GREATER
         foreach (var part in urls.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+#else
+        foreach (var part in urls.Split(new char[] { ';' }, StringSplitOptions.RemoveEmptyEntries).Select(p => p.Trim()).Where(p => p.Length > 0))
+#endif
         {
             if (part.Contains("://0.0.0.0", StringComparison.OrdinalIgnoreCase) ||
                 part.Contains("://+", StringComparison.OrdinalIgnoreCase) ||
@@ -52,7 +58,11 @@ public static class LoopbackBindingGuard
 
     internal static string RewriteToLoopback(string urls)
     {
+#if NET5_0_OR_GREATER
         var parts = urls.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+#else
+        var parts = urls.Split(new char[] { ';' }, StringSplitOptions.RemoveEmptyEntries).Select(p => p.Trim()).Where(p => p.Length > 0).ToArray();
+#endif
         var rewritten = new List<string>(parts.Length);
         foreach (var part in parts)
         {

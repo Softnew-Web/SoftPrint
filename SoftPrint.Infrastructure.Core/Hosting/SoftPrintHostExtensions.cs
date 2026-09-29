@@ -15,6 +15,7 @@ namespace SoftPrint.Infrastructure.Hosting;
 
 public static class SoftPrintHostExtensions
 {
+#if NET6_0_OR_GREATER
     public static WebApplicationBuilder AddSoftPrintConfiguration(this WebApplicationBuilder builder)
     {
         var userConfigRoot = UserAppPaths.ResolveConfigRoot();
@@ -32,6 +33,25 @@ public static class SoftPrintHostExtensions
         JobStatusExtensions.UseCatalog(statusTypes);
         builder.Services.AddSingleton(statusTypes);
         return builder;
+    }
+#endif
+
+    /// <summary>
+    /// Versão para netcoreapp3.1 / Host.CreateDefaultBuilder — recebe IConfiguration e IServiceCollection separados.
+    /// </summary>
+    public static IServiceCollection AddSoftPrintConfiguration(
+        this IServiceCollection services, IConfiguration configuration, string contentRootPath)
+    {
+        var userConfigRoot = UserAppPaths.ResolveConfigRoot();
+        Directory.CreateDirectory(userConfigRoot);
+        // O ConfigurationBuilder já foi executado antes; aqui apenas registramos as opções.
+        services.Configure<SoftPrintFeatureOptions>(
+            configuration.GetSection(SoftPrintFeatureOptions.Section));
+
+        var statusTypes = JobStatusTypeCatalogFactory.FromConfiguration(configuration);
+        JobStatusExtensions.UseCatalog(statusTypes);
+        services.AddSingleton(statusTypes);
+        return services;
     }
 
     public static IServiceCollection AddSoftPrintCore(this IServiceCollection services)

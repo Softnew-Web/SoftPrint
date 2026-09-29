@@ -9,7 +9,7 @@
       __defProp(target, name, { get: all[name], enumerable: true });
   };
 
-  // js/state.js
+  // SoftPrint.Host.Windows/wwwroot/js/state.js
   function feedback(msg, err = false) {
     const el = document.getElementById("feedback");
     if (!el) return;
@@ -38,7 +38,7 @@
   }
   var state;
   var init_state = __esm({
-    "js/state.js"() {
+    "SoftPrint.Host.Windows/wwwroot/js/state.js"() {
       state = {
         jobs: [],
         selectedId: null,
@@ -49,7 +49,7 @@
     }
   });
 
-  // js/settings-payload.js
+  // SoftPrint.Host.Windows/wwwroot/js/settings-payload.js
   var settings_payload_exports = {};
   __export(settings_payload_exports, {
     buildSettingsPayload: () => buildSettingsPayload
@@ -71,12 +71,12 @@
     };
   }
   var init_settings_payload = __esm({
-    "js/settings-payload.js"() {
+    "SoftPrint.Host.Windows/wwwroot/js/settings-payload.js"() {
       init_state();
     }
   });
 
-  // js/api.js
+  // SoftPrint.Host.Windows/wwwroot/js/api.js
   function createApi(key = "") {
     const baseHeaders = {
       "Content-Type": "application/json"
@@ -119,10 +119,10 @@
     );
   }
 
-  // js/app.js
+  // SoftPrint.Host.Windows/wwwroot/js/app.js
   init_state();
 
-  // js/components/stats.js
+  // SoftPrint.Host.Windows/wwwroot/js/components/stats.js
   async function refreshHeaderPrinterStatus(api2, settings) {
     const targets = [
       document.getElementById("headerPrinterStatus"),
@@ -197,10 +197,10 @@
     }
   }
 
-  // js/components/printer-tab.js
+  // SoftPrint.Host.Windows/wwwroot/js/components/printer-tab.js
   init_state();
 
-  // js/image-layout.js
+  // SoftPrint.Host.Windows/wwwroot/js/image-layout.js
   var PAPER_PRESETS = {
     a4: { w: 210, h: 297, label: "A4" },
     a5: { w: 148, h: 210, label: "A5" },
@@ -470,10 +470,10 @@
     return Number.isInteger(v) ? String(v) : v.toFixed(1);
   }
 
-  // js/components/printer-tab.js
+  // SoftPrint.Host.Windows/wwwroot/js/components/printer-tab.js
   init_settings_payload();
 
-  // ../../node_modules/pdfjs-dist/legacy/build/pdf.mjs
+  // node_modules/pdfjs-dist/legacy/build/pdf.mjs
   var import_meta = {};
   var __webpack_modules__ = {
     /***/
@@ -32213,7 +32213,7 @@ fn fs_main(in : VertexOutput) -> @location(0) vec4<f32> {
     XfaLayer
   };
 
-  // js/pdf-preview.js
+  // SoftPrint.Host.Windows/wwwroot/js/pdf-preview.js
   GlobalWorkerOptions.workerSrc = "/js/pdf.worker.min.mjs";
   async function loadPdfPreview(file) {
     const bytes = new Uint8Array(await file.arrayBuffer());
@@ -32241,7 +32241,7 @@ fn fs_main(in : VertexOutput) -> @location(0) vec4<f32> {
     };
   }
 
-  // js/components/printer-tab.js
+  // SoftPrint.Host.Windows/wwwroot/js/components/printer-tab.js
   function bindPrinterTab({ api: api2, onSaved }) {
     const printers = document.getElementById("printers");
     const inboxEntryPrinter = document.getElementById("inboxEntryPrinter");
@@ -32696,7 +32696,7 @@ fn fs_main(in : VertexOutput) -> @location(0) vec4<f32> {
     return [...byHost.values()];
   }
 
-  // js/components/monitor-tab.js
+  // SoftPrint.Host.Windows/wwwroot/js/components/monitor-tab.js
   init_state();
   init_settings_payload();
   var STATUS_OPTIONS = [
@@ -32769,6 +32769,49 @@ fn fs_main(in : VertexOutput) -> @location(0) vec4<f32> {
       });
     });
     let _dragSrcId = null;
+    function updateVolumeChart() {
+      const canvas = document.getElementById("volumeChart");
+      if (!canvas) return;
+      const ctx = canvas.getContext("2d");
+      const now = /* @__PURE__ */ new Date();
+      const hours = Array.from({ length: 24 }, (_, i) => {
+        const h = new Date(now);
+        h.setMinutes(0, 0, 0);
+        h.setHours(h.getHours() - 23 + i);
+        return h;
+      });
+      const counts = hours.map((h) => {
+        const next = new Date(h.getTime() + 36e5);
+        return state.jobs.filter((j) => {
+          const at = new Date(j.finishedAt || j.createdAt);
+          return at >= h && at < next && (j.status === "sent" || j.status === "simulated");
+        }).length;
+      });
+      const total = counts.reduce((a, b) => a + b, 0);
+      const label = document.getElementById("chartTotalLabel");
+      if (label) label.textContent = `${total} impress\xE3o${total === 1 ? "" : "\xF5es"}`;
+      const W = canvas.offsetWidth || 400;
+      const H = canvas.height;
+      canvas.width = W;
+      ctx.clearRect(0, 0, W, H);
+      const max = Math.max(...counts, 1);
+      const barW = Math.floor(W / 24) - 2;
+      counts.forEach((c, i) => {
+        const x = i * (barW + 2);
+        const h = Math.max(2, Math.floor(c / max * (H - 16)));
+        const isNow = i === 23;
+        ctx.fillStyle = isNow ? "#14b8a6" : c > 0 ? "#0d9488" : "#2a3644";
+        ctx.beginPath();
+        ctx.roundRect(x, H - h, barW, h, 3);
+        ctx.fill();
+        if (isNow && c > 0) {
+          ctx.fillStyle = "#9aabbc";
+          ctx.font = "10px sans-serif";
+          ctx.textAlign = "center";
+          ctx.fillText(c, x + barW / 2, H - h - 4);
+        }
+      });
+    }
     function renderJobs() {
       const statuses = selectedStatuses();
       const rf = document.getElementById("refFilter").value.trim().toLowerCase();
@@ -32780,23 +32823,43 @@ fn fs_main(in : VertexOutput) -> @location(0) vec4<f32> {
           const isPending = j.status === "pending";
           const dragAttrs = isPending ? `draggable="true" data-drag-id="${j.id}"` : "";
           const dragHandle = isPending ? `<span class="drag-handle select-none cursor-grab text-mist/50 hover:text-mist px-1" title="Arrastar para reordenar">\u283F</span>` : `<span class="px-1 opacity-0 select-none">\u283F</span>`;
+          const prioBtn = j.status === "pending" ? `<button class="job-prio-btn text-xs px-1 rounded ${j.priority === 1 ? "text-warn" : "text-mist/40 hover:text-warn"}"
+                   data-id="${j.id}" data-prio="${j.priority === 1 ? 0 : 1}" title="${j.priority === 1 ? "Remover urg\xEAncia" : "Marcar como urgente"}">\u26A1</button>` : `<span class="px-1 w-5 inline-block"></span>`;
+          const urgentBadge = j.priority === 1 ? `<span class="text-warn text-xs mr-1" title="Urgente">\u26A1</span>` : "";
           return `
       <tr ${dragAttrs} data-id="${j.id}" class="job-row border-t border-ink-line cursor-pointer hover:bg-ink/60 ${state.selectedId === j.id ? "bg-ink" : ""} ${j.status === "uncertain" ? "text-bad" : ""}">
         <td class="px-3 py-2.5" onclick="event.stopPropagation()">
           <div class="flex items-center gap-1">
             ${dragHandle}
+            ${prioBtn}
             <input type="checkbox" class="job-check accent-sea" data-id="${j.id}" aria-label="Selecionar ${escapeHtml(
             j.reference
           )}" />
           </div>
         </td>
-        <td class="px-3 py-2.5 font-medium">${escapeHtml(j.reference)}</td>
+        <td class="px-3 py-2.5 font-medium">${urgentBadge}${escapeHtml(j.reference)}</td>
         <td class="px-3 py-2.5 text-mist">${escapeHtml(j.jobType || "default")}</td>
         <td class="px-3 py-2.5">${escapeHtml(statusLabel[j.status] || j.status)}</td>
         <td class="px-3 py-2.5 text-mist text-xs">${new Date(j.createdAt).toLocaleString()}</td>
       </tr>`;
         }
       ).join("") || `<tr><td colspan="5" class="px-3 py-8 text-mist text-center">Nenhum pedido nesta aba.</td></tr>`;
+      body.querySelectorAll(".job-prio-btn").forEach((btn) => {
+        btn.addEventListener("click", async (e) => {
+          e.stopPropagation();
+          const id = btn.dataset.id;
+          const prio = Number(btn.dataset.prio);
+          try {
+            await api2(`/api/jobs/${id}/priority`, {
+              method: "PUT",
+              body: JSON.stringify({ priority: prio })
+            });
+            onChanged?.();
+          } catch (err2) {
+            feedback(err2.message || "Falha ao alterar prioridade.", true);
+          }
+        });
+      });
       body.querySelectorAll(".job-row").forEach((row) => {
         row.addEventListener("click", () => {
           state.selectedId = row.dataset.id;
@@ -32849,6 +32912,7 @@ fn fs_main(in : VertexOutput) -> @location(0) vec4<f32> {
       const sel = state.jobs.find((j) => j.id === state.selectedId) || filtered.at(-1) || null;
       if (sel) state.selectedId = sel.id;
       showTrace(sel);
+      updateVolumeChart();
     }
     syncFilterLabel();
     function showTrace(job) {
@@ -33030,7 +33094,7 @@ fn fs_main(in : VertexOutput) -> @location(0) vec4<f32> {
       a.download = name;
       a.click();
     }
-    return { renderJobs, updatePipeline };
+    return { renderJobs, updatePipeline, updateVolumeChart };
   }
   function showFullExplanation() {
     const job = state.jobs.find((j) => j.id === state.selectedId);
@@ -33263,7 +33327,7 @@ fn fs_main(in : VertexOutput) -> @location(0) vec4<f32> {
     return [key, value];
   }
 
-  // js/components/connect-tab.js
+  // SoftPrint.Host.Windows/wwwroot/js/components/connect-tab.js
   init_state();
   init_settings_payload();
   function bindConnectTab({ api: api2 }) {
@@ -33435,6 +33499,7 @@ fn fs_main(in : VertexOutput) -> @location(0) vec4<f32> {
     const inboxEntryScale = document.getElementById("inboxEntryScale");
     const inboxEntryScaleLabel = document.getElementById("inboxEntryScaleLabel");
     const inboxEntryCopies = document.getElementById("inboxEntryCopies");
+    const inboxEntryRateLimit = document.getElementById("inboxEntryRateLimit");
     const inboxEntryWebhookUrl = document.getElementById("inboxEntryWebhookUrl");
     const inboxFolderList = document.getElementById("inboxFolderList");
     let _entries = [];
@@ -33492,6 +33557,7 @@ fn fs_main(in : VertexOutput) -> @location(0) vec4<f32> {
       if (inboxEntryScale) inboxEntryScale.value = scale;
       if (inboxEntryScaleLabel) inboxEntryScaleLabel.textContent = `${scale}%`;
       if (inboxEntryCopies) inboxEntryCopies.value = entry?.copies ?? 1;
+      if (inboxEntryRateLimit) inboxEntryRateLimit.value = entry?.rateLimitPerMinute ?? 0;
       if (inboxEntryWebhookUrl) inboxEntryWebhookUrl.value = entry?.webhookUrl ?? "";
       toggleCustomPaperRow();
       inboxEntryPaperSize?.dispatchEvent(new Event("change"));
@@ -33688,6 +33754,7 @@ fn fs_main(in : VertexOutput) -> @location(0) vec4<f32> {
       inboxEntryImageFit,
       inboxEntryLandscape,
       inboxEntryCopies,
+      inboxEntryRateLimit,
       inboxEntryWebhookUrl
     ].forEach((el) => {
       el?.addEventListener("input", markDirty);
@@ -33711,6 +33778,7 @@ fn fs_main(in : VertexOutput) -> @location(0) vec4<f32> {
         paperHeightMm: parseFloat(inboxEntryPaperH?.value || "297"),
         paperLandscape: !!inboxEntryLandscape?.checked,
         copies: Math.max(1, Math.min(99, parseInt(inboxEntryCopies?.value || "1", 10))),
+        rateLimitPerMinute: Math.max(0, Math.min(1e3, parseInt(inboxEntryRateLimit?.value || "0", 10))),
         webhookUrl: inboxEntryWebhookUrl?.value.trim() || null
       };
       try {
@@ -33943,7 +34011,7 @@ fn fs_main(in : VertexOutput) -> @location(0) vec4<f32> {
     return `<span class="log-meta-chip truncate" title="${title}"><span class="text-mist/70">${escapeHtml(kind)}</span> ${escapeHtml(text)}</span>`;
   }
 
-  // js/components/system-settings-tab.js
+  // SoftPrint.Host.Windows/wwwroot/js/components/system-settings-tab.js
   function bindSystemSettingsTab({ api: api2 }) {
     const byId = (id) => document.getElementById(id);
     const message = byId("systemSettingsMsg");
@@ -34118,7 +34186,7 @@ fn fs_main(in : VertexOutput) -> @location(0) vec4<f32> {
     return { load };
   }
 
-  // js/components/setup-wizard.js
+  // SoftPrint.Host.Windows/wwwroot/js/components/setup-wizard.js
   init_state();
   init_settings_payload();
   var DONE_KEY = "softprint-setup-done";
@@ -34329,7 +34397,7 @@ fn fs_main(in : VertexOutput) -> @location(0) vec4<f32> {
     return escapeHtml2(value).replaceAll("'", "&#39;");
   }
 
-  // js/components/update-banner.js
+  // SoftPrint.Host.Windows/wwwroot/js/components/update-banner.js
   var DISMISS_KEY = "softprint-update-dismissed";
   var applyBound = false;
   var rollbackBound = false;
@@ -34563,7 +34631,7 @@ Ser\xE1 restaurada a c\xF3pia local salva antes da \xFAltima atualiza\xE7\xE3o (
     }
   }
 
-  // js/app.js
+  // SoftPrint.Host.Windows/wwwroot/js/app.js
   var KEY = "";
   var { api } = createApi(KEY);
   setApiHint(location.origin);
