@@ -1,7 +1,7 @@
 ﻿#define AppName "SoftPrint"
 ; Manter alinhado a VERSION e SoftPrint.Domain/SoftPrintVersion.cs
 ; Este arquivo deve ser UTF-8 com BOM (Inno Setup Unicode).
-#define AppVersion "1.0.32"
+#define AppVersion "1.0.33"
 #define AppPublisher "Softnew"
 #define AppURL "https://softnewinfo.com.br"
 
