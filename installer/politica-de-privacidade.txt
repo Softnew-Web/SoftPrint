@@ -1,36 +1,596 @@
-﻿POLÍTICA DE PRIVACIDADE DO SOFTPRINT
-Última atualização: 18 de setembro de 2026
+================================================================================
+           POLÍTICA DE PRIVACIDADE E PROTEÇÃO DE DADOS PESSOAIS
+                                 SOFTPRINT
+                    Softnew Soluções em Tecnologia da Informação
+================================================================================
+                          Versão 2.0 — 30 de setembro de 2026
+================================================================================
 
-Esta política descreve como o SoftPrint trata dados neste computador. Leia com atenção antes de instalar.
 
-1. Processamento local
-O SoftPrint funciona neste computador. A API e o painel padrão escutam só em 127.0.0.1. Não há conta na nuvem nem cadastro obrigatório.
+PREÂMBULO
 
-2. Dados que o SoftPrint guarda
-No perfil do usuário (por exemplo %LocalAppData%\SoftPrint no Windows) o aplicativo pode guardar:
-- configurações de impressora, papel, pasta de entrada e opções do computador;
-- chave de API gerada localmente;
-- histórico de pedidos de impressão (referência, texto ou caminho do arquivo, status e erros);
-- logs de eventos e fila de retry de webhook, se você os ativar.
+A Softnew Soluções em Tecnologia da Informação ("Softnew", "nós" ou "nossa
+empresa") está comprometida com a privacidade e a proteção dos dados pessoais
+de todas as pessoas que utilizam o SoftPrint, nosso software de gerenciamento
+local de impressão ("Software").
 
-Esses arquivos ficam no seu disco. O instalador não envia esses dados para a internet.
+Esta Política de Privacidade e Proteção de Dados Pessoais ("Política") foi
+elaborada em conformidade com a Lei Geral de Proteção de Dados Pessoais —
+LGPD (Lei Federal nº 13.709, de 14 de agosto de 2018), com o Marco Civil da
+Internet (Lei Federal nº 12.965, de 23 de abril de 2014), com o Código de
+Defesa do Consumidor (Lei Federal nº 8.078, de 11 de setembro de 1990) e
+demais normas aplicáveis ao tratamento de dados pessoais no Brasil.
 
-3. O que o SoftPrint não faz
-O SoftPrint não cria perfil online, não vende dados e não precisa da internet para imprimir. Ele não lê outros aplicativos, senhas do Windows nem o conteúdo da sua rede, além da busca opcional de impressoras na rede local que você dispara no painel.
+Recomendamos a leitura integral deste documento antes de instalar ou utilizar
+o SoftPrint. Ao prosseguir com a instalação ou utilização do Software, você
+declara que leu, compreendeu e concorda com os termos desta Política.
 
-4. Webhook e pasta de entrada
-Se você configurar uma URL de webhook, o SoftPrint enviará eventos de pedidos concluídos para esse endereço, com assinatura HMAC se houver segredo. Se você indicar uma pasta de entrada, o SoftPrint lerá os arquivos que forem gravados nela para imprimir. Esses envios só acontecem porque você configurou.
 
-5. Inicialização automática e bandeja
-Se você ligar “Iniciar com o Windows”, o SoftPrint registra um atalho no Registro do usuário e pode permanecer em segundo plano na bandeja, recebendo pedidos mesmo com o painel fechado.
+================================================================================
+SEÇÃO 1 — DEFINIÇÕES E INTERPRETAÇÃO
+================================================================================
 
-6. Edições e registros
-A instalação pode migrar dados e atalhos antigos do AutoPrint. A edição Legacy deixa claro que o sistema operacional não tem mais suporte de segurança.
+Para os fins desta Política, aplicam-se as seguintes definições, que seguem
+os conceitos estabelecidos pelo art. 5º da LGPD:
 
-7. Seus controles
-Você pode apagar o histórico no próprio aplicativo (retenção), desligar logs, webhook e inicialização automática, e excluir a pasta de dados do usuário. Desinstalar o programa não apaga automaticamente esses arquivos.
+1.1  "Dado Pessoal": toda informação relacionada a pessoa natural identificada
+     ou identificável, como nome, endereço de e-mail, endereço IP, informações
+     de dispositivo e dados funcionais do usuário do Software.
 
-8. Contato
-Dúvidas sobre estes dados devem ser tratadas com quem instalou o SoftPrint neste computador, pois o processamento é local.
+1.2  "Dado Pessoal Sensível": dado pessoal sobre origem racial ou étnica,
+     convicção religiosa, opinião política, filiação a sindicato ou
+     organização de caráter religioso, filosófico ou político, dado referente
+     à saúde ou à vida sexual, dado genético ou biométrico, quando vinculado
+     a uma pessoa natural.
 
-Se não concordar com esta política, não instale o SoftPrint.
+1.3  "Tratamento": toda operação realizada com dados pessoais, como coleta,
+     produção, recepção, classificação, utilização, acesso, reprodução,
+     transmissão, distribuição, processamento, arquivamento, armazenamento,
+     eliminação, avaliação, controle da informação, modificação, comunicação,
+     transferência, difusão ou extração.
+
+1.4  "Titular": pessoa natural a quem se referem os dados pessoais objeto
+     de tratamento.
+
+1.5  "Controlador": pessoa natural ou jurídica, de direito público ou
+     privado, a quem competem as decisões referentes ao tratamento de dados
+     pessoais. Para fins desta Política, o Controlador é a Softnew.
+
+1.6  "Operador": pessoa natural ou jurídica, de direito público ou privado,
+     que realiza o tratamento de dados pessoais em nome do Controlador.
+
+1.7  "Encarregado" ("DPO — Data Protection Officer"): pessoa indicada pelo
+     Controlador para atuar como canal de comunicação entre o Controlador,
+     os Titulares e a Autoridade Nacional de Proteção de Dados (ANPD).
+
+1.8  "Consentimento": manifestação livre, informada e inequívoca pela qual
+     o Titular concorda com o tratamento de seus dados pessoais para uma
+     finalidade determinada.
+
+1.9  "Autoridade Nacional de Proteção de Dados" ("ANPD"): órgão da
+     administração pública responsável por zelar pela proteção de dados
+     pessoais no Brasil (Lei Federal nº 13.853/2019).
+
+1.10 "Anonimização": utilização de meios técnicos razoáveis e disponíveis
+     no momento do tratamento, por meio dos quais um dado perde a
+     possibilidade de associação, direta ou indireta, a um indivíduo.
+
+1.11 "Pseudonimização": tratamento por meio do qual um dado perde a
+     possibilidade de associação direta a um indivíduo, senão pelo uso de
+     informação adicional mantida separadamente pelo Controlador.
+
+1.12 "Software": o SoftPrint e todos os seus componentes, módulos e versões,
+     incluindo a edição Legacy (compatível com Windows 7/8).
+
+1.13 "Usuário" ou "você": pessoa natural que instala ou utiliza o Software,
+     bem como a pessoa jurídica em cujo nome o Software seja instalado ou
+     operado.
+
+1.14 "Ambiente Local": infraestrutura computacional do próprio Usuário —
+     computadores, servidores locais e rede interna —, na qual o Software
+     é executado de forma autônoma, sem dependência de servidores externos
+     da Softnew para o processamento de dados operacionais.
+
+
+================================================================================
+SEÇÃO 2 — NATUREZA LOCAL DO SOFTWARE E MODELO DE DADOS
+================================================================================
+
+2.1  Arquitetura local. O SoftPrint é um software de execução local ("on-
+     premise"). Todas as operações de gerenciamento de impressão, filas de
+     trabalhos, cadastros de impressoras, configurações e documentos
+     processados ocorrem exclusivamente no Ambiente Local do Usuário,
+     em banco de dados SQLite armazenado no próprio dispositivo.
+
+2.2  Ausência de nuvem obrigatória. O SoftPrint não exige conta em nuvem,
+     não transmite documentos a servidores da Softnew e não armazena
+     arquivos enviados para impressão em infraestrutura externa.
+
+2.3  Dados operacionais. Os dados criados pelo uso do Software — filas de
+     impressão, históricos, configurações de impressoras, chaves de API
+     locais, logs de diagnóstico — são de responsabilidade exclusiva do
+     Usuário enquanto permanecerem no Ambiente Local.
+
+2.4  Comunicações externas opcionais. O Software pode realizar comunicações
+     externas de natureza técnica e operacional, descritas na Seção 3.
+     Nenhuma dessas comunicações inclui o conteúdo dos documentos
+     impressos ou dados pessoais sensíveis do Titular.
+
+
+================================================================================
+SEÇÃO 3 — DADOS COLETADOS E FINALIDADES DO TRATAMENTO
+================================================================================
+
+3.1  Verificação de atualizações.
+
+     3.1.1  O Software verifica periodicamente a disponibilidade de novas
+            versões mediante requisição HTTPS à API pública do GitHub
+            (api.github.com), serviço operado pela GitHub, Inc. (subsidiária
+            da Microsoft Corporation).
+
+     3.1.2  Dados transmitidos nessa comunicação: (a) endereço IP do
+            dispositivo, inerente ao protocolo TCP/IP; (b) versão atual do
+            Software instalado, para comparação com a versão mais recente
+            disponível; (c) informações de User-Agent do sistema operacional
+            e da versão do .NET Runtime utilizada.
+
+     3.1.3  Finalidade: verificar se há atualização disponível e notificar
+            o Usuário, permitindo a manutenção da segurança e conformidade
+            do Software.
+
+     3.1.4  Base legal (LGPD, art. 7º): legítimo interesse do Controlador
+            (art. 7º, IX) e execução de contrato ou diligências preliminares
+            (art. 7º, V), considerando que manter o software atualizado é
+            obrigação assumida pelo Usuário nos Termos de Uso.
+
+     3.1.5  A Softnew não controla os dados coletados pelo GitHub durante
+            essa requisição. Recomendamos consultar a Política de
+            Privacidade do GitHub (github.com/site/privacy).
+
+3.2  Telemetria e diagnóstico.
+
+     3.2.1  O Software pode gerar arquivos de log armazenados localmente no
+            perfil do Usuário (diretório AppData\Local\SoftPrint\logs no
+            Windows). Esses logs registram eventos operacionais, erros e
+            informações de desempenho para fins de diagnóstico.
+
+     3.2.2  Os logs são armazenados exclusivamente no Ambiente Local. A
+            Softnew não coleta esses logs automaticamente. Quando o Usuário
+            acionar suporte técnico e optar por compartilhar os logs, o
+            envio é manual e voluntário.
+
+     3.2.3  Recomendamos que, antes de enviar logs para suporte, o Usuário
+            revise o conteúdo e remova eventuais dados pessoais sensíveis.
+
+3.3  Dados de instalação e licenciamento.
+
+     3.3.1  A instalação do Software é registrada no Registro do Windows
+            (HKCU\Software\Microsoft\Windows\CurrentVersion\Uninstall)
+            exclusivamente para fins de gerenciamento local (desinstalação,
+            atualização, controle de versão).
+
+     3.3.2  Nenhum dado de instalação é transmitido à Softnew de forma
+            automática.
+
+3.4  Dados de configuração e operação do Software.
+
+     3.4.1  O banco de dados local do SoftPrint pode conter: (a) nomes e
+            endereços IP de impressoras cadastradas; (b) identificadores de
+            usuário atribuídos pelo próprio Usuário ao configurar o acesso
+            ao Software; (c) histórico de trabalhos de impressão (nome do
+            arquivo, data, horário, status); (d) configurações de inbox
+            entries (e-mail, chave de API, limites de taxa).
+
+     3.4.2  Esses dados são de responsabilidade do Usuário enquanto
+            operados no Ambiente Local. A Softnew não tem acesso a eles
+            salvo mediante solicitação expressa de suporte pelo Usuário.
+
+3.5  Dados de contato para suporte.
+
+     3.5.1  Quando o Usuário acionar o suporte técnico da Softnew por
+            qualquer canal (e-mail, formulário de contato, telefone),
+            poderão ser coletados: nome, cargo, empresa, e-mail, telefone,
+            versão do Software, sistema operacional e descrição do problema.
+
+     3.5.2  Finalidade: prestação do suporte técnico solicitado e registro
+            histórico para continuidade do atendimento.
+
+     3.5.3  Base legal: execução de contrato (LGPD, art. 7º, V) e legítimo
+            interesse (art. 7º, IX).
+
+3.6  Resumo das bases legais utilizadas.
+
+     +----------------------------------+----------------------------------+
+     | Atividade de Tratamento          | Base Legal (LGPD art. 7º)        |
+     +----------------------------------+----------------------------------+
+     | Verificação de atualizações      | Legítimo interesse (IX)          |
+     | Logs de diagnóstico (local)      | Legítimo interesse (IX)          |
+     | Dados de instalação (registro)   | Execução de contrato (V)         |
+     | Dados operacionais (locais)      | Execução de contrato (V)         |
+     | Suporte técnico                  | Execução de contrato (V)         |
+     +----------------------------------+----------------------------------+
+
+
+================================================================================
+SEÇÃO 4 — DADOS PESSOAIS SENSÍVEIS E AMBIENTES DE SAÚDE
+================================================================================
+
+4.1  Natureza dos ambientes de saúde. O SoftPrint pode ser utilizado em
+     estabelecimentos de saúde (hospitais, clínicas, laboratórios,
+     farmácias, consultórios médicos, entre outros) que processam dados
+     pessoais sensíveis de seus pacientes, incluindo dados relativos à
+     saúde, na forma do art. 11 da LGPD.
+
+4.2  Responsabilidade do Usuário como Controlador de dados sensíveis.
+     Quando o SoftPrint for utilizado para impressão de documentos que
+     contenham dados pessoais sensíveis (prontuários, laudos, resultados
+     de exames, receitas médicas, termos de consentimento, entre outros),
+     o Usuário atua como Controlador independente desses dados e assume
+     integralmente as obrigações previstas nos arts. 11 a 13 da LGPD,
+     incluindo:
+
+     (a) obter consentimento específico e destacado dos Titulares (pacientes)
+         para o tratamento de dados sensíveis, quando exigido;
+     (b) implementar medidas de segurança técnicas e administrativas
+         proporcionais à sensibilidade dos dados tratados;
+     (c) garantir que o ambiente de impressão (impressoras, filas, rede)
+         seja seguro e que documentos impressos sejam manuseados de acordo
+         com as normas aplicáveis (CFM, CFF, COFEN, ANS, ANVISA e outras);
+     (d) manter Registro das Atividades de Tratamento (art. 37 da LGPD);
+     (e) comunicar incidentes de segurança à ANPD e aos Titulares afetados,
+         quando aplicável (art. 48 da LGPD).
+
+4.3  A Softnew como Operadora. Nos casos em que a Softnew preste serviços
+     de suporte técnico que impliquem acesso a dados do Ambiente Local
+     do Usuário, a Softnew atuará como Operadora (art. 39 da LGPD),
+     tratando os dados exclusivamente conforme as instruções do Usuário
+     (Controlador) e nos limites estritamente necessários à prestação
+     do serviço.
+
+4.4  Recomendações de segurança para ambientes de saúde. Recomendamos
+     fortemente que estabelecimentos de saúde:
+
+     (a) restrinjam o acesso ao Software a profissionais autorizados;
+     (b) utilizem a funcionalidade de chaves de API para controlar o
+         acesso às funcionalidades de impressão remota;
+     (c) configurem limites de taxa (rate limiting) nas inbox entries
+         para prevenir abusos;
+     (d) mantenham os dispositivos que executam o Software atualizados
+         com os patches de segurança do sistema operacional;
+     (e) adotem política de mesa limpa (clear desk policy) para documentos
+         impressos que contenham dados de pacientes;
+     (f) ativem logs de auditoria e os preservem pelo prazo legal aplicável
+         (geralmente 20 anos para prontuários, nos termos da Resolução CFM
+         nº 1.638/2002 e demais normas específicas).
+
+
+================================================================================
+SEÇÃO 5 — COMPARTILHAMENTO E TRANSFERÊNCIA DE DADOS
+================================================================================
+
+5.1  Regra geral. A Softnew não vende, aluga, cede ou comercializa dados
+     pessoais de Usuários ou de Titulares cujos dados transitam pelo
+     Software.
+
+5.2  Comunicação com o GitHub. Conforme descrito na Seção 3.1, o Software
+     comunica-se com a API pública do GitHub para verificação de atualizações.
+     O GitHub é um serviço operado pela GitHub, Inc. (EUA). Essa comunicação
+     implica transferência internacional de dados (endereço IP), realizada
+     com base no legítimo interesse e amparada pelas garantias previstas
+     no art. 33 da LGPD, considerando que o GitHub mantém nível de proteção
+     de dados adequado por meio de cláusulas contratuais padrão e
+     certificações internacionais.
+
+5.3  Prestadores de serviço. A Softnew pode contratar prestadores de
+     serviços terceirizados (hospedagem, suporte de TI, consultoria
+     jurídica, contabilidade) que, no exercício de suas atividades, possam
+     ter acesso a dados pessoais de Usuários fornecidos em contexto de
+     contratação ou suporte. Esses prestadores são contratualmente obrigados
+     a tratar os dados com confidencialidade e segurança, na qualidade de
+     Operadores.
+
+5.4  Obrigações legais. A Softnew poderá compartilhar dados pessoais com
+     autoridades governamentais, judiciais ou regulatórias quando tal
+     compartilhamento for exigido por ordem judicial, requisição
+     administrativa legítima ou obrigação legal prevista em norma vigente,
+     nos termos do art. 7º, II, e art. 11, II, "a", da LGPD.
+
+5.5  Proteção de direitos. A Softnew poderá divulgar dados pessoais
+     quando necessário para exercício regular de direitos em processo
+     judicial, administrativo ou arbitral, nos termos do art. 7º, VI,
+     da LGPD.
+
+5.6  Transferência em razão de reorganização societária. Em caso de fusão,
+     aquisição, cisão ou venda da Softnew ou de parte substancial de seus
+     ativos, os dados pessoais dos Usuários poderão ser transferidos ao
+     sucessor, que ficará obrigado a respeitar esta Política ou comunicar
+     previamente os Titulares sobre eventuais alterações.
+
+
+================================================================================
+SEÇÃO 6 — PERÍODO DE RETENÇÃO E ELIMINAÇÃO DE DADOS
+================================================================================
+
+6.1  Dados locais do Software. Os dados operacionais armazenados no Ambiente
+     Local (banco de dados SQLite, logs, configurações) são retidos pelo
+     tempo que o Software permanecer instalado ou enquanto o Usuário não
+     solicitar sua eliminação. A desinstalação do Software remove os
+     arquivos de instalação, mas os dados de usuário no perfil (AppData)
+     não são removidos automaticamente, podendo o Usuário fazê-lo
+     manualmente.
+
+6.2  Dados de suporte técnico. Dados fornecidos em contexto de suporte
+     técnico são retidos pelo período necessário à resolução do chamado
+     e por até 5 (cinco) anos após o encerramento, para fins de histórico,
+     auditoria e exercício de direitos em eventuais disputas.
+
+6.3  Dados de contato comercial. Dados de contato de Usuários obtidos em
+     contexto comercial são retidos por até 5 (cinco) anos após o término
+     do relacionamento contratual, ou pelo prazo superior exigido por lei.
+
+6.4  Critérios de retenção. Os prazos de retenção consideram: (a) finalidade
+     do tratamento; (b) obrigações legais e regulatórias; (c) exercício
+     regular de direitos; (d) legítimo interesse, limitado ao necessário.
+
+6.5  Anonimização. Ao término do período de retenção, os dados pessoais
+     são eliminados ou anonimizados, de modo que não possam ser associados
+     ao Titular, nos termos do art. 5º, XI, da LGPD.
+
+
+================================================================================
+SEÇÃO 7 — SEGURANÇA DA INFORMAÇÃO
+================================================================================
+
+7.1  Medidas técnicas e administrativas. A Softnew adota medidas de
+     segurança técnicas e administrativas para proteger os dados pessoais
+     tratados em suas infraestruturas contra acesso não autorizado, destruição,
+     perda, alteração ou divulgação acidental ou ilícita, incluindo:
+
+     (a) comunicações externas realizadas via HTTPS/TLS 1.2 ou superior;
+     (b) controle de acesso restrito aos dados de suporte e contato;
+     (c) política de segurança interna e treinamento de colaboradores;
+     (d) revisão periódica de práticas de segurança.
+
+7.2  Segurança do Ambiente Local. A segurança dos dados armazenados no
+     Ambiente Local do Usuário é responsabilidade do Usuário. A Softnew
+     recomenda:
+
+     (a) manter o sistema operacional e os drivers de impressora atualizados;
+     (b) utilizar antivírus e firewall ativos;
+     (c) configurar controle de acesso ao dispositivo (senha, bloqueio
+         automático);
+     (d) realizar backups periódicos do banco de dados do Software;
+     (e) segmentar a rede de impressão de outras redes corporativas quando
+         possível;
+     (f) utilizar as funcionalidades de chave de API do SoftPrint para
+         restringir o acesso ao endpoint de impressão.
+
+7.3  Incidente de segurança. Na hipótese de incidente de segurança que
+     afete dados pessoais tratados pela Softnew em suas próprias
+     infraestruturas, a Softnew adotará as medidas previstas no art. 48
+     da LGPD, comunicando a ANPD e os Titulares afetados em prazo razoável,
+     com indicação: (a) da data do incidente; (b) dos dados afetados; (c)
+     dos riscos relacionados; (d) das medidas adotadas para remediar o
+     incidente e proteger os Titulares.
+
+7.4  Limitação de responsabilidade por incidentes no Ambiente Local.
+     A Softnew não se responsabiliza por incidentes de segurança que
+     ocorram no Ambiente Local do Usuário decorrentes de falhas de
+     infraestrutura, negligência ou ação de terceiros sobre os equipamentos
+     e redes do Usuário.
+
+
+================================================================================
+SEÇÃO 8 — DIREITOS DOS TITULARES
+================================================================================
+
+8.1  Garantia de direitos. A LGPD garante ao Titular de dados pessoais
+     um conjunto de direitos que podem ser exercidos a qualquer tempo
+     perante o Controlador. A Softnew compromete-se a atender as
+     solicitações dos Titulares em conformidade com o art. 18 da LGPD.
+
+8.2  Rol de direitos. São direitos do Titular:
+
+     I.    Confirmação da existência de tratamento de seus dados pessoais
+           pela Softnew;
+
+     II.   Acesso aos dados pessoais objeto de tratamento, mediante
+           solicitação;
+
+     III.  Correção de dados incompletos, inexatos ou desatualizados;
+
+     IV.   Anonimização, bloqueio ou eliminação de dados desnecessários,
+           excessivos ou tratados em desconformidade com a LGPD;
+
+     V.    Portabilidade dos dados pessoais a outro fornecedor de serviço
+           ou produto, observados os segredos comerciais e industriais;
+
+     VI.   Eliminação dos dados pessoais tratados com base no consentimento
+           do Titular, ressalvadas as hipóteses de conservação previstas
+           no art. 16 da LGPD;
+
+     VII.  Informação sobre as entidades públicas e privadas com as quais
+           o Controlador realizou uso compartilhado de dados;
+
+     VIII. Informação sobre a possibilidade de não fornecer consentimento e
+           sobre as consequências da negativa;
+
+     IX.   Revogação do consentimento, nos termos do art. 8º, §5º, da LGPD;
+
+     X.    Oposição ao tratamento realizado com fundamento em uma das
+           hipóteses de dispensa de consentimento, em caso de descumprimento
+           da LGPD;
+
+     XI.   Petição em relação aos seus dados contra o Controlador perante
+           a ANPD.
+
+8.3  Dados controlados pelo Usuário. Para dados armazenados exclusivamente
+     no Ambiente Local do Usuário (banco de dados SQLite do SoftPrint),
+     o Titular deve dirigir suas solicitações diretamente ao Usuário
+     (estabelecimento que instalou o Software), que é o Controlador
+     independente desses dados.
+
+8.4  Exercício dos direitos. Solicitações relativas a dados tratados pela
+     Softnew em suas infraestruturas (dados de suporte, contato comercial)
+     devem ser encaminhadas ao canal indicado na Seção 11 desta Política.
+
+8.5  Prazo de resposta. A Softnew responderá às solicitações dos Titulares
+     em prazo razoável, observado o prazo máximo de 15 (quinze) dias
+     contados do recebimento da solicitação, podendo ser prorrogado por
+     igual período mediante justificativa, nos termos orientados pela ANPD.
+
+8.6  Verificação de identidade. Para proteção dos dados dos Titulares,
+     a Softnew poderá solicitar a verificação de identidade antes de
+     atender qualquer solicitação.
+
+
+================================================================================
+SEÇÃO 9 — COOKIES E TECNOLOGIAS SIMILARES
+================================================================================
+
+9.1  O SoftPrint é um software desktop que não opera por meio de navegador
+     web e, portanto, não utiliza cookies de terceiros no sentido
+     convencional.
+
+9.2  A interface web local do SoftPrint (acessível em http://127.0.0.1:5178
+     ou porta configurada) pode utilizar o armazenamento local do navegador
+     (localStorage) exclusivamente para persistir preferências do Usuário
+     na interface, como o estado do modo escuro (dark mode) e configurações
+     de exibição. Esse armazenamento é local, não é transmitido a servidores
+     externos e não coleta dados de identificação pessoal.
+
+9.3  Nenhum rastreamento de comportamento de uso é realizado através da
+     interface web local.
+
+
+================================================================================
+SEÇÃO 10 — TRATAMENTO DE DADOS DE MENORES
+================================================================================
+
+10.1 O SoftPrint é um software corporativo destinado exclusivamente ao uso
+     por pessoas jurídicas ou profissionais maiores de 18 (dezoito) anos.
+     O Software não é destinado ao uso pessoal por menores de idade.
+
+10.2 A Softnew não coleta intencionalmente dados pessoais de menores de
+     18 (dezoito) anos. Na hipótese de identificarmos que dados pessoais
+     de menores foram fornecidos inadvertidamente, procederemos à
+     eliminação imediata desses dados, nos termos do art. 14 da LGPD.
+
+10.3 Em estabelecimentos de saúde que atendam pacientes menores de idade,
+     o tratamento de dados sensíveis desses pacientes (prontuários,
+     laudos, etc.) é de responsabilidade exclusiva do estabelecimento
+     (Usuário), que deve observar as disposições específicas do art. 14
+     da LGPD e as normas de proteção ao menor.
+
+
+================================================================================
+SEÇÃO 11 — ENCARREGADO PELO TRATAMENTO DE DADOS (DPO)
+================================================================================
+
+11.1 Nos termos do art. 41 da LGPD, a Softnew designou um Encarregado
+     pelo Tratamento de Dados Pessoais (DPO — Data Protection Officer),
+     responsável por:
+
+     (a) aceitar reclamações e comunicações dos Titulares e da ANPD;
+     (b) prestar esclarecimentos e adotar providências;
+     (c) orientar os colaboradores da Softnew sobre práticas de proteção
+         de dados;
+     (d) executar as demais atribuições previstas em lei e em políticas
+         internas.
+
+11.2 Canal de contato com o Encarregado e com a Softnew para exercício
+     de direitos dos Titulares ou esclarecimentos sobre esta Política:
+
+     Softnew Soluções em Tecnologia da Informação
+     Encarregado de Proteção de Dados (DPO)
+     E-mail: privacidade@softnewinfo.com.br
+     Site:   https://softnewinfo.com.br
+     Horário de atendimento: dias úteis, das 08h às 18h (horário de
+     Brasília)
+
+11.3 A Softnew responderá às comunicações recebidas no prazo descrito
+     na Seção 8.5.
+
+
+================================================================================
+SEÇÃO 12 — ALTERAÇÕES DESTA POLÍTICA
+================================================================================
+
+12.1 A Softnew reserva-se o direito de atualizar esta Política periodicamente,
+     para refletir alterações no Software, em sua estrutura organizacional,
+     na legislação aplicável ou nas práticas de proteção de dados.
+
+12.2 Comunicação de alterações. Alterações materiais serão comunicadas
+     ao Usuário pelos seguintes meios, conforme aplicável:
+
+     (a) notificação exibida na interface do Software na próxima vez
+         em que o Usuário o acessar;
+     (b) atualização da Política no arquivo "politica-de-privacidade.txt"
+         incluído no pacote de instalação;
+     (c) publicação no site https://softnewinfo.com.br.
+
+12.3 Data de vigência. A versão atualizada desta Política entrará em vigor
+     na data de sua publicação, salvo indicação expressa em contrário.
+     O uso continuado do Software após a publicação de nova versão constituirá
+     aceitação das alterações.
+
+12.4 Versões anteriores. A Softnew manterá arquivadas versões anteriores
+     desta Política pelo prazo de 5 (cinco) anos, disponíveis mediante
+     solicitação ao canal indicado na Seção 11.
+
+
+================================================================================
+SEÇÃO 13 — DISPOSIÇÕES GERAIS
+================================================================================
+
+13.1 Lei aplicável. Esta Política é regida pelas leis da República
+     Federativa do Brasil, em especial pela Lei Federal nº 13.709/2018
+     (LGPD), pelo Marco Civil da Internet (Lei Federal nº 12.965/2014)
+     e pelo Código de Defesa do Consumidor (Lei Federal nº 8.078/1990).
+
+13.2 Foro. Para dirimir eventuais controvérsias decorrentes desta Política,
+     as partes elegem o foro da comarca da sede da Softnew, renunciando a
+     qualquer outro, por mais privilegiado que seja, salvo nos casos em
+     que o Titular for pessoa natural e se qualificar como consumidor, hipótese
+     em que será observada a legislação consumerista aplicável.
+
+13.3 Independência das cláusulas. Se qualquer disposição desta Política
+     for considerada inválida, ilegal ou inaplicável, as demais disposições
+     permanecerão em pleno vigor e efeito.
+
+13.4 Versão do documento. Esta é a Versão 2.0 desta Política, em vigor a
+     partir de 30 de setembro de 2026, revogando versões anteriores.
+
+13.5 Relação com os Termos de Uso. Esta Política complementa os Termos
+     de Uso e Contrato de Licença de Uso de Software do SoftPrint, devendo
+     ser interpretada em conjunto com eles. Em caso de conflito, prevalecerá
+     a disposição mais protetiva ao Titular dos dados.
+
+13.6 Glossário complementar. Termos utilizados nesta Política que não
+     tenham sido definidos na Seção 1 seguirão as definições do art. 5º
+     da LGPD e, subsidiariamente, as orientações publicadas pela ANPD.
+
+13.7 Autoridade supervisora. O Titular de dados tem o direito de apresentar
+     reclamação à Autoridade Nacional de Proteção de Dados (ANPD),
+     independentemente de qualquer medida tomada junto à Softnew. Para
+     mais informações: https://www.gov.br/anpd/
+
+
+================================================================================
+HISTÓRICO DE VERSÕES
+================================================================================
+
+Versão  Data               Descrição das Alterações
+------- -----------------  -------------------------------------------------------
+1.0     (original)         Política inicial, versão simplificada
+2.0     30/09/2026         Reformulação completa: conformidade LGPD art. 5º-48;
+                           inclusão de seções sobre dados sensíveis em saúde;
+                           definição do canal DPO; histórico de versões;
+                           alinhamento com Termos de Uso v2.0
+
+
+================================================================================
+              FIM DA POLÍTICA DE PRIVACIDADE E PROTEÇÃO DE DADOS
+                         SoftPrint — Versão 2.0 — 30/09/2026
+                  Copyright (C) 2026 Softnew Soluções em Tecnologia da Informação
+================================================================================

@@ -1,27 +1,388 @@
-﻿TERMOS DE USO DO SOFTPRINT
-Última atualização: 18 de setembro de 2026
+================================================================================
+          CONTRATO DE LICENÇA DE USO DE SOFTWARE — SOFTPRINT
+================================================================================
+                        Versão 2.0 — 30 de setembro de 2026
+                          Softnew Tecnologia — CNPJ a definir
+                             https://softnewinfo.com.br
+================================================================================
 
-Ao instalar ou usar o SoftPrint, você concorda com estes termos.
+LEIA COM ATENÇÃO ANTES DE INSTALAR, COPIAR OU UTILIZAR ESTE SOFTWARE.
 
-1. O que o SoftPrint faz
-O SoftPrint é um aplicativo local de impressão. Ele recebe pedidos neste computador, organiza uma fila e envia o conteúdo para impressoras instaladas no Windows ou, na edição Linux, via CUPS. O painel e a API padrão escutam apenas em 127.0.0.1.
+Este Contrato de Licença de Uso de Software ("Contrato") é um acordo legal
+vinculante entre você ("Usuário", "Licenciado" ou "Organização") e a Softnew
+Tecnologia ("Softnew", "Licenciante" ou "nós"), pessoa jurídica de direito
+privado, com sede no Brasil, desenvolvedora e distribuidora do software
+denominado SoftPrint ("Software").
 
-2. Licença de uso
-Você pode instalar e usar o SoftPrint neste computador para fins próprios ou da sua organização. Não é permitido revender o instalador como se fosse um produto de terceiros, remover avisos de autoria ou usar o nome SoftPrint de forma enganosa.
+Ao clicar em "Aceito", instalar, copiar, baixar ou de qualquer forma utilizar
+o Software, você declara que:
 
-3. Responsabilidade
-O SoftPrint entrega o trabalho ao spooler do Windows ou ao CUPS. Isso não garante que o papel saiu da impressora. Conferir impressão física, papel, toner e o equipamento é sua responsabilidade. O software é oferecido “como está”, sem garantia de funcionamento ininterrupto ou de adequação a um fim específico.
+  (a) leu e compreendeu integralmente este Contrato;
+  (b) tem capacidade legal para celebrar contratos em nome próprio ou da
+      organização que representa; e
+  (c) concorda, sem reservas, com todos os termos e condições aqui
+      estabelecidos.
 
-4. Edição Legacy (Windows 7)
-A edição SoftPrint Legacy existe só para compatibilidade. Windows 7 e o runtime .NET 6 usado nela não recebem mais atualizações de segurança da Microsoft. Ao escolher essa edição, você assume esse risco.
+SE VOCÊ NÃO CONCORDAR COM QUALQUER DISPOSIÇÃO DESTE CONTRATO, NÃO INSTALE,
+NÃO COPIE E NÃO UTILIZE O SOFTWARE. Neste caso, desinstale-o imediatamente.
 
-5. Conteúdo enviado para impressão
-Você é responsável pelo conteúdo dos pedidos (textos, PDFs, imagens e ESC/POS) e por ter autorização para imprimi-los. Não use o SoftPrint para atividade ilegal.
+________________________________________________________________________________
+CLÁUSULA 1 — OBJETO E DESCRIÇÃO DO SOFTWARE
+________________________________________________________________________________
 
-6. Atualizações e suporte
-O SoftPrint pode mudar entre versões. Recursos de impressão dependem do driver, da impressora e do sistema operacional. A edição Legacy e o Linux exigem teste no equipamento real.
+1.1  O SoftPrint é um aplicativo de gerenciamento local de impressão,
+     desenvolvido pela Softnew, que permite a organizações e usuários
+     individuais receber, organizar, priorizar e encaminhar pedidos de
+     impressão a impressoras físicas instaladas no sistema operacional
+     Windows (edições Moderna e Legacy) ou Linux (via CUPS).
 
-7. Encerramento
-Você pode desinstalar o SoftPrint a qualquer momento. Dados salvos no perfil do usuário (configurações, chave da API e histórico) não são apagados automaticamente na desinstalação, salvo se você os excluir.
+1.2  O Software opera inteiramente no dispositivo local do Usuário. Por
+     padrão, a interface de programação de aplicativos (API) e o painel de
+     gerenciamento escutam exclusivamente no endereço de loopback
+     127.0.0.1, sem exposição à rede externa, salvo configuração explícita
+     realizada pelo próprio Usuário.
 
-Se não concordar com estes termos, não instale nem use o SoftPrint.
+1.3  São características funcionais do Software, sujeitas a variação
+     conforme a versão instalada:
+     (a) recepção e enfileiramento de pedidos de impressão via API REST
+         local;
+     (b) suporte a arquivos nos formatos PDF, imagens (JPEG, PNG, BMP,
+         TIFF, GIF) e comandos ESC/POS;
+     (c) monitoramento de pastas de entrada (inbox) para impressão
+         automática;
+     (d) integração via webhook configurável pelo Usuário;
+     (e) painel de gerenciamento acessível por navegador web;
+     (f) fila de impressão com prioridade, reordenação e reimpressão;
+     (g) descoberta de impressoras em rede local;
+     (h) verificação e aplicação automática de atualizações de versão.
+
+1.4  O SoftPrint é disponibilizado em diferentes edições:
+     (a) Edição Moderna — compatível com Windows 10 ou superior (x64 e
+         x86), construída sobre .NET 10.0;
+     (b) Edição Legacy — compatível com Windows 7 SP1 ou superior,
+         construída sobre .NET Core 3.1 (ver Cláusula 10);
+     (c) Edição Linux — compatível com distribuições Linux x86-64 com
+         CUPS instalado.
+
+________________________________________________________________________________
+CLÁUSULA 2 — CONCESSÃO DE LICENÇA
+________________________________________________________________________________
+
+2.1  Sujeito ao cumprimento integral deste Contrato, a Softnew concede ao
+     Usuário uma licença limitada, não exclusiva, intransferível, sem
+     sublicenciamento, para:
+     (a) instalar e executar o Software em um ou mais dispositivos de
+         propriedade ou sob controle do Usuário ou de sua organização;
+     (b) realizar cópias de segurança (backup) do Software, desde que
+         destinadas exclusivamente à restauração de uso autorizado.
+
+2.2  A licença é concedida para uso interno do Usuário ou de sua
+     organização. Não é concedida qualquer licença além do que está
+     expressamente previsto neste Contrato.
+
+2.3  O Software pode ser utilizado em quantidade ilimitada de dispositivos
+     pertencentes à mesma organização, salvo se a Softnew estabelecer
+     restrição diversa por meio de plano de licença específico.
+
+________________________________________________________________________________
+CLÁUSULA 3 — RESTRIÇÕES DE USO
+________________________________________________________________________________
+
+3.1  Salvo disposição legal expressa em contrário, é vedado ao Usuário,
+     direta ou indiretamente:
+     (a) sublicenciar, vender, alugar, arrendar, transferir, ceder ou de
+         qualquer forma comercializar o Software ou os direitos a ele
+         relativos;
+     (b) realizar engenharia reversa, descompilar, desmontar ou tentar
+         derivar o código-fonte do Software, exceto nos limites em que
+         tal restrição seja expressamente proibida pela lei aplicável;
+     (c) modificar, adaptar, traduzir ou criar obras derivadas do Software
+         sem autorização prévia e escrita da Softnew;
+     (d) remover, ocultar ou alterar quaisquer avisos de propriedade
+         intelectual, marcas, créditos ou identificações de autoria
+         presentes no Software;
+     (e) utilizar o nome "SoftPrint", "Softnew" ou quaisquer marcas
+         associadas de forma que possa causar confusão, erro ou engano
+         quanto à origem do Software;
+     (f) distribuir o Software como parte de produto próprio sem acordo
+         comercial prévio firmado com a Softnew;
+     (g) utilizar o Software para prestar serviços a terceiros mediante
+         remuneração, sob a forma de SaaS, bureau de impressão ou
+         equivalente, sem licença específica para tal finalidade.
+
+3.2  O Usuário não poderá usar o Software para fins ilegais, incluindo,
+     mas não se limitando a: reprodução não autorizada de materiais
+     protegidos por direito autoral; violação de privacidade de terceiros;
+     envio de conteúdo fraudulento, abusivo ou que viole a legislação
+     brasileira ou do país de uso.
+
+________________________________________________________________________________
+CLÁUSULA 4 — PROPRIEDADE INTELECTUAL
+________________________________________________________________________________
+
+4.1  O Software, incluindo seu código-fonte (quando disponibilizado), código
+     objeto, documentação, interfaces, design, marcas, logotipos e todos
+     os elementos que o compõem, são de propriedade exclusiva da Softnew
+     ou de seus licenciantes, e estão protegidos pelas leis brasileiras e
+     internacionais de propriedade intelectual, incluindo a Lei n.º
+     9.609/1998 (Lei do Software), a Lei n.º 9.610/1998 (Lei de Direitos
+     Autorais) e os tratados internacionais aplicáveis.
+
+4.2  Este Contrato não transfere ao Usuário qualquer título ou direito de
+     propriedade sobre o Software. O Usuário adquire apenas o direito de
+     uso nos termos aqui previstos.
+
+4.3  Componentes de terceiros incorporados ao Software — incluindo
+     bibliotecas de código aberto e o runtime do .NET — estão sujeitos a
+     suas respectivas licenças, disponíveis no repositório oficial do
+     Software ou na documentação acompanhante.
+
+________________________________________________________________________________
+CLÁUSULA 5 — RESPONSABILIDADES DO USUÁRIO
+________________________________________________________________________________
+
+5.1  O Usuário é o único responsável por:
+     (a) garantir que possui autorização legal para imprimir os documentos,
+         imagens e demais conteúdos processados pelo Software;
+     (b) verificar a conformidade da impressão física com o conteúdo
+         esperado, incluindo qualidade, legibilidade e integridade do
+         material impresso;
+     (c) manter atualizado e em condições adequadas o equipamento de
+         impressão, incluindo drivers, consumíveis (papel, toner/tinta) e
+         conectividade;
+     (d) configurar adequadamente as permissões de rede quando optar por
+         expor a API do Software além do loopback local;
+     (e) proteger a chave de API gerada pelo Software e demais credenciais
+         de acesso, responsabilizando-se por acessos não autorizados
+         decorrentes da exposição dessas informações;
+     (f) respeitar a legislação vigente aplicável ao tipo de documento
+         processado, incluindo normas setoriais (saúde, financeiro,
+         jurídico, entre outros).
+
+5.2  Em ambientes de saúde ou que processem dados pessoais sensíveis,
+     conforme definido pela Lei n.º 13.709/2018 (LGPD), é de
+     responsabilidade exclusiva do Usuário:
+     (a) assegurar que o uso do Software está em conformidade com as
+         obrigações do controlador de dados perante a LGPD;
+     (b) adotar medidas técnicas e organizacionais adequadas para proteger
+         os dados pessoais processados por meio do Software;
+     (c) não armazenar conteúdo de documentos médicos ou pessoais sensíveis
+         no histórico do Software além do necessário.
+
+________________________________________________________________________________
+CLÁUSULA 6 — ATUALIZAÇÕES DE SOFTWARE
+________________________________________________________________________________
+
+6.1  A Softnew poderá, a seu exclusivo critério, disponibilizar
+     atualizações, correções de bugs e novas versões do Software
+     ("Atualizações").
+
+6.2  O Software inclui mecanismo de verificação e instalação automática de
+     Atualizações. Este mecanismo realiza consultas periódicas ao
+     repositório oficial do Software na plataforma GitHub para verificar a
+     existência de versões mais recentes.
+
+6.3  Atualizações marcadas como obrigatórias ("mandatory") serão instaladas
+     automaticamente na próxima abertura do Software, sem necessidade de
+     ação do Usuário. Atualizações não obrigatórias poderão ser instaladas
+     pelo Usuário mediante confirmação no painel.
+
+6.4  A Softnew se reserva o direito de alterar funcionalidades, remover
+     recursos ou modificar a forma de operação do Software em qualquer
+     Atualização. O uso continuado do Software após a instalação de uma
+     Atualização implica aceitação das modificações introduzidas.
+
+6.5  A Softnew não se obriga a manter suporte a versões anteriores do
+     Software por prazo indeterminado.
+
+________________________________________________________________________________
+CLÁUSULA 7 — EXCLUSÃO DE GARANTIAS
+________________________________________________________________________________
+
+7.1  O SOFTWARE É FORNECIDO "NO ESTADO EM QUE SE ENCONTRA" ("AS IS"),
+     SEM GARANTIAS DE QUALQUER NATUREZA, EXPRESSAS OU IMPLÍCITAS,
+     INCLUINDO, SEM LIMITAÇÃO, AS GARANTIAS IMPLÍCITAS DE ADEQUAÇÃO A
+     FINALIDADE ESPECÍFICA, COMERCIALIZAÇÃO, NÃO VIOLAÇÃO DE DIREITOS DE
+     TERCEIROS E INTEROPERABILIDADE.
+
+7.2  A Softnew não garante que:
+     (a) o Software funcionará de forma ininterrupta, sem erros ou falhas;
+     (b) os defeitos identificados serão corrigidos;
+     (c) o Software é compatível com todos os sistemas operacionais,
+         configurações de hardware ou drivers de impressora existentes;
+     (d) os resultados obtidos com o uso do Software atenderão às
+         expectativas ou requisitos específicos do Usuário.
+
+7.3  A entrega do trabalho de impressão ao spooler do Windows (edições
+     Windows) ou ao CUPS (edição Linux) não constitui garantia de que o
+     documento foi efetivamente impresso no papel. Falhas de hardware,
+     falta de consumíveis, erros de driver e problemas de conectividade
+     estão fora do controle do Software e da Softnew.
+
+________________________________________________________________________________
+CLÁUSULA 8 — LIMITAÇÃO DE RESPONSABILIDADE
+________________________________________________________________________________
+
+8.1  NA MÁXIMA EXTENSÃO PERMITIDA PELA LEI APLICÁVEL, A SOFTNEW, SEUS
+     DIRETORES, FUNCIONÁRIOS, PARCEIROS E FORNECEDORES NÃO SERÃO
+     RESPONSÁVEIS POR:
+     (a) DANOS INDIRETOS, INCIDENTAIS, ESPECIAIS, CONSEQUENCIAIS OU
+         PUNITIVOS, INCLUINDO LUCROS CESSANTES, PERDA DE DADOS, PERDA
+         DE GOODWILL OU INTERRUPÇÃO DE NEGÓCIOS;
+     (b) DANOS DECORRENTES DO USO OU IMPOSSIBILIDADE DE USO DO SOFTWARE,
+         AINDA QUE A SOFTNEW TENHA SIDO INFORMADA DA POSSIBILIDADE DE
+         TAIS DANOS;
+     (c) DANOS RESULTANTES DE ACESSO NÃO AUTORIZADO OU ALTERAÇÃO DAS
+         TRANSMISSÕES E DADOS DO USUÁRIO;
+     (d) DANOS DECORRENTES DO CONTEÚDO DOS DOCUMENTOS ENVIADOS PARA
+         IMPRESSÃO PELO USUÁRIO.
+
+8.2  A responsabilidade total da Softnew perante o Usuário, por quaisquer
+     reclamações decorrentes ou relacionadas a este Contrato, seja em
+     contrato, responsabilidade civil ou outra teoria jurídica, não
+     excederá o valor pago pelo Usuário pelo Software nos doze (12) meses
+     anteriores ao evento que gerou a responsabilidade. Sendo o Software
+     gratuito, a responsabilidade máxima será de R$ 50,00 (cinquenta
+     reais).
+
+8.3  Algumas jurisdições não permitem a exclusão ou limitação de
+     responsabilidade por danos consequenciais ou incidentais, de modo que
+     as limitações acima podem não ser aplicáveis em sua totalidade ao
+     Usuário.
+
+________________________________________________________________________________
+CLÁUSULA 9 — INDENIZAÇÃO
+________________________________________________________________________________
+
+9.1  O Usuário concorda em defender, indenizar e isentar a Softnew, seus
+     controladores, afiliadas, diretores, funcionários, agentes e
+     licenciantes de e contra quaisquer reclamações, responsabilidades,
+     danos, julgamentos, valores, perdas, custos, despesas ou honorários
+     advocatícios decorrentes de:
+     (a) uso do Software em violação a este Contrato;
+     (b) violação de direitos de terceiros, incluindo direitos autorais,
+         marcas, privacidade ou qualquer outro direito de propriedade;
+     (c) conteúdo dos documentos enviados pelo Usuário para impressão por
+         meio do Software.
+
+________________________________________________________________________________
+CLÁUSULA 10 — EDIÇÃO LEGACY (WINDOWS 7 E WINDOWS 8)
+________________________________________________________________________________
+
+10.1  A Edição Legacy do SoftPrint foi desenvolvida exclusivamente para
+      garantir compatibilidade com sistemas Windows 7 SP1 e Windows 8/8.1,
+      cujo suporte estendido pela Microsoft foi encerrado.
+
+10.2  O Usuário que optar pela Edição Legacy declara ciência e aceita
+      expressamente os seguintes riscos adicionais:
+      (a) o Windows 7 e o Windows 8/8.1 não recebem atualizações de
+          segurança da Microsoft desde, respectivamente, 14 de janeiro
+          de 2020 e 10 de janeiro de 2023;
+      (b) o runtime .NET Core 3.1 utilizado pela Edição Legacy não recebe
+          atualizações de segurança desde 13 de dezembro de 2022;
+      (c) a operação da Edição Legacy em redes corporativas ou que
+          processem dados sensíveis é de responsabilidade exclusiva do
+          Usuário;
+      (d) a Softnew recomenda a migração para sistemas operacionais com
+          suporte ativo assim que possível.
+
+10.3  A Softnew não garante a paridade funcional completa entre a Edição
+      Legacy e a Edição Moderna. Determinados recursos podem estar
+      indisponíveis na Edição Legacy por limitações técnicas do sistema
+      operacional e do runtime.
+
+________________________________________________________________________________
+CLÁUSULA 11 — VIGÊNCIA E RESCISÃO
+________________________________________________________________________________
+
+11.1  Este Contrato entra em vigor na data de instalação ou de primeiro uso
+      do Software e permanece vigente por prazo indeterminado, até que
+      seja rescindido nos termos desta Cláusula.
+
+11.2  A Softnew poderá rescindir este Contrato imediatamente, sem aviso
+      prévio, caso o Usuário descumpra qualquer disposição aqui prevista.
+
+11.3  O Usuário poderá rescindir este Contrato a qualquer momento mediante
+      a desinstalação completa do Software e a eliminação de todas as
+      cópias em sua posse.
+
+11.4  Com a rescisão deste Contrato, por qualquer motivo:
+      (a) todos os direitos concedidos ao Usuário cessam imediatamente;
+      (b) o Usuário deve desinstalar o Software e destruir todas as cópias;
+      (c) as cláusulas de propriedade intelectual, exclusão de garantias,
+          limitação de responsabilidade e disposições gerais sobreviverão
+          à rescisão.
+
+11.5  A rescisão não gera direito a qualquer reembolso ou compensação.
+
+________________________________________________________________________________
+CLÁUSULA 12 — DADOS PESSOAIS E PRIVACIDADE
+________________________________________________________________________________
+
+12.1  O tratamento de dados pessoais realizado pelo Software está descrito
+      na Política de Privacidade do SoftPrint, documento que integra este
+      Contrato como Anexo I e que está disponível no diretório de
+      instalação do Software.
+
+12.2  Ao aceitar este Contrato, o Usuário também aceita a Política de
+      Privacidade do SoftPrint.
+
+________________________________________________________________________________
+CLÁUSULA 13 — DISPOSIÇÕES GERAIS
+________________________________________________________________________________
+
+13.1  LEI APLICÁVEL E FORO. Este Contrato é regido pelas leis da República
+      Federativa do Brasil. As partes elegem o foro da Comarca de [Cidade-
+      sede da Softnew], Estado da Bahia, como competente para dirimir
+      quaisquer controvérsias decorrentes deste Contrato, com exclusão de
+      qualquer outro, por mais privilegiado que seja.
+
+13.2  INTEGRALIDADE. Este Contrato, juntamente com a Política de
+      Privacidade e quaisquer adendos ou acordos complementares firmados
+      por escrito entre as partes, constitui o acordo integral entre o
+      Usuário e a Softnew com relação ao Software, substituindo todos os
+      entendimentos e acordos anteriores sobre o mesmo objeto.
+
+13.3  NULIDADE PARCIAL. Se qualquer disposição deste Contrato for
+      considerada inválida, ilegal ou inexequível por tribunal competente,
+      as demais disposições permanecerão em pleno vigor e efeito. A
+      disposição inválida será substituída por outra que, tanto quanto
+      possível, reflita a intenção original das partes.
+
+13.4  AUSÊNCIA DE RENÚNCIA. A omissão da Softnew em exigir o cumprimento
+      de qualquer disposição deste Contrato não constituirá renúncia ao
+      direito de fazê-lo posteriormente.
+
+13.5  MODIFICAÇÕES. A Softnew reserva-se o direito de modificar este
+      Contrato. Modificações substanciais serão comunicadas ao Usuário por
+      meio do painel do Software ou das notas de atualização de versão. O
+      uso continuado do Software após a comunicação implica aceitação das
+      modificações.
+
+13.6  CESSÃO. O Usuário não poderá ceder ou transferir este Contrato ou
+      quaisquer direitos e obrigações dele decorrentes sem o consentimento
+      prévio e escrito da Softnew. A Softnew poderá ceder este Contrato
+      livremente, inclusive em caso de fusão, aquisição ou venda de ativos.
+
+13.7  INDEPENDÊNCIA DAS PARTES. Este Contrato não cria vínculo empregatício,
+      societário, de mandato, representação ou qualquer outro entre o
+      Usuário e a Softnew.
+
+13.8  COMUNICAÇÕES. Comunicações formais ao Usuário poderão ser feitas por
+      meio do painel do Software, das notas de versão publicadas no
+      repositório oficial ou por e-mail, quando o endereço for fornecido
+      pelo Usuário. Comunicações à Softnew devem ser encaminhadas para o
+      endereço indicado em https://softnewinfo.com.br.
+
+________________________________________________________________________________
+AVISO FINAL
+________________________________________________________________________________
+
+SE VOCÊ NÃO CONCORDAR COM ESTES TERMOS, NÃO INSTALE NEM UTILIZE O
+SOFTPRINT. A INSTALAÇÃO OU O USO DO SOFTWARE CONSTITUI ACEITAÇÃO PLENA E
+IRREVOGÁVEL DE TODOS OS TERMOS AQUI PREVISTOS.
+
+================================================================================
+           SoftPrint — Softnew Tecnologia — https://softnewinfo.com.br
+                Versão do documento: 2.0 — 30 de setembro de 2026
+================================================================================
