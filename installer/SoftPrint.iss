@@ -1,7 +1,7 @@
 ﻿#define AppName "SoftPrint"
 ; Manter alinhado a VERSION e SoftPrint.Domain/SoftPrintVersion.cs
 ; Este arquivo deve ser UTF-8 com BOM (Inno Setup Unicode).
-#define AppVersion "1.0.33"
+#define AppVersion "1.0.34"
 #define AppPublisher "Softnew"
 #define AppURL "https://softnewinfo.com.br"
 
@@ -54,6 +54,7 @@ WizardStyle=modern
 WizardSizePercent=120
 WizardImageFile=wizard-sidebar.bmp
 WizardSmallImageFile=wizard-small.bmp
+SetupIconFile=setup-icon.ico
 
 ; Paginas
 DisableWelcomePage=no

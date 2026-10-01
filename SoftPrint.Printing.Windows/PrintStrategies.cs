@@ -314,7 +314,7 @@ internal static class PrintPageSetup
         if (choice.RawKind is int rawKind and > 0)
             custom.RawKind = rawKind;
         document.DefaultPageSettings.PaperSize = custom;
-        document.DefaultPageSettings.Landscape = false;
+        document.DefaultPageSettings.Landscape = settings.PaperLandscape;
     }
 
     private static List<PrinterPaperCandidate> GetCandidates(PrinterSettings printer, string printerName)

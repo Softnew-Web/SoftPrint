@@ -358,6 +358,8 @@ public sealed class SoftPrintUpdateApplier : IUpdateApplier
 #endif
         var preferLegacy = current.Contains("Legacy", StringComparison.OrdinalIgnoreCase);
         var fallback = File.Exists(current) ? current : modern;
+        var trayFlag = Environment.GetCommandLineArgs().Any(a =>
+            string.Equals(a, "--tray", StringComparison.OrdinalIgnoreCase)) ? " --tray" : "";
 #if NET5_0_OR_GREATER
         var pid = Environment.ProcessId;
 #else
@@ -406,11 +408,11 @@ public sealed class SoftPrintUpdateApplier : IUpdateApplier
             ")",
             "timeout /t 1 /nobreak >nul",
             preferLegacy
-                ? $"if exist \"{legacy}\" start \"\" \"{legacy}\" & goto done"
-                : $"if exist \"{modern}\" start \"\" \"{modern}\" & goto done",
-            $"if exist \"{modern}\" start \"\" \"{modern}\" & goto done",
-            $"if exist \"{legacy}\" start \"\" \"{legacy}\" & goto done",
-            $"if exist \"{fallback}\" start \"\" \"{fallback}\" & goto done",
+                ? $"if exist \"{legacy}\" start \"\" \"{legacy}\"{trayFlag} & goto done"
+                : $"if exist \"{modern}\" start \"\" \"{modern}\"{trayFlag} & goto done",
+            $"if exist \"{modern}\" start \"\" \"{modern}\"{trayFlag} & goto done",
+            $"if exist \"{legacy}\" start \"\" \"{legacy}\"{trayFlag} & goto done",
+            $"if exist \"{fallback}\" start \"\" \"{fallback}\"{trayFlag} & goto done",
             "echo SoftPrint update could not restart > \"%TEMP%\\softprint-update-error.txt\"",
             ":done",
             "endlocal"
@@ -430,6 +432,8 @@ public sealed class SoftPrintUpdateApplier : IUpdateApplier
 #endif
         var preferLegacy = current.Contains("Legacy", StringComparison.OrdinalIgnoreCase);
         var fallback = File.Exists(current) ? current : modern;
+        var trayFlag = Environment.GetCommandLineArgs().Any(a =>
+            string.Equals(a, "--tray", StringComparison.OrdinalIgnoreCase)) ? " --tray" : "";
 #if NET5_0_OR_GREATER
         var pid = Environment.ProcessId;
 #else
@@ -464,11 +468,11 @@ public sealed class SoftPrintUpdateApplier : IUpdateApplier
             ")",
             "timeout /t 1 /nobreak >nul",
             preferLegacy
-                ? $"if exist \"{legacy}\" start \"\" \"{legacy}\" & goto done"
-                : $"if exist \"{modern}\" start \"\" \"{modern}\" & goto done",
-            $"if exist \"{modern}\" start \"\" \"{modern}\" & goto done",
-            $"if exist \"{legacy}\" start \"\" \"{legacy}\" & goto done",
-            $"if exist \"{fallback}\" start \"\" \"{fallback}\" & goto done",
+                ? $"if exist \"{legacy}\" start \"\" \"{legacy}\"{trayFlag} & goto done"
+                : $"if exist \"{modern}\" start \"\" \"{modern}\"{trayFlag} & goto done",
+            $"if exist \"{modern}\" start \"\" \"{modern}\"{trayFlag} & goto done",
+            $"if exist \"{legacy}\" start \"\" \"{legacy}\"{trayFlag} & goto done",
+            $"if exist \"{fallback}\" start \"\" \"{fallback}\"{trayFlag} & goto done",
             "echo SoftPrint rollback could not restart > \"%TEMP%\\softprint-update-error.txt\"",
             ":done",
             "endlocal"
@@ -491,6 +495,8 @@ public sealed class SoftPrintUpdateApplier : IUpdateApplier
 #endif
         var preferLegacy = current.Contains("Legacy", StringComparison.OrdinalIgnoreCase);
         var fallback = File.Exists(current) ? current : modern;
+        var trayFlag = Environment.GetCommandLineArgs().Any(a =>
+            string.Equals(a, "--tray", StringComparison.OrdinalIgnoreCase)) ? " --tray" : "";
 #if NET5_0_OR_GREATER
         var pid = Environment.ProcessId;
 #else
@@ -519,11 +525,11 @@ public sealed class SoftPrintUpdateApplier : IUpdateApplier
             "set ERR=%ERRORLEVEL%",
             "timeout /t 2 /nobreak >nul",
             preferLegacy
-                ? $"if exist \"{legacy}\" start \"\" \"{legacy}\" & goto done"
-                : $"if exist \"{modern}\" start \"\" \"{modern}\" & goto done",
-            $"if exist \"{modern}\" start \"\" \"{modern}\" & goto done",
-            $"if exist \"{legacy}\" start \"\" \"{legacy}\" & goto done",
-            $"if exist \"{fallback}\" start \"\" \"{fallback}\" & goto done",
+                ? $"if exist \"{legacy}\" start \"\" \"{legacy}\"{trayFlag} & goto done"
+                : $"if exist \"{modern}\" start \"\" \"{modern}\"{trayFlag} & goto done",
+            $"if exist \"{modern}\" start \"\" \"{modern}\"{trayFlag} & goto done",
+            $"if exist \"{legacy}\" start \"\" \"{legacy}\"{trayFlag} & goto done",
+            $"if exist \"{fallback}\" start \"\" \"{fallback}\"{trayFlag} & goto done",
             "echo SoftPrint update could not restart > \"%TEMP%\\softprint-update-error.txt\"",
             ":done",
             "if not \"%ERR%\"==\"0\" echo SoftPrint setup exit %ERR%>> \"%TEMP%\\softprint-update-error.txt\"",
