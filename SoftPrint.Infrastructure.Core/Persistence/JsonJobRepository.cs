@@ -216,6 +216,8 @@ public sealed class JsonJobRepository : IJobRepository
         job.FinishedAt, job.Error, job.PrinterName, job.SettingsRevision,
         job.Steps.ToArray(), job.ErrorReason, job.ErrorWhere,
         job.JobType, job.ContentKind, job.SourcePath, job.TemplateName, job.ReprintedFromId,
+        requestedPrinterName: job.RequestedPrinterName,
+        settingsOverride: job.SettingsOverride,
         priority: job.Priority);
 
     private static PrintJob ToDomain(JobRecord record) => new(
@@ -226,6 +228,8 @@ public sealed class JsonJobRepository : IJobRepository
         record.JobType ?? "default",
         JobContentKindExtensions.FromWire(record.ContentKind),
         record.SourcePath, record.TemplateName, record.ReprintedFromId,
+        requestedPrinterName: record.RequestedPrinterName,
+        settingsOverride: record.SettingsOverride,
         priority: record.Priority);
 
     private static JobRecord ToRecord(PrintJob job) => new(
@@ -233,7 +237,9 @@ public sealed class JsonJobRepository : IJobRepository
         job.FinishedAt, job.Error, job.PrinterName, job.SettingsRevision,
         job.Steps.Select(s => new StepRecord(s.At, s.Stage, s.Where, s.Message, s.Detail, s.IsError)).ToList(),
         job.ErrorReason, job.ErrorWhere, job.JobType, job.ContentKind.ToWire(),
-        job.SourcePath, job.TemplateName, job.ReprintedFromId, job.Priority);
+        job.SourcePath, job.TemplateName, job.ReprintedFromId, job.Priority,
+        RequestedPrinterName: job.RequestedPrinterName,
+        SettingsOverride: job.SettingsOverride);
 
     private sealed record StepRecord(
         DateTimeOffset At, string Stage, string Where, string Message,
@@ -246,5 +252,7 @@ public sealed class JsonJobRepository : IJobRepository
         string? ErrorReason = null, string? ErrorWhere = null,
         string? JobType = null, string? ContentKind = null,
         string? SourcePath = null, string? TemplateName = null, Guid? ReprintedFromId = null,
-        int Priority = 0);
+        int Priority = 0,
+        string? RequestedPrinterName = null,
+        PrintJobSettings? SettingsOverride = null);
 }

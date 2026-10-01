@@ -259,7 +259,8 @@ public sealed class PrintWorker(
                 _balloonGroups.TryRemove(printerName, out _);
             }
             var label = string.IsNullOrWhiteSpace(printerName) ? "impressora" : printerName;
-            notifier.NotifyPrintBatch(label, count);
+            try { notifier.NotifyPrintBatch(label, count); }
+            catch { /* notification failure must not crash the worker */ }
         });
     }
 
