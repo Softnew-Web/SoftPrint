@@ -891,6 +891,20 @@ public static class SettingsEndpoints
                 report.Checks.Select(check => new DiagnoseCheckDto(check.Name, check.Available, check.Detail)).ToArray());
         });
 
+        app.MapGet("/api/errors", (IRecentErrorLog errorLog) =>
+            errorLog.GetRecent(30).Select(e => new
+            {
+                at = e.At,
+                source = e.Source,
+                message = e.Message
+            }));
+
+        app.MapDelete("/api/errors", (IRecentErrorLog errorLog) =>
+        {
+            errorLog.Clear();
+            return Results.Ok(new { cleared = true });
+        });
+
         return app;
     }
 

@@ -69,6 +69,8 @@ public static class SoftPrintHostExtensions
         {
             client.Timeout = TimeSpan.FromSeconds(8);
         });
+        services.AddSingleton<SoftPrint.Infrastructure.Operations.InMemoryRecentErrorLog>();
+        services.AddSingleton<IRecentErrorLog>(sp => sp.GetRequiredService<SoftPrint.Infrastructure.Operations.InMemoryRecentErrorLog>());
         services.AddSingleton<IAppPaths, UserAppPaths>();
         services.AddSingleton<IApiKeyProvider, FileApiKeyProvider>();
         services.AddSingleton<IJobRepository, JsonJobRepository>();

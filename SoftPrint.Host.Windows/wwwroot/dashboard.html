@@ -139,6 +139,13 @@
       <div id="queueAlertBanner" class="hidden px-5 py-2.5 border-b border-bad/40 bg-bad/15 text-sm shrink-0">
         <p id="queueAlertText" class="text-paper/95 font-medium"></p>
       </div>
+      <div id="errorLogPanel" class="hidden px-5 py-2.5 border-b border-bad/30 bg-bad/10 text-xs shrink-0">
+        <div class="flex items-center justify-between gap-2 mb-1">
+          <span class="font-semibold text-bad">Erros recentes <span id="errorLogBadge" class="hidden ml-1 px-1.5 py-0.5 rounded-full bg-bad text-white text-[10px]"></span></span>
+          <button id="btnClearErrors" type="button" class="text-dim hover:text-paper text-[10px] underline underline-offset-2">limpar</button>
+        </div>
+        <ul id="errorLogList" class="space-y-0.5 font-mono max-h-32 overflow-y-auto scroll-thin"></ul>
+      </div>
       <div id="updateBanner" class="hidden px-5 py-2.5 border-b border-warn/40 bg-warn/15 text-sm shrink-0">
         <div class="flex flex-wrap items-center justify-between gap-2">
           <p id="updateBannerText" class="text-paper/95"></p>

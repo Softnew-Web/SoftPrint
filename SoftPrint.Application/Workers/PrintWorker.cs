@@ -20,6 +20,7 @@ public sealed class PrintWorker(
     IWebhookNotifier webhook,
     IAppNotifier notifier,
     ITelemetryService telemetry,
+    IRecentErrorLog errorLog,
     IOptions<SoftPrintFeatureOptions> features,
     ILogger<PrintWorker> logger) : BackgroundService
 {
@@ -195,6 +196,7 @@ public sealed class PrintWorker(
             if (status == JobStatus.Uncertain)
             {
                 notifier.NotifyUncertain(finished);
+                errorLog.Record("impressão", $"{finished.Reference}: {finished.Error ?? error ?? "falha desconhecida"}");
                 _ = telemetry.ReportPrintFailureAsync(finished, CancellationToken.None);
             }
             else

@@ -21,6 +21,7 @@ public sealed class SoftPrintUpdateApplier : IUpdateApplier
     private readonly IOptionsMonitor<SoftPrintFeatureOptions> _options;
     private readonly IHostApplicationLifetime _lifetime;
     private readonly ILogger<SoftPrintUpdateApplier> _logger;
+    private readonly IRecentErrorLog _errorLog;
     private readonly object _gate = new();
     private UpdateApplyStatus _status = Idle();
     private int _running;
@@ -33,6 +34,7 @@ public sealed class SoftPrintUpdateApplier : IUpdateApplier
         IHttpClientFactory httpClientFactory,
         IOptionsMonitor<SoftPrintFeatureOptions> options,
         IHostApplicationLifetime lifetime,
+        IRecentErrorLog errorLog,
         ILogger<SoftPrintUpdateApplier> logger)
     {
         _checker = checker;
@@ -42,6 +44,7 @@ public sealed class SoftPrintUpdateApplier : IUpdateApplier
         _httpClientFactory = httpClientFactory;
         _options = options;
         _lifetime = lifetime;
+        _errorLog = errorLog;
         _logger = logger;
     }
 
@@ -182,6 +185,7 @@ public sealed class SoftPrintUpdateApplier : IUpdateApplier
         {
             _logger.LogError(ex, rollback ? "Falha ao retroceder versão" : "Falha ao aplicar atualização");
             UpdateFailureNotice.Record(ex.Message);
+            _errorLog.Record(rollback ? "rollback" : "atualização", ex.Message);
             try { _history.RecordApplyFailed(applyVersion, rollback, ex.Message); } catch { /* ignore */ }
             try { _notifier.NotifyUpdateFailed(ex.Message); } catch { /* ignore */ }
             Set(new UpdateApplyStatus(

@@ -238,6 +238,46 @@ async function refreshUpdate({ force = false } = {}) {
   }
 }
 
+async function refreshErrors() {
+  try {
+    const errors = await api("/api/errors");
+    const panel = document.getElementById("errorLogPanel");
+    const list = document.getElementById("errorLogList");
+    const badge = document.getElementById("errorLogBadge");
+    if (!panel || !list) return;
+    if (!errors || errors.length === 0) {
+      panel.classList.add("hidden");
+      if (badge) badge.classList.add("hidden");
+      return;
+    }
+    panel.classList.remove("hidden");
+    if (badge) {
+      badge.textContent = errors.length;
+      badge.classList.remove("hidden");
+    }
+    list.innerHTML = errors.map(e => {
+      const dt = new Date(e.at);
+      const ts = dt.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+      const src = e.source ? `<span class="text-sea-glow mr-1">[${e.source}]</span>` : "";
+      return `<li class="flex gap-2 items-start py-0.5"><span class="shrink-0 text-dim">${ts}</span>${src}<span class="text-bad break-all">${escHtml(e.message)}</span></li>`;
+    }).join("");
+  } catch { /* silent — secondary UI */ }
+}
+
+function escHtml(s) {
+  return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+}
+
+const btnClearErrors = document.getElementById("btnClearErrors");
+if (btnClearErrors) {
+  btnClearErrors.addEventListener("click", async () => {
+    try {
+      await fetch("/api/errors", { method: "DELETE" });
+      await refreshErrors();
+    } catch { /* ignore */ }
+  });
+}
+
 Promise.resolve()
   .then(() => printer.loadPrinters(api))
   .catch((e) => {
@@ -252,6 +292,8 @@ Promise.resolve()
     setInterval(refreshAll, 2000);
     setTimeout(refreshUpdate, 4000);
     setInterval(refreshUpdate, 30 * 60 * 1000);
+    refreshErrors();
+    setInterval(refreshErrors, 5000);
   });
 systemSettings.load().catch(showBootError);
 

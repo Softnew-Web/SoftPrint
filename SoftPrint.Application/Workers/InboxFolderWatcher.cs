@@ -8,6 +8,7 @@ namespace SoftPrint.Application.Workers;
 public sealed class InboxFolderWatcher(
     JobQueueService jobs,
     ISettingsRepository settings,
+    IRecentErrorLog errorLog,
     ILogger<InboxFolderWatcher> logger) : BackgroundService
 {
     // Chave: caminho absoluto do arquivo → bloqueado até quando.
@@ -65,6 +66,7 @@ public sealed class InboxFolderWatcher(
         catch (Exception ex)
         {
             logger.LogDebug(ex, "Não foi possível listar a pasta de entrada '{Folder}'.", entry.Folder);
+            errorLog.Record("pasta-entrada", $"Pasta '{entry.Label}' inacessível: {ex.Message}");
             return;
         }
 
@@ -109,6 +111,7 @@ public sealed class InboxFolderWatcher(
             catch (Exception ex)
             {
                 logger.LogWarning(ex, "Falha ao enfileirar {File}", full);
+                errorLog.Record("pasta-entrada", $"{Path.GetFileName(full)}: {ex.Message}");
                 _blockedUntil[full] = now.AddSeconds(15);
             }
         }
