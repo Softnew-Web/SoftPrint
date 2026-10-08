@@ -76,7 +76,7 @@ FinishedLabel=O {#AppName} foi instalado com sucesso neste computador. Clique em
 [Tasks]
 Name: "desktopicon"; Description: "Criar atalho na area de trabalho"; GroupDescription: "Atalhos adicionais:"
 Name: "startwithwindows"; Description: "Iniciar {#AppName} automaticamente com o Windows"; GroupDescription: "Opcoes de inicializacao:"
-Name: "windowsService"; Description: "Manter a impressao ativa depois do logoff (servico do Windows)"; GroupDescription: "Opcoes de inicializacao:"; Flags: checked; Check: IsAdminInstallMode and IsModernWindows
+Name: "windowsService"; Description: "Manter a impressao ativa depois do logoff (servico do Windows)"; GroupDescription: "Opcoes de inicializacao:"; Check: IsAdminInstallMode and IsModernWindows
 
 [Files]
 Source: "..\dist\windows-modern-x64\*"; DestDir: "{app}"; Flags: recursesubdirs ignoreversion; Check: IsModernWindows and IsWin64
