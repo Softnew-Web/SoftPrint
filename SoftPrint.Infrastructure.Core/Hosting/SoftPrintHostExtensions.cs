@@ -98,6 +98,7 @@ public static class SoftPrintHostExtensions
         services.AddSingleton<IPreviousVersionStore, SoftPrint.Infrastructure.Updates.LocalPreviousVersionStore>();
         services.AddSingleton<IUpdateHistoryStore, SoftPrint.Infrastructure.Updates.LocalUpdateHistoryStore>();
         services.AddSingleton<IUpdateApplier, SoftPrint.Infrastructure.Updates.SoftPrintUpdateApplier>();
+        services.AddSingleton<IWindowsServiceMode, UnsupportedWindowsServiceMode>();
         services.AddHostedService<SoftPrint.Infrastructure.Updates.UpdateCheckHostedService>();
         services.AddHostedService<AppLifecycleHostedService>();
         services.AddHostedService<PrintWorker>();

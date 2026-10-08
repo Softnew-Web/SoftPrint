@@ -1,5 +1,6 @@
 using SoftPrint.Application.Abstractions;
 using SoftPrint.Domain;
+using SoftPrint.Hosting;
 
 namespace SoftPrint.Infrastructure.Integrations;
 
@@ -93,7 +94,11 @@ public sealed class WindowsStartupService(IHostEnvironment environment) : IWindo
         using var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(RunKey, true)
                         ?? Microsoft.Win32.Registry.CurrentUser.CreateSubKey(RunKey, true);
         if (enable)
-            key.SetValue(ValueName, $"\"{exe}\" --tray");
+        {
+            // Com o serviço instalado, o login só abre o painel. O motor já está na sessão 0.
+            var launchArgs = WindowsServiceControl.IsCurrentExecutableInstalledAsService() ? "--ui" : "--tray";
+            key.SetValue(ValueName, $"\"{exe}\" {launchArgs}");
+        }
         else if (key.GetValue(ValueName) is not null)
             key.DeleteValue(ValueName, false);
         if (key.GetValue("AutoPrint") is not null)

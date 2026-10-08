@@ -10,6 +10,24 @@ public interface IPlatformCapabilities
     bool IsLegacy { get; }
 }
 
+public interface IWindowsServiceMode
+{
+    ServiceModeStatus GetStatus();
+    ServiceModeChange SetEnabled(bool enabled);
+}
+
+public sealed record ServiceModeStatus(
+    bool Supported,
+    bool Installed,
+    bool Running,
+    bool CurrentProcessIsService);
+
+public sealed record ServiceModeChange(
+    bool Ok,
+    bool NeedsConfirmation,
+    string Message,
+    Action? AfterResponse = null);
+
 public sealed record PlatformCapabilities(
     string Platform,
     string PrintingBackend,

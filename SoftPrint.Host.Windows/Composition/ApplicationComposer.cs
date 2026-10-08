@@ -2,6 +2,8 @@ using System.Security.Cryptography;
 using System.Text;
 using SoftPrint.Application;
 using SoftPrint.Application.Abstractions;
+using SoftPrint.Hosting;
+using Microsoft.Extensions.Hosting.WindowsServices;
 using SoftPrint.Infrastructure.Auth;
 using SoftPrint.Infrastructure.Hosting;
 using SoftPrint.Infrastructure.Integrations;
@@ -31,6 +33,7 @@ public static class ApplicationComposer
         builder.Services.AddSingleton<TrayAppNotifier>();
         builder.Services.AddSingleton<IAppNotifier>(sp => sp.GetRequiredService<TrayAppNotifier>());
         builder.Services.AddSingleton<IWindowsStartupService, WindowsStartupService>();
+        builder.Services.AddSingleton<IWindowsServiceMode, WindowsServiceMode>();
         builder.Services.AddSingleton<IFolderOperations, WindowsFolderOperations>();
         builder.Services.AddSingleton<IPlatformCapabilities>(new PlatformCapabilities(
             Platform: "windows",
@@ -45,8 +48,13 @@ public static class ApplicationComposer
         builder.Services.AddSingleton<IPrintStrategy, EscPosPrintStrategy>();
         builder.Services.AddSingleton<INetworkPrinterInstaller, WindowsNetworkPrinterInstaller>();
         builder.Logging.AddSoftPrintFileLogging(builder.Environment, builder.Configuration);
+        builder.Host.UseWindowsService(options => options.ServiceName = WindowsServiceControl.ServiceName);
 
-        if (builder.Configuration.GetValue("SoftPrint:StartWithWindows", false))
+        var asService = WindowsServiceHelpers.IsWindowsService()
+            || Environment.GetCommandLineArgs().Any(a =>
+                string.Equals(a, "--service", StringComparison.OrdinalIgnoreCase));
+        // No serviço a conta é LocalSystem: gravar o Run em HKCU afetaria o perfil do sistema, não o do usuário.
+        if (!asService && builder.Configuration.GetValue("SoftPrint:StartWithWindows", false))
             new WindowsStartupService(builder.Environment).ApplyFromOptions(true);
 
         return builder;

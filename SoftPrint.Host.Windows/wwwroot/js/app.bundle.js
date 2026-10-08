@@ -32396,6 +32396,59 @@ fn fs_main(in : VertexOutput) -> @location(0) vec4<f32> {
         }
       });
     }
+    const serviceBtn = document.getElementById("btnWindowsService");
+    let serviceInstalled = false;
+    let serviceRunning = false;
+    async function refreshServiceButton() {
+      if (!serviceBtn) return;
+      try {
+        const status = await api2("/api/windows-service");
+        if (!status?.supported) {
+          serviceBtn.classList.add("hidden");
+          return;
+        }
+        serviceInstalled = !!status.installed;
+        serviceRunning = !!status.running;
+        document.documentElement.dataset.windowsService = serviceInstalled ? "1" : "0";
+        serviceBtn.classList.remove("hidden");
+        if (serviceInstalled && serviceRunning) {
+          serviceBtn.textContent = "Ativo ap\xF3s o logoff";
+          serviceBtn.title = "A impress\xE3o continua depois do logoff. Clique para desativar o servi\xE7o.";
+        } else if (serviceInstalled) {
+          serviceBtn.textContent = "Servi\xE7o parado \u2014 iniciar";
+          serviceBtn.title = "O servi\xE7o est\xE1 instalado, mas parado. Clique para iniciar.";
+        } else {
+          serviceBtn.textContent = "Continuar ap\xF3s o logoff";
+          serviceBtn.title = "Instala o SoftPrint como servi\xE7o do Windows. A impress\xE3o continua depois do logoff.";
+        }
+      } catch {
+        serviceBtn.classList.add("hidden");
+      }
+    }
+    serviceBtn?.addEventListener("click", async () => {
+      const enabling = !serviceInstalled || !serviceRunning;
+      if (!enabling && !window.confirm("Desativar o servi\xE7o? A impress\xE3o volta a parar quando algu\xE9m fizer logoff."))
+        return;
+      serviceBtn.disabled = true;
+      try {
+        const result = await api2("/api/windows-service", {
+          method: "POST",
+          body: JSON.stringify({ enabled: enabling })
+        });
+        feedback(result?.message || "Atualizado.");
+        if (!result?.needsConfirmation)
+          await refreshServiceButton();
+      } catch (err) {
+        const cancelled = /cancelad/i.test(err?.message || "");
+        if (enabling && !cancelled)
+          feedback("Se voc\xEA confirmou a permiss\xE3o, o SoftPrint est\xE1 reiniciando como servi\xE7o.");
+        else
+          feedback(err.message, true);
+      } finally {
+        serviceBtn.disabled = false;
+      }
+    });
+    refreshServiceButton();
     if (previewFile) {
       previewFile.addEventListener("change", async () => {
         const file = previewFile.files?.[0];
@@ -34819,7 +34872,7 @@ Ser\xE1 restaurada a c\xF3pia local salva antes da \xFAltima atualiza\xE7\xE3o (
     const startupLabel = document.getElementById("startupLabel");
     if (startup) startup.title = `Inicializa\xE7\xE3o: ${capabilities.startupRegistration}`;
     if (startupLabel) {
-      startupLabel.textContent = capabilities.startupRegistration === "systemd-user" ? "Servi\xE7o systemd do usu\xE1rio" : capabilities.startupRegistration === "registry" ? "Iniciar com o Windows" : "Iniciar automaticamente";
+      startupLabel.textContent = document.documentElement.dataset.windowsService === "1" ? "Abrir o painel ao entrar" : capabilities.startupRegistration === "systemd-user" ? "Servi\xE7o systemd do usu\xE1rio" : capabilities.startupRegistration === "registry" ? "Iniciar com o Windows" : "Iniciar automaticamente";
     }
     const closeHint = document.getElementById("closeHint");
     if (closeHint) closeHint.classList.toggle("hidden", !capabilities.hasDesktopShell);
@@ -34841,6 +34894,45 @@ Ser\xE1 restaurada a c\xF3pia local salva antes da \xFAltima atualiza\xE7\xE3o (
       console.warn("Falha ao verificar atualiza\xE7\xE3o", err);
     }
   }
+  async function refreshErrors() {
+    try {
+      const errors = await api("/api/errors");
+      const panel = document.getElementById("errorLogPanel");
+      const list = document.getElementById("errorLogList");
+      const badge = document.getElementById("errorLogBadge");
+      if (!panel || !list) return;
+      if (!errors || errors.length === 0) {
+        panel.classList.add("hidden");
+        if (badge) badge.classList.add("hidden");
+        return;
+      }
+      panel.classList.remove("hidden");
+      if (badge) {
+        badge.textContent = errors.length;
+        badge.classList.remove("hidden");
+      }
+      list.innerHTML = errors.map((e) => {
+        const dt = new Date(e.at);
+        const ts = dt.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+        const src = e.source ? `<span class="text-sea-glow mr-1">[${e.source}]</span>` : "";
+        return `<li class="flex gap-2 items-start py-0.5"><span class="shrink-0 text-dim">${ts}</span>${src}<span class="text-bad break-all">${escHtml(e.message)}</span></li>`;
+      }).join("");
+    } catch {
+    }
+  }
+  function escHtml(s) {
+    return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  }
+  var btnClearErrors = document.getElementById("btnClearErrors");
+  if (btnClearErrors) {
+    btnClearErrors.addEventListener("click", async () => {
+      try {
+        await fetch("/api/errors", { method: "DELETE" });
+        await refreshErrors();
+      } catch {
+      }
+    });
+  }
   Promise.resolve().then(() => printer.loadPrinters(api)).catch((e) => {
     console.error(e);
     const summary = document.getElementById("printerSummary");
@@ -34850,6 +34942,8 @@ Ser\xE1 restaurada a c\xF3pia local salva antes da \xFAltima atualiza\xE7\xE3o (
     setInterval(refreshAll, 2e3);
     setTimeout(refreshUpdate, 4e3);
     setInterval(refreshUpdate, 30 * 60 * 1e3);
+    refreshErrors();
+    setInterval(refreshErrors, 5e3);
   });
   systemSettings.load().catch(showBootError);
   window.__softprinttBooted = true;

@@ -76,6 +76,7 @@ FinishedLabel=O {#AppName} foi instalado com sucesso neste computador. Clique em
 [Tasks]
 Name: "desktopicon"; Description: "Criar atalho na area de trabalho"; GroupDescription: "Atalhos adicionais:"
 Name: "startwithwindows"; Description: "Iniciar {#AppName} automaticamente com o Windows"; GroupDescription: "Opcoes de inicializacao:"
+Name: "windowsService"; Description: "Manter a impressao ativa depois do logoff (servico do Windows)"; GroupDescription: "Opcoes de inicializacao:"; Flags: checked; Check: IsAdminInstallMode and IsModernWindows
 
 [Files]
 Source: "..\dist\windows-modern-x64\*"; DestDir: "{app}"; Flags: recursesubdirs ignoreversion; Check: IsModernWindows and IsWin64
@@ -105,8 +106,13 @@ Type: files; Name: "{group}\AutoPrint.lnk"
 Type: files; Name: "{autodesktop}\AutoPrint.lnk"
 
 [Run]
+Filename: "{app}\SoftPrint.exe"; Parameters: "--install-service --quiet"; StatusMsg: "Registrando o servico do SoftPrint..."; Flags: runhidden waituntilterminated; Tasks: windowsService; Check: IsModernWindows
 Filename: "{app}\SoftPrint.exe"; Description: "Abrir {#AppName} agora"; Flags: nowait postinstall skipifsilent shellexec; Check: IsModernWindows
 Filename: "{app}\SoftPrint.Legacy.exe"; Description: "Abrir {#AppName} agora"; Flags: nowait postinstall skipifsilent shellexec; Check: not IsModernWindows
+
+[UninstallRun]
+Filename: "{sys}\sc.exe"; Parameters: "stop SoftPrint"; Flags: runhidden; RunOnceId: "StopSoftPrintSvc"
+Filename: "{app}\SoftPrint.exe"; Parameters: "--uninstall-service --quiet"; Flags: runhidden waituntilterminated; RunOnceId: "RemoveSoftPrintSvc"; Check: IsModernWindows
 
 [Code]
 var
@@ -243,6 +249,9 @@ procedure KillSoftPrint;
 var
   ResultCode: Integer;
 begin
+  Exec(ExpandConstant('{sys}\sc.exe'), 'stop SoftPrint', '',
+    SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  Sleep(1500);
   Exec(ExpandConstant('{sys}\taskkill.exe'), '/F /IM SoftPrint.exe', '',
     SW_HIDE, ewWaitUntilTerminated, ResultCode);
   Exec(ExpandConstant('{sys}\taskkill.exe'), '/F /IM SoftPrint.Legacy.exe', '',
@@ -266,10 +275,23 @@ begin
   end;
 end;
 
+procedure RestartSoftPrintServiceIfInstalled;
+var
+  ResultCode: Integer;
+begin
+  if not IsModernWindows then Exit;
+  if not Exec(ExpandConstant('{sys}\sc.exe'), 'query SoftPrint', '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then Exit;
+  if ResultCode <> 0 then Exit;
+  Exec(ExpandConstant('{sys}\sc.exe'), 'start SoftPrint', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+end;
+
 procedure CurStepChanged(CurStep: TSetupStep);
 begin
   if CurStep = ssInstall then
     KillSoftPrint;
   if CurStep = ssPostInstall then
+  begin
     MigrateAutoPrintRunKey;
+    RestartSoftPrintServiceIfInstalled;
+  end;
 end;

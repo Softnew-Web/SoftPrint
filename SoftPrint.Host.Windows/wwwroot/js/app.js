@@ -207,11 +207,13 @@ function applyCapabilities(capabilities) {
   const startupLabel = document.getElementById("startupLabel");
   if (startup) startup.title = `Inicialização: ${capabilities.startupRegistration}`;
   if (startupLabel) {
-    startupLabel.textContent = capabilities.startupRegistration === "systemd-user"
-      ? "Serviço systemd do usuário"
-      : capabilities.startupRegistration === "registry"
-        ? "Iniciar com o Windows"
-        : "Iniciar automaticamente";
+    startupLabel.textContent = document.documentElement.dataset.windowsService === "1"
+      ? "Abrir o painel ao entrar"
+      : capabilities.startupRegistration === "systemd-user"
+        ? "Serviço systemd do usuário"
+        : capabilities.startupRegistration === "registry"
+          ? "Iniciar com o Windows"
+          : "Iniciar automaticamente";
   }
   const closeHint = document.getElementById("closeHint");
   if (closeHint) closeHint.classList.toggle("hidden", !capabilities.hasDesktopShell);

@@ -682,6 +682,54 @@ public static class SettingsEndpoints
             startup.ApplyFromOptions(request.Enabled);
             return Results.Ok(new { startWithWindows = startup.IsEnabled });
         });
+        app.MapGet("/api/windows-service", (IWindowsServiceMode mode) =>
+        {
+            var status = mode.GetStatus();
+            return Results.Ok(new
+            {
+                status.Supported,
+                status.Installed,
+                status.Running,
+                status.CurrentProcessIsService
+            });
+        });
+        app.MapPost("/api/windows-service", (StartupRequest request, IWindowsServiceMode mode, HttpContext http) =>
+        {
+            var change = mode.SetEnabled(request.Enabled);
+            if (change.AfterResponse is not null)
+            {
+                var after = change.AfterResponse;
+                http.Response.OnCompleted(() =>
+                {
+                    try { after(); }
+                    catch { /* a resposta já foi enviada */ }
+                    return Task.CompletedTask;
+                });
+            }
+
+            var status = mode.GetStatus();
+            if (!change.Ok)
+            {
+                return Results.BadRequest(new
+                {
+                    error = change.Message,
+                    status.Supported,
+                    status.Installed,
+                    status.Running
+                });
+            }
+
+            return Results.Ok(new
+            {
+                ok = true,
+                needsConfirmation = change.NeedsConfirmation,
+                message = change.Message,
+                status.Supported,
+                status.Installed,
+                status.Running,
+                status.CurrentProcessIsService
+            });
+        });
         app.MapPost("/api/settings/uninstall", async (HttpRequest request, IHostApplicationLifetime lifetime) =>
         {
             if (!OperatingSystem.IsWindows())

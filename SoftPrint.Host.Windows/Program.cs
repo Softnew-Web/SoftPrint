@@ -3,6 +3,8 @@ using SoftPrint.Application.Abstractions;
 using SoftPrint.Composition;
 using SoftPrint.Application.Services;
 using SoftPrint.Domain;
+using SoftPrint.Hosting;
+using Microsoft.Extensions.Hosting.WindowsServices;
 using System.Diagnostics;
 
 if (args.Contains("--diagnose"))
@@ -14,13 +16,64 @@ if (args.Contains("--diagnose"))
     return;
 }
 
+if (Has(args, "--install-service"))
+{
+    Environment.ExitCode = WindowsServiceControl.Install(Has(args, "--quiet"));
+    return;
+}
+
+if (Has(args, "--uninstall-service"))
+{
+    Environment.ExitCode = WindowsServiceControl.Uninstall(Has(args, "--quiet"));
+    return;
+}
+
+WindowsServiceControl.ApplyConfigRootArgument(args);
+
+var asService = WindowsServiceHelpers.IsWindowsService() || Has(args, "--service");
+var headlessRequested = Has(args, "--headless")
+    || string.Equals(Environment.GetEnvironmentVariable("HEADLESS"), "true", StringComparison.OrdinalIgnoreCase)
+    || string.Equals(Environment.GetEnvironmentVariable("HEADLESS"), "1", StringComparison.OrdinalIgnoreCase);
+
 if (!OperatingSystem.IsWindowsVersionAtLeast(10))
 {
-    MessageBox.Show(
-        "Este executável requer Windows 10 ou mais recente. Use SoftPrint.Legacy.exe neste computador.",
-        "SoftPrint",
-        MessageBoxButtons.OK,
-        MessageBoxIcon.Warning);
+    if (!asService)
+    {
+        MessageBox.Show(
+            "Este executável requer Windows 10 ou mais recente. Use SoftPrint.Legacy.exe neste computador.",
+            "SoftPrint",
+            MessageBoxButtons.OK,
+            MessageBoxIcon.Warning);
+    }
+
+    Environment.ExitCode = 1;
+    return;
+}
+
+// Serviço instalado para este exe: o processo da sessão só abre o painel.
+// O motor fica na sessão 0 e sobrevive ao logoff.
+if (!asService && WindowsServiceControl.IsCurrentExecutableInstalledAsService())
+{
+    if (!WindowsServiceControl.TryEnsureRunning(out var serviceError))
+    {
+        if (!headlessRequested)
+        {
+            MessageBox.Show(
+                "O serviço do SoftPrint não está em execução.\n\n" + serviceError,
+                "SoftPrint",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Warning);
+        }
+
+        Environment.ExitCode = 1;
+        return;
+    }
+
+    if (headlessRequested)
+        return;
+
+    var startUiInTray = Has(args, "--tray") || Has(args, "--ui");
+    Environment.ExitCode = ServiceDashboardClient.Run(startUiInTray);
     return;
 }
 
@@ -58,26 +111,32 @@ using var instance = SingleInstanceGuard.TryAcquire();
 if (instance is null)
 {
     // Já sinalizou a 1ª instância (ShowRequested). Avisa para o usuário não achar que “não abriu”.
-    MessageBox.Show(
-        "O SoftPrint já está em execução em segundo plano.\n\n" +
-        "O painel deve aparecer em instantes.\n\n" +
-        "Se não aparecer: procure o ícone do SoftPrint perto do relógio (▲ na barra de tarefas) e clique duas vezes.",
-        "SoftPrint",
-        MessageBoxButtons.OK,
-        MessageBoxIcon.Information);
+    if (!asService)
+    {
+        MessageBox.Show(
+            "O SoftPrint já está em execução em segundo plano.\n\n" +
+            "O painel deve aparecer em instantes.\n\n" +
+            "Se não aparecer: procure o ícone do SoftPrint perto do relógio (▲ na barra de tarefas) e clique duas vezes.",
+            "SoftPrint",
+            MessageBoxButtons.OK,
+            MessageBoxIcon.Information);
+    }
+
     return;
 }
 
 // Chegamos aqui: somos a única instância legítima (mutex adquirido).
 // Qualquer SoftPrint.exe ainda em execução é um zumbi (morreu antes de liberar a porta).
 // Matamos antes de tentar bindar a porta para evitar "Address already in use".
-KillZombieSoftPrint();
+// Sessão 0 é o serviço: não derrubar a fila que sobrevive ao logoff.
+if (!asService)
+    KillZombieSoftPrint();
 
 var builder = ApplicationComposer.CreateBuilder(args);
 var app = ApplicationComposer.BuildApplication(builder);
 lifecycle = app.Services.GetService<IAppLifecycleLogger>();
 
-var headless = builder.Configuration.GetValue<bool>("headless") || args.Contains("--headless");
+var headless = asService || headlessRequested || builder.Configuration.GetValue<bool>("headless");
 var startInTray = args.Contains("--tray") || builder.Configuration.GetValue("SoftPrint:StartInTray", false);
 
 ApplicationComposer.StartDashboardIfNeeded(app, headless, startInTray, instance.ShowRequested);
@@ -113,7 +172,7 @@ static void KillZombieSoftPrint()
         {
             foreach (var p in Process.GetProcessesByName(name))
             {
-                if (p.Id == currentPid) continue;
+                if (p.Id == currentPid || p.SessionId == 0) continue;
                 try { p.Kill(entireProcessTree: true); p.WaitForExit(2000); }
                 catch { /* ignore — processo pode já ter morrido */ }
                 finally { p.Dispose(); }
@@ -122,6 +181,9 @@ static void KillZombieSoftPrint()
         catch { /* ignore */ }
     }
 }
+
+static bool Has(string[] args, string name) =>
+    args.Any(a => string.Equals(a, name, StringComparison.OrdinalIgnoreCase));
 
 static bool IsPortConflict(Exception ex)
 {

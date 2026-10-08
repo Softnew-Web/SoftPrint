@@ -163,6 +163,63 @@ export function bindPrinterTab({ api, onSaved }) {
     });
   }
 
+  const serviceBtn = document.getElementById("btnWindowsService");
+  let serviceInstalled = false;
+  let serviceRunning = false;
+
+  async function refreshServiceButton() {
+    if (!serviceBtn) return;
+    try {
+      const status = await api("/api/windows-service");
+      if (!status?.supported) {
+        serviceBtn.classList.add("hidden");
+        return;
+      }
+      serviceInstalled = !!status.installed;
+      serviceRunning = !!status.running;
+      document.documentElement.dataset.windowsService = serviceInstalled ? "1" : "0";
+      serviceBtn.classList.remove("hidden");
+      if (serviceInstalled && serviceRunning) {
+        serviceBtn.textContent = "Ativo após o logoff";
+        serviceBtn.title = "A impressão continua depois do logoff. Clique para desativar o serviço.";
+      } else if (serviceInstalled) {
+        serviceBtn.textContent = "Serviço parado — iniciar";
+        serviceBtn.title = "O serviço está instalado, mas parado. Clique para iniciar.";
+      } else {
+        serviceBtn.textContent = "Continuar após o logoff";
+        serviceBtn.title = "Instala o SoftPrint como serviço do Windows. A impressão continua depois do logoff.";
+      }
+    } catch {
+      serviceBtn.classList.add("hidden");
+    }
+  }
+
+  serviceBtn?.addEventListener("click", async () => {
+    const enabling = !serviceInstalled || !serviceRunning;
+    if (!enabling && !window.confirm("Desativar o serviço? A impressão volta a parar quando alguém fizer logoff."))
+      return;
+    serviceBtn.disabled = true;
+    try {
+      const result = await api("/api/windows-service", {
+        method: "POST",
+        body: JSON.stringify({ enabled: enabling }),
+      });
+      feedback(result?.message || "Atualizado.");
+      if (!result?.needsConfirmation)
+        await refreshServiceButton();
+    } catch (err) {
+      const cancelled = /cancelad/i.test(err?.message || "");
+      if (enabling && !cancelled)
+        feedback("Se você confirmou a permissão, o SoftPrint está reiniciando como serviço.");
+      else
+        feedback(err.message, true);
+    } finally {
+      serviceBtn.disabled = false;
+    }
+  });
+
+  refreshServiceButton();
+
   if (previewFile) {
     // Preferir o botão do bootstrap; manter sync se o módulo carregar.
     previewFile.addEventListener("change", async () => {

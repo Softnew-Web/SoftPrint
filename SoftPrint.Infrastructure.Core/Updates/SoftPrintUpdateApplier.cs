@@ -385,6 +385,8 @@ public sealed class SoftPrintUpdateApplier : IUpdateApplier
             "  goto waitpid",
             ")",
             // Matar qualquer processo SoftPrint residual para liberar o exe antes do robocopy.
+            "sc stop SoftPrint >nul 2>&1",
+            "timeout /t 2 /nobreak >nul",
             "taskkill /F /IM SoftPrint.exe >nul 2>nul",
             "taskkill /F /IM SoftPrint.Legacy.exe >nul 2>nul",
             "timeout /t 1 /nobreak >nul",
@@ -411,6 +413,12 @@ public sealed class SoftPrintUpdateApplier : IUpdateApplier
             "  set ERR=0",
             ")",
             "timeout /t 1 /nobreak >nul",
+            "sc query SoftPrint >nul 2>&1",
+            "if errorlevel 1 goto startapp",
+            "sc start SoftPrint >nul 2>&1",
+            "if errorlevel 1 echo SoftPrint service start failed>> \"%TEMP%\\softprint-update-error.txt\"",
+            "goto done",
+            ":startapp",
             preferLegacy
                 ? $"if exist \"{legacy}\" start \"\" \"{legacy}\"{trayFlag} & goto done"
                 : $"if exist \"{modern}\" start \"\" \"{modern}\"{trayFlag} & goto done",
@@ -455,6 +463,8 @@ public sealed class SoftPrintUpdateApplier : IUpdateApplier
             "  timeout /t 1 /nobreak >nul",
             "  goto waitpid",
             ")",
+            "sc stop SoftPrint >nul 2>&1",
+            "timeout /t 2 /nobreak >nul",
             "taskkill /F /IM SoftPrint.exe >nul 2>nul",
             "taskkill /F /IM SoftPrint.Legacy.exe >nul 2>nul",
             "timeout /t 1 /nobreak >nul",
@@ -471,6 +481,12 @@ public sealed class SoftPrintUpdateApplier : IUpdateApplier
             "  set ERR=0",
             ")",
             "timeout /t 1 /nobreak >nul",
+            "sc query SoftPrint >nul 2>&1",
+            "if errorlevel 1 goto startapp",
+            "sc start SoftPrint >nul 2>&1",
+            "if errorlevel 1 echo SoftPrint service start failed>> \"%TEMP%\\softprint-update-error.txt\"",
+            "goto done",
+            ":startapp",
             preferLegacy
                 ? $"if exist \"{legacy}\" start \"\" \"{legacy}\"{trayFlag} & goto done"
                 : $"if exist \"{modern}\" start \"\" \"{modern}\"{trayFlag} & goto done",
@@ -518,6 +534,8 @@ public sealed class SoftPrintUpdateApplier : IUpdateApplier
             "  timeout /t 1 /nobreak >nul",
             "  goto waitpid",
             ")",
+            "sc stop SoftPrint >nul 2>&1",
+            "timeout /t 2 /nobreak >nul",
             "taskkill /F /IM SoftPrint.exe >nul 2>nul",
             "taskkill /F /IM SoftPrint.Legacy.exe >nul 2>nul",
             "timeout /t 1 /nobreak >nul",
@@ -528,6 +546,12 @@ public sealed class SoftPrintUpdateApplier : IUpdateApplier
             $"\"{setupPath}\" /VERYSILENT /NORESTART /SUPPRESSMSGBOXES /CLOSEAPPLICATIONS /FORCECLOSEAPPLICATIONS",
             "set ERR=%ERRORLEVEL%",
             "timeout /t 2 /nobreak >nul",
+            "sc query SoftPrint >nul 2>&1",
+            "if errorlevel 1 goto startapp",
+            "sc start SoftPrint >nul 2>&1",
+            "if errorlevel 1 echo SoftPrint service start failed>> \"%TEMP%\\softprint-update-error.txt\"",
+            "goto done",
+            ":startapp",
             preferLegacy
                 ? $"if exist \"{legacy}\" start \"\" \"{legacy}\"{trayFlag} & goto done"
                 : $"if exist \"{modern}\" start \"\" \"{modern}\"{trayFlag} & goto done",

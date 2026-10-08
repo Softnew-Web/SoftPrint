@@ -209,6 +209,7 @@
                 <label class="inline-flex items-center gap-1.5"><input id="simulation" type="checkbox" class="accent-sea" checked /> Simular</label>
                 <label class="inline-flex items-center gap-1.5"><input id="paused" type="checkbox" class="accent-sea" /> Pausar fila</label>
                 <label class="inline-flex items-center gap-1.5" id="startupRow"><input id="startup" type="checkbox" class="accent-sea" /> <span id="startupLabel">Iniciar automaticamente</span></label>
+                <button id="btnWindowsService" type="button" class="hidden rounded-lg border border-ink-line bg-ink px-2.5 py-1 text-xs font-medium hover:border-sea hover:text-sea-glow">Continuar após o logoff</button>
               </div>
               <!-- Cards de impressoras -->
               <div id="inboxCards" class="flex flex-wrap gap-2"></div>
@@ -713,7 +714,7 @@ Teste de impressão de texto.</textarea>
       }
     }, 4000);
   </script>
-  <script defer src="/js/app.bundle.js?v=20260925a"
+  <script defer src="/js/app.bundle.js?v=20261008a"
           onerror="document.getElementById('healthLine').textContent='Falha ao carregar o painel.'"></script>
   <script>
     // Theme toggle
