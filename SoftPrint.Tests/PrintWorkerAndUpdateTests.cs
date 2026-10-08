@@ -28,7 +28,7 @@ public sealed class PrintWorkerAndUpdateTests
         var strategies = new PrintStrategyResolver([new SimulationPrintStrategy()]);
         var worker = new PrintWorker(
             jobs, settings, systemSettings, router, catalog, strategies,
-            new NoOpWebhook(), new NoOpNotifier(), new NoOpTelemetry(),
+            new NoOpWebhook(), new NoOpNotifier(), new NoOpTelemetry(), new NoOpRecentErrorLog(),
             Options.Create(new SoftPrintFeatureOptions { PrintJobTimeoutSeconds = 60 }),
             NullLogger<PrintWorker>.Instance);
 
@@ -55,7 +55,7 @@ public sealed class PrintWorkerAndUpdateTests
         var strategies = new PrintStrategyResolver([new SimulationPrintStrategy()]);
         var worker = new PrintWorker(
             jobs, settings, systemSettings, router, catalog, strategies,
-            new NoOpWebhook(), new NoOpNotifier(), new NoOpTelemetry(),
+            new NoOpWebhook(), new NoOpNotifier(), new NoOpTelemetry(), new NoOpRecentErrorLog(),
             Options.Create(new SoftPrintFeatureOptions()),
             NullLogger<PrintWorker>.Instance);
 
@@ -250,6 +250,13 @@ public sealed class PrintWorkerAndUpdateTests
         public void NotifyUpdateAvailable(string currentVersion, string latestVersion, bool mandatory) { }
         public void NotifyUpdateFailed(string message) { }
         public void NotifyQueueAlert(string title, string message) { }
+    }
+
+    private sealed class NoOpRecentErrorLog : IRecentErrorLog
+    {
+        public void Record(string source, string message) { }
+        public void Clear() { }
+        public IReadOnlyList<RecentError> GetRecent(int max = 30) => Array.Empty<RecentError>();
     }
 
     private sealed class NoOpTelemetry : ITelemetryService
