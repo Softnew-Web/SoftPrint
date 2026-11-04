@@ -44,6 +44,55 @@ public sealed class PrintWorkerAndUpdateTests
     }
 
     [Fact]
+    public async Task PrintWorker_UsesSystemDefaultPrinter_WhenNoneConfigured()
+    {
+        var jobs = new MemoryJobRepository();
+        var job = jobs.Add(PrintJob.CreatePending("ref-default", "hello"));
+        var finished = await RunWorkerOnce(jobs, job.Id, simulation: true, printer: "", [
+            new PrinterDeviceInfo("Outra", "USB002", "USB", "drv", false, false, false, true, false, "Pronta"),
+            new PrinterDeviceInfo("Padrao Windows", "USB001", "USB", "drv", true, false, false, true, false, "Pronta")
+        ]);
+
+        Assert.Equal(JobStatus.Simulated, finished.Status);
+        Assert.Equal("Padrao Windows", finished.PrinterName);
+    }
+
+    [Fact]
+    public async Task PrintWorker_MarksUncertain_WhenNoPrinterAndNoSystemDefault()
+    {
+        var jobs = new MemoryJobRepository();
+        var job = jobs.Add(PrintJob.CreatePending("ref-none", "hello"));
+        var finished = await RunWorkerOnce(jobs, job.Id, simulation: false, printer: "", [
+            new PrinterDeviceInfo("Outra", "USB002", "USB", "drv", false, false, false, true, false, "Pronta")
+        ]);
+
+        Assert.Equal(JobStatus.Uncertain, finished.Status);
+    }
+
+    private static async Task<PrintJob> RunWorkerOnce(
+        MemoryJobRepository jobs, Guid jobId, bool simulation, string printer, IReadOnlyList<PrinterDeviceInfo> installed)
+    {
+        var systemSettings = new MemorySystemSettings();
+        var worker = new PrintWorker(
+            jobs, new MemorySettingsRepository(simulation, printer), systemSettings,
+            new PrinterRouter(Options.Create(new SoftPrintFeatureOptions()), systemSettings),
+            new FakePrinterCatalog(installed),
+            new PrintStrategyResolver([new SimulationPrintStrategy()]),
+            new NoOpWebhook(), new NoOpNotifier(), new NoOpTelemetry(), new NoOpRecentErrorLog(),
+            Options.Create(new SoftPrintFeatureOptions { PrintJobTimeoutSeconds = 60 }),
+            NullLogger<PrintWorker>.Instance);
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+        await worker.StartAsync(cts.Token);
+        await Task.Delay(500);
+        await worker.StopAsync(CancellationToken.None);
+
+        var finished = jobs.FindById(jobId);
+        Assert.NotNull(finished);
+        return finished!;
+    }
+
+    [Fact]
     public async Task PrintWorker_Simulates_WhenSimulationEnabled()
     {
         var jobs = new MemoryJobRepository();
@@ -102,6 +151,29 @@ public sealed class PrintWorkerAndUpdateTests
             Assert.Equal("softprint-linux-x64.zip", name);
         else
             Assert.StartsWith("SoftPrint-", name);
+    }
+
+    [Fact]
+    public void SettingsService_AllowsRealMode_WithoutDefaultPrinter()
+    {
+        // Impressoras ficam nas pastas de entrada; o painel não expõe a impressora padrão.
+        var repo = new MemorySettingsRepository(simulation: true, printer: "");
+        var service = new SettingsService(repo, new FakePrinterCatalog([]));
+
+        var saved = service.Update("", simulation: false, paused: false,
+            null, null, null, null, null, null, expectedRevision: 1);
+
+        Assert.False(saved.Simulation);
+    }
+
+    [Fact]
+    public void SettingsService_RejectsUninstalledDefaultPrinter()
+    {
+        var repo = new MemorySettingsRepository(simulation: true, printer: "");
+        var service = new SettingsService(repo, new FakePrinterCatalog([]));
+
+        Assert.Throws<ArgumentException>(() => service.Update("Fantasma", simulation: false, paused: false,
+            null, null, null, null, null, null, expectedRevision: 1));
     }
 
     private sealed class FakePrinterCatalog(IReadOnlyList<PrinterDeviceInfo> printers) : IPrinterCatalog

@@ -145,7 +145,10 @@ async function refreshAll() {
       const origin = (status.baseUrl || location.origin).replace(/\/$/, "");
       endpoint.value = `${origin}/api/jobs`;
     }
-    state.applied = status.settings;
+    // Uma resposta de polling que saiu antes de um PUT pode chegar depois dele:
+    // não volta para uma revisão mais antiga do que a que já temos.
+    if (!state.applied || (status.settings?.revision ?? 0) >= (state.applied.revision ?? 0))
+      state.applied = status.settings;
     state.jobs = jobList || [];
     applyCapabilities(status.capabilities);
     printer.applySettingsToForm?.();

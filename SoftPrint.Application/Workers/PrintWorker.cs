@@ -71,7 +71,16 @@ public sealed class PrintWorker(
             var printer = !string.IsNullOrWhiteSpace(pending.RequestedPrinterName)
                 ? pending.RequestedPrinterName
                 : router.ResolvePrinter(pending.JobType, options.PrinterName);
-            var routed = !string.Equals(printer, options.PrinterName, StringComparison.OrdinalIgnoreCase)
+            // Nem o pedido, nem a rota, nem as configurações definem impressora:
+            // usa a padrão do sistema (Windows/CUPS).
+            var usedSystemDefault = false;
+            if (string.IsNullOrWhiteSpace(printer) && TryGetSystemDefaultPrinter(out var systemDefault))
+            {
+                printer = systemDefault;
+                usedSystemDefault = true;
+            }
+            var routed = !usedSystemDefault
+                && !string.Equals(printer, options.PrinterName, StringComparison.OrdinalIgnoreCase)
                 && !string.IsNullOrWhiteSpace(printer);
 
             var job = jobs.TakeNextPending(printer, options.Revision);
@@ -150,6 +159,13 @@ public sealed class PrintWorker(
                             "route", "PrinterRouter",
                             $"Roteado pelo tipo '{job.JobType}'.",
                             $"Impressora padrão '{options.PrinterName}' → '{printer}'"));
+                    }
+                    else if (usedSystemDefault)
+                    {
+                        steps.Add(new JobStepDraft(
+                            "route", "PrintWorker",
+                            $"Impressora padrão do sistema: '{printer}'.",
+                            "Nenhuma impressora definida no pedido, na pasta, na rota ou nas configurações."));
                     }
 
                     steps.Add(new JobStepDraft(
@@ -293,12 +309,26 @@ public sealed class PrintWorker(
         }
     }
 
+    private bool TryGetSystemDefaultPrinter(out string printerName)
+    {
+        printerName = "";
+        try
+        {
+            printerName = printers.ListDetailed().FirstOrDefault(p => p.IsDefault)?.Name ?? "";
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Não foi possível consultar a impressora padrão do sistema.");
+        }
+        return printerName.Length > 0;
+    }
+
     private bool IsPrinterUnavailable(string printerName, out string detail)
     {
         detail = "";
         if (string.IsNullOrWhiteSpace(printerName))
         {
-            detail = "Nenhuma impressora selecionada.";
+            detail = "Nenhuma impressora selecionada e o sistema não tem impressora padrão.";
             return true;
         }
 

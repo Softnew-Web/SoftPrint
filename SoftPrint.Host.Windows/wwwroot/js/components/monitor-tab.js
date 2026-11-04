@@ -330,7 +330,7 @@ export function bindMonitorTab({ api, onChanged }) {
     if (
       state.applied &&
       !state.applied.simulation &&
-      !confirm(`Enviar para ${state.applied.printerName}?`)
+      !confirm(`Enviar para ${printerLabel(state.applied)}?`)
     )
       return;
     try {
@@ -380,7 +380,7 @@ export function bindMonitorTab({ api, onChanged }) {
       }
     }
 
-    if (!state.applied.simulation && !confirm(`Teste guiado para ${state.applied.printerName}?`))
+    if (!state.applied.simulation && !confirm(`Teste guiado para ${printerLabel(state.applied)}?`))
       return;
 
     const started = Date.now();
@@ -496,6 +496,11 @@ function idleTraceMessage(status) {
   if (status === "simulated") return "Concluído em simulação.";
   if (status === "sent") return "Enviado ao spooler (não garante papel).";
   return "Sem erro.";
+}
+
+function printerLabel(applied) {
+  return applied?.printerName
+    || "a impressora padrão do sistema";
 }
 
 function pipelineStatusText(applied, processing, pendingCount) {
