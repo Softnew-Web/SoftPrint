@@ -20,10 +20,11 @@ public sealed class SettingsService(ISettingsRepository repository, IPrinterCata
         bool? paperLandscape,
         long expectedRevision)
     {
+        // Impressora padrão é opcional também no modo real: cada pasta de entrada
+        // tem a sua, e um pedido sem impressora falha com motivo claro no PrintWorker.
         var printer = printerName?.Trim() ?? "";
-        if ((!simulation && string.IsNullOrWhiteSpace(printer)) ||
-            (!string.IsNullOrWhiteSpace(printer) && !printers.IsInstalled(printer)))
-            throw new ArgumentException("Selecione uma impressora instalada no Windows. Atualize a lista e tente novamente.");
+        if (!string.IsNullOrWhiteSpace(printer) && !printers.IsInstalled(printer))
+            throw new ArgumentException($"A impressora padrão '{printer}' não está instalada neste Windows. Atualize a lista e tente novamente.");
 
         var current = repository.Current;
         var fit = ImageFitModeExtensions.FromWire(imageFit);

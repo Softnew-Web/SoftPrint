@@ -1,81 +1,4 @@
 (() => {
-  var __defProp = Object.defineProperty;
-  var __getOwnPropNames = Object.getOwnPropertyNames;
-  var __esm = (fn, res) => function __init() {
-    return fn && (res = (0, fn[__getOwnPropNames(fn)[0]])(fn = 0)), res;
-  };
-  var __export = (target, all) => {
-    for (var name in all)
-      __defProp(target, name, { get: all[name], enumerable: true });
-  };
-
-  // SoftPrint.Host.Windows/wwwroot/js/state.js
-  function feedback(msg, err = false) {
-    const el = document.getElementById("feedback");
-    if (!el) return;
-    el.textContent = msg || "";
-    el.className = `text-sm min-h-[1.25rem] ${err ? "text-bad" : "text-sea-glow"}`;
-  }
-  function openDlg(title, body) {
-    const dlg = document.getElementById("dlg");
-    dlg.classList.remove("max-w-3xl");
-    dlg.classList.add("max-w-2xl");
-    document.getElementById("dlgTitle").textContent = title;
-    const el = document.getElementById("dlgBody");
-    el.className = "p-5 text-sm whitespace-pre-wrap overflow-auto max-h-[70vh] scroll-thin leading-relaxed font-body";
-    el.textContent = body;
-    dlg.showModal();
-  }
-  function openDlgHtml(title, html, { wide = false } = {}) {
-    const dlg = document.getElementById("dlg");
-    dlg.classList.toggle("max-w-3xl", wide);
-    dlg.classList.toggle("max-w-2xl", !wide);
-    document.getElementById("dlgTitle").textContent = title;
-    const el = document.getElementById("dlgBody");
-    el.className = "p-5 text-sm overflow-auto max-h-[75vh] scroll-thin leading-relaxed font-body";
-    el.innerHTML = html;
-    dlg.showModal();
-  }
-  var state;
-  var init_state = __esm({
-    "SoftPrint.Host.Windows/wwwroot/js/state.js"() {
-      state = {
-        jobs: [],
-        selectedId: null,
-        applied: null,
-        dirty: false,
-        inboxDirty: false
-      };
-    }
-  });
-
-  // SoftPrint.Host.Windows/wwwroot/js/settings-payload.js
-  var settings_payload_exports = {};
-  __export(settings_payload_exports, {
-    buildSettingsPayload: () => buildSettingsPayload
-  });
-  function buildSettingsPayload(overrides = {}) {
-    const s = state.applied || {};
-    return {
-      printerName: s.printerName || "",
-      simulation: !!s.simulation,
-      paused: !!s.paused,
-      imageFit: s.imageFit || "contain",
-      imageScalePercent: s.imageScalePercent ?? 100,
-      paperSize: s.paperSize || "a4",
-      paperWidthMm: s.paperWidthMm ?? 210,
-      paperHeightMm: s.paperHeightMm ?? 297,
-      paperLandscape: !!s.paperLandscape,
-      expectedRevision: s.revision,
-      ...overrides
-    };
-  }
-  var init_settings_payload = __esm({
-    "SoftPrint.Host.Windows/wwwroot/js/settings-payload.js"() {
-      init_state();
-    }
-  });
-
   // SoftPrint.Host.Windows/wwwroot/js/api.js
   function createApi(key = "") {
     const baseHeaders = {
@@ -119,8 +42,41 @@
     );
   }
 
-  // SoftPrint.Host.Windows/wwwroot/js/app.js
-  init_state();
+  // SoftPrint.Host.Windows/wwwroot/js/state.js
+  var state = {
+    jobs: [],
+    selectedId: null,
+    applied: null,
+    dirty: false,
+    savingFlags: false,
+    inboxDirty: false
+  };
+  function feedback(msg, err = false) {
+    const el = document.getElementById("feedback");
+    if (!el) return;
+    el.textContent = msg || "";
+    el.className = `text-sm min-h-[1.25rem] ${err ? "text-bad" : "text-sea-glow"}`;
+  }
+  function openDlg(title, body) {
+    const dlg = document.getElementById("dlg");
+    dlg.classList.remove("max-w-3xl");
+    dlg.classList.add("max-w-2xl");
+    document.getElementById("dlgTitle").textContent = title;
+    const el = document.getElementById("dlgBody");
+    el.className = "p-5 text-sm whitespace-pre-wrap overflow-auto max-h-[70vh] scroll-thin leading-relaxed font-body";
+    el.textContent = body;
+    dlg.showModal();
+  }
+  function openDlgHtml(title, html, { wide = false } = {}) {
+    const dlg = document.getElementById("dlg");
+    dlg.classList.toggle("max-w-3xl", wide);
+    dlg.classList.toggle("max-w-2xl", !wide);
+    document.getElementById("dlgTitle").textContent = title;
+    const el = document.getElementById("dlgBody");
+    el.className = "p-5 text-sm overflow-auto max-h-[75vh] scroll-thin leading-relaxed font-body";
+    el.innerHTML = html;
+    dlg.showModal();
+  }
 
   // SoftPrint.Host.Windows/wwwroot/js/components/stats.js
   async function refreshHeaderPrinterStatus(api2, settings) {
@@ -196,9 +152,6 @@
       hint.textContent = location.host || "\u2014";
     }
   }
-
-  // SoftPrint.Host.Windows/wwwroot/js/components/printer-tab.js
-  init_state();
 
   // SoftPrint.Host.Windows/wwwroot/js/image-layout.js
   var PAPER_PRESETS = {
@@ -470,8 +423,23 @@
     return Number.isInteger(v) ? String(v) : v.toFixed(1);
   }
 
-  // SoftPrint.Host.Windows/wwwroot/js/components/printer-tab.js
-  init_settings_payload();
+  // SoftPrint.Host.Windows/wwwroot/js/settings-payload.js
+  function buildSettingsPayload(overrides = {}) {
+    const s = state.applied || {};
+    return {
+      printerName: s.printerName || "",
+      simulation: !!s.simulation,
+      paused: !!s.paused,
+      imageFit: s.imageFit || "contain",
+      imageScalePercent: s.imageScalePercent ?? 100,
+      paperSize: s.paperSize || "a4",
+      paperWidthMm: s.paperWidthMm ?? 210,
+      paperHeightMm: s.paperHeightMm ?? 297,
+      paperLandscape: !!s.paperLandscape,
+      expectedRevision: s.revision,
+      ...overrides
+    };
+  }
 
   // node_modules/pdfjs-dist/legacy/build/pdf.mjs
   var import_meta = {};
@@ -32317,38 +32285,45 @@ fn fs_main(in : VertexOutput) -> @location(0) vec4<f32> {
         return false;
       }
     };
-    const markDirty = () => {
+    let flagsQueue = Promise.resolve();
+    let flagsPending = 0;
+    const restoreFlagsFromApplied = () => {
+      if (!state.applied) return;
+      if (simulation) simulation.checked = !!state.applied.simulation;
+      if (paused) paused.checked = !!state.applied.paused;
+      syncModeStat();
+    };
+    const saveFlags = (event) => {
       syncModeStat();
       if (!state.applied) return;
-      const { buildSettingsPayload: bp } = { buildSettingsPayload: (x) => x };
-      Promise.resolve().then(() => (init_settings_payload(), settings_payload_exports)).then(({ buildSettingsPayload: buildSettingsPayload2 }) => {
-        api2("/api/settings", {
-          method: "PUT",
-          body: JSON.stringify(buildSettingsPayload2({
-            printerName: state.applied.printerName || "",
-            simulation: !!simulation?.checked,
-            paused: !!paused?.checked,
-            imageFit: state.applied.imageFit || "contain",
-            imageScalePercent: state.applied.imageScalePercent ?? 100,
-            paperSize: state.applied.paperSize || "a4",
-            paperWidthMm: state.applied.paperWidthMm ?? 210,
-            paperHeightMm: state.applied.paperHeightMm ?? 297,
-            paperLandscape: !!state.applied.paperLandscape
-          }))
-        }).then((saved) => {
-          state.applied = saved;
-          state.dirty = false;
-          if (msg) {
-            msg.textContent = `v${saved.revision}`;
-            msg.className = "text-xs text-sea-glow leading-relaxed";
-          }
+      const wanted = { simulation: !!simulation?.checked, paused: !!paused?.checked };
+      const okMessage = event?.target === paused ? wanted.paused ? "Fila pausada." : "Fila retomada." : wanted.simulation ? "Modo simula\xE7\xE3o ativado." : "Modo real ativado: os pedidos v\xE3o para a impressora.";
+      flagsPending += 1;
+      state.savingFlags = true;
+      flagsQueue = flagsQueue.then(() => api2("/api/settings", {
+        method: "PUT",
+        body: JSON.stringify(buildSettingsPayload(wanted))
+      })).then((saved) => {
+        state.applied = saved;
+        if (msg) {
+          msg.textContent = `v${saved.revision}`;
+          msg.className = "text-xs text-sea-glow leading-relaxed";
+        }
+        feedback(okMessage);
+      }).catch((err) => {
+        restoreFlagsFromApplied();
+        feedback(err.message || "N\xE3o foi poss\xEDvel salvar o modo.", true);
+      }).finally(() => {
+        flagsPending -= 1;
+        if (flagsPending === 0) {
+          state.savingFlags = false;
           onSaved?.();
-        }).catch((err) => feedback(err.message, true));
+        }
       });
     };
     ["simulation", "paused"].forEach((id) => {
       const el = document.getElementById(id);
-      if (el) el.addEventListener("change", markDirty);
+      if (el) el.addEventListener("change", saveFlags);
     });
     if (paperSize) paperSize.addEventListener("change", () => {
       syncCustomRow();
@@ -32375,12 +32350,12 @@ fn fs_main(in : VertexOutput) -> @location(0) vec4<f32> {
       });
     }
     document.getElementById("btnPrinterPaper")?.addEventListener("click", async () => {
-      if (await loadDefaultPaper(api2)) markDirty();
+      if (await loadDefaultPaper(api2)) paperSize?.dispatchEvent(new Event("change"));
     });
     if (imageScale) {
       imageScale.addEventListener("input", () => {
         if (imageScaleLabel) imageScaleLabel.textContent = `${imageScale.value}%`;
-        markDirty();
+        redrawPreview();
       });
     }
     if (startup) {
@@ -32710,7 +32685,7 @@ fn fs_main(in : VertexOutput) -> @location(0) vec4<f32> {
       }
     }
     function applySettingsToForm() {
-      if (!state.applied || state.dirty) return;
+      if (!state.applied || state.dirty || state.savingFlags) return;
       if (simulation) simulation.checked = !!state.applied.simulation;
       if (paused) paused.checked = !!state.applied.paused;
       if (state.applied.printerName && printers) printers.value = state.applied.printerName;
@@ -32750,8 +32725,6 @@ fn fs_main(in : VertexOutput) -> @location(0) vec4<f32> {
   }
 
   // SoftPrint.Host.Windows/wwwroot/js/components/monitor-tab.js
-  init_state();
-  init_settings_payload();
   var STATUS_OPTIONS = [
     { value: "pending", label: "Na fila" },
     { value: "processing", label: "Enviando" },
@@ -33017,7 +32990,7 @@ fn fs_main(in : VertexOutput) -> @location(0) vec4<f32> {
     }
     async function sendTest() {
       if (state.dirty) return feedback("Salve as configura\xE7\xF5es antes de testar.", true);
-      if (state.applied && !state.applied.simulation && !confirm(`Enviar para ${state.applied.printerName}?`))
+      if (state.applied && !state.applied.simulation && !confirm(`Enviar para ${printerLabel(state.applied)}?`))
         return;
       try {
         await api2("/api/jobs", {
@@ -33062,7 +33035,7 @@ fn fs_main(in : VertexOutput) -> @location(0) vec4<f32> {
           }
         }
       }
-      if (!state.applied.simulation && !confirm(`Teste guiado para ${state.applied.printerName}?`))
+      if (!state.applied.simulation && !confirm(`Teste guiado para ${printerLabel(state.applied)}?`))
         return;
       const started = Date.now();
       feedback("Teste guiado enviado\u2026");
@@ -33165,6 +33138,9 @@ fn fs_main(in : VertexOutput) -> @location(0) vec4<f32> {
     if (status === "simulated") return "Conclu\xEDdo em simula\xE7\xE3o.";
     if (status === "sent") return "Enviado ao spooler (n\xE3o garante papel).";
     return "Sem erro.";
+  }
+  function printerLabel(applied) {
+    return applied?.printerName || "a impressora padr\xE3o do sistema";
   }
   function pipelineStatusText(applied, processing, pendingCount) {
     if (!applied) return "Aguardando\u2026";
@@ -33381,8 +33357,6 @@ fn fs_main(in : VertexOutput) -> @location(0) vec4<f32> {
   }
 
   // SoftPrint.Host.Windows/wwwroot/js/components/connect-tab.js
-  init_state();
-  init_settings_payload();
   function bindConnectTab({ api: api2 }) {
     const endpoint = document.getElementById("endpoint");
     if (endpoint) endpoint.value = location.origin + "/api/jobs";
@@ -34240,8 +34214,6 @@ fn fs_main(in : VertexOutput) -> @location(0) vec4<f32> {
   }
 
   // SoftPrint.Host.Windows/wwwroot/js/components/setup-wizard.js
-  init_state();
-  init_settings_payload();
   var DONE_KEY = "softprint-setup-done";
   function bindSetupWizard({ api: api2, setTab: setTab2, onRefresh, loadPrinters }) {
     const overlay = document.getElementById("setupWizard");
@@ -34816,7 +34788,8 @@ Ser\xE1 restaurada a c\xF3pia local salva antes da \xFAltima atualiza\xE7\xE3o (
         const origin = (status.baseUrl || location.origin).replace(/\/$/, "");
         endpoint.value = `${origin}/api/jobs`;
       }
-      state.applied = status.settings;
+      if (!state.applied || (status.settings?.revision ?? 0) >= (state.applied.revision ?? 0))
+        state.applied = status.settings;
       state.jobs = jobList || [];
       applyCapabilities(status.capabilities);
       printer.applySettingsToForm?.();

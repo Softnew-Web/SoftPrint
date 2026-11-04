@@ -3,6 +3,7 @@ export const state = {
   selectedId: null,
   applied: null,
   dirty: false,
+  savingFlags: false,
   inboxDirty: false,
 };
 

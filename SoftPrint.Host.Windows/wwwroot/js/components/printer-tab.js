@@ -89,41 +89,58 @@ export function bindPrinterTab({ api, onSaved }) {
     }
   };
 
-  const markDirty = () => {
-    syncModeStat();
-    // Auto-save simulation and paused changes
+  // Salvamentos de Simular/Pausar em fila: cada um usa a revisão do anterior
+  // (sem 409) e o polling não sobrescreve os checkboxes enquanto algum está pendente.
+  let flagsQueue = Promise.resolve();
+  let flagsPending = 0;
+
+  const restoreFlagsFromApplied = () => {
     if (!state.applied) return;
-    const { buildSettingsPayload: bp } = { buildSettingsPayload: (x) => x };
-    import("../settings-payload.js").then(({ buildSettingsPayload }) => {
-      api("/api/settings", {
+    if (simulation) simulation.checked = !!state.applied.simulation;
+    if (paused) paused.checked = !!state.applied.paused;
+    syncModeStat();
+  };
+
+  const saveFlags = (event) => {
+    syncModeStat();
+    if (!state.applied) return;
+    const wanted = { simulation: !!simulation?.checked, paused: !!paused?.checked };
+    const okMessage = event?.target === paused
+      ? (wanted.paused ? "Fila pausada." : "Fila retomada.")
+      : (wanted.simulation ? "Modo simulação ativado." : "Modo real ativado: os pedidos vão para a impressora.");
+    flagsPending += 1;
+    state.savingFlags = true;
+    flagsQueue = flagsQueue
+      .then(() => api("/api/settings", {
         method: "PUT",
-        body: JSON.stringify(buildSettingsPayload({
-          printerName: state.applied.printerName || "",
-          simulation: !!simulation?.checked,
-          paused: !!paused?.checked,
-          imageFit: state.applied.imageFit || "contain",
-          imageScalePercent: state.applied.imageScalePercent ?? 100,
-          paperSize: state.applied.paperSize || "a4",
-          paperWidthMm: state.applied.paperWidthMm ?? 210,
-          paperHeightMm: state.applied.paperHeightMm ?? 297,
-          paperLandscape: !!state.applied.paperLandscape,
-        })),
-      }).then((saved) => {
+        body: JSON.stringify(buildSettingsPayload(wanted)),
+      }))
+      .then((saved) => {
         state.applied = saved;
-        state.dirty = false;
         if (msg) {
           msg.textContent = `v${saved.revision}`;
           msg.className = "text-xs text-sea-glow leading-relaxed";
         }
-        onSaved?.();
-      }).catch((err) => feedback(err.message, true));
-    });
+        feedback(okMessage);
+      })
+      .catch((err) => {
+        // Servidor recusou: volta ao que está salvo e explica, em vez de o
+        // checkbox "voltar sozinho" no próximo polling.
+        restoreFlagsFromApplied();
+        feedback(err.message || "Não foi possível salvar o modo.", true);
+      })
+      .finally(() => {
+        flagsPending -= 1;
+        if (flagsPending === 0) {
+          state.savingFlags = false;
+          onSaved?.();
+        }
+      });
   };
 
-  // Auto-save simulation/paused on change
   ["simulation", "paused"].forEach((id) => {
     const el = document.getElementById(id);
-    if (el) el.addEventListener("change", markDirty);
+    if (el) el.addEventListener("change", saveFlags);
   });
   // Redraw preview when entry paper fields change (managed by connect-tab.js for dirty tracking)
   if (paperSize) paperSize.addEventListener("change", () => { syncCustomRow(); redrawPreview(); refreshPreviewMargins(); });
@@ -139,13 +156,14 @@ export function bindPrinterTab({ api, onSaved }) {
   }
 
   document.getElementById("btnPrinterPaper")?.addEventListener("click", async () => {
-    if (await loadDefaultPaper(api)) markDirty();
+    // Papel é da entrada: o change faz o connect-tab marcar a entrada como alterada.
+    if (await loadDefaultPaper(api)) paperSize?.dispatchEvent(new Event("change"));
   });
 
   if (imageScale) {
     imageScale.addEventListener("input", () => {
       if (imageScaleLabel) imageScaleLabel.textContent = `${imageScale.value}%`;
-      markDirty();
+      redrawPreview();
     });
   }
 
@@ -520,7 +538,7 @@ export function bindPrinterTab({ api, onSaved }) {
   }
 
   function applySettingsToForm() {
-    if (!state.applied || state.dirty) return;
+    if (!state.applied || state.dirty || state.savingFlags) return;
     if (simulation) simulation.checked = !!state.applied.simulation;
     if (paused) paused.checked = !!state.applied.paused;
     if (state.applied.printerName && printers) printers.value = state.applied.printerName;
