@@ -126,6 +126,10 @@ jobs:
         shell: pwsh
         run: .\scripts\publish-all.ps1
 
+      - name: Smoke Legacy (abre, painel e API)
+        shell: pwsh
+        run: .\scripts\smoke-legacy.ps1 -PublishDirs dist/windows-legacy-x64, dist/windows-legacy-x86
+
       - name: Publish symbols (support)
         shell: pwsh
         run: .\scripts\publish-symbols.ps1

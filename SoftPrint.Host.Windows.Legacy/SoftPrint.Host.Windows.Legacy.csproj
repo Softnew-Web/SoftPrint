@@ -8,6 +8,18 @@
     <Nullable>enable</Nullable>
     <LangVersion>12.0</LangVersion>
   </PropertyGroup>
+  <!--
+    SkiaSharp.NativeAssets.Win32 declara libSkiaSharp.pdb como asset nativo. O single-file
+    do netcoreapp3.1 não embute .pdb, mas o deps.json continua exigindo o arquivo e o
+    SoftPrint.Legacy.exe fecha antes do Main ("An assembly specified in the application
+    dependencies manifest ... was not found"). Símbolo não é necessário em runtime.
+  -->
+  <Target Name="DropNativePdbAssets" AfterTargets="ResolvePackageAssets">
+    <ItemGroup>
+      <NativeCopyLocalItems Remove="@(NativeCopyLocalItems)" Condition="'%(Extension)' == '.pdb'" />
+      <RuntimeTargetsCopyLocalItems Remove="@(RuntimeTargetsCopyLocalItems)" Condition="'%(Extension)' == '.pdb'" />
+    </ItemGroup>
+  </Target>
   <ItemGroup>
     <ProjectReference Include="..\SoftPrint.Domain\SoftPrint.Domain.csproj" />
     <ProjectReference Include="..\SoftPrint.Application\SoftPrint.Application.csproj" />
