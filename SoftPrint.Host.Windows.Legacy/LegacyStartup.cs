@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.StaticFiles;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using SoftPrint.Host.Windows.Legacy.Controllers;
@@ -22,7 +23,10 @@ namespace SoftPrint.Host.Windows.Legacy
         public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
         {
             app.UseDefaultFiles();
-            app.UseStaticFiles();
+            // O netcoreapp3.1 não conhece .mjs (worker do pdf.js da prévia de PDF) e responde 404.
+            var contentTypes = new FileExtensionContentTypeProvider();
+            contentTypes.Mappings[".mjs"] = "text/javascript";
+            app.UseStaticFiles(new StaticFileOptions { ContentTypeProvider = contentTypes });
             app.UseRouting();
             app.UseMiddleware<ApiKeyMiddleware>();
             app.UseEndpoints(endpoints => endpoints.MapControllers());

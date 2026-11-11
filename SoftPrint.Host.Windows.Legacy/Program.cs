@@ -47,6 +47,10 @@ namespace SoftPrint.Host.Windows.Legacy
             }
 
             var host = Microsoft.Extensions.Hosting.Host.CreateDefaultBuilder(args)
+                // O padrão é a pasta atual (System32 no autostart, a pasta do atalho etc.).
+                // No single-file do netcoreapp3.1 o wwwroot fica na pasta de extração,
+                // que é o AppContext.BaseDirectory.
+                .UseContentRoot(AppContext.BaseDirectory)
                 .ConfigureAppConfiguration((ctx, config) =>
                 {
                     config.SetBasePath(AppContext.BaseDirectory);

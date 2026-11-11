@@ -89,6 +89,23 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           if ($out -notmatch '(?i)windows') { throw "Diagnóstico sem marker Windows." }
 
+      - name: Publish Legacy (Windows 7) x64 + x86
+        shell: pwsh
+        run: |
+          foreach ($rid in "win-x64", "win-x86") {
+            dotnet publish SoftPrint.Host.Windows.Legacy/SoftPrint.Host.Windows.Legacy.csproj `
+              -c Release -r $rid --self-contained true `
+              -p:PublishSingleFile=true `
+              -p:IncludeNativeLibrariesForSelfExtract=true `
+              -p:DebugType=None -p:DebugSymbols=false `
+              -o "dist/legacy-smoke-$rid"
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+
+      - name: Smoke Legacy (abre, painel e API)
+        shell: pwsh
+        run: .\scripts\smoke-legacy.ps1 -PublishDirs dist/legacy-smoke-win-x64, dist/legacy-smoke-win-x86
+
   installer-smoke:
     # Publish completo + Inno é pesado — só na main (ou manual).
     if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
