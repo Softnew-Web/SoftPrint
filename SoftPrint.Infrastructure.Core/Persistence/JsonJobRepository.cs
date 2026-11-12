@@ -122,6 +122,28 @@ public sealed class JsonJobRepository : IJobRepository
         }
     }
 
+    public PrintJob? TakePending(Guid id, string printerName, long settingsRevision)
+    {
+        lock (_gate)
+        {
+            var index = _jobs.FindIndex(j => j.Id == id && j.Status == JobStatus.Pending);
+            if (index < 0) return null;
+
+            var original = Clone(_jobs[index]);
+            try
+            {
+                _jobs[index].MarkProcessing(printerName, settingsRevision);
+                Save();
+                return Clone(_jobs[index]);
+            }
+            catch
+            {
+                _jobs[index] = original;
+                throw;
+            }
+        }
+    }
+
     public void SetJobPriority(Guid id, int priority)
     {
         lock (_gate)

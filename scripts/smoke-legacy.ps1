@@ -73,6 +73,10 @@ foreach ($dir in $PublishDirs) {
         $key = (Get-Content (Join-Path $env:SOFTPRINT_DATA_ROOT "api-key.txt") -Raw).Trim()
         $status = Invoke-RestMethod -Uri "$base/api/status" -Headers @{ "X-SoftPrint-Key" = $key } -TimeoutSec 10
         if ($status.application -notmatch "Legacy") { throw "/api/status inesperado: $($status.application)" }
+
+        # DNS rebinding: Host que não é loopback não pode receber o painel (nem o cookie da chave).
+        $rebind = (& curl.exe -s -o NUL -w "%{http_code}" -H "Host: evil.example:$Port" "$base/dashboard")
+        if ($rebind -ne "400") { throw "/dashboard com Host externo respondeu $rebind (esperado 400)." }
         Write-Host "OK: painel, estáticos e API ($($status.application) $($status.version))."
     }
     finally {

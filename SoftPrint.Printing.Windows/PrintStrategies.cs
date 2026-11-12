@@ -264,12 +264,16 @@ public sealed class EscPosPrintStrategy : IPrintStrategy
     public Task<JobStatus> ExecuteAsync(PrintJob job, PrintOptions settings, CancellationToken cancellationToken)
     {
         var payload = BuildEscPos(job.Text);
-        RawPrinterHelper.SendBytes(settings.PrinterName, payload, $"SoftPrint {job.Reference}");
+        var copies = Math.Clamp(settings.Copies, 1, 99);
+        for (var i = 0; i < copies; i++)
+            RawPrinterHelper.SendBytes(settings.PrinterName, payload, $"SoftPrint {job.Reference}");
         return Task.FromResult(JobStatus.Sent);
     }
 
     private static byte[] BuildEscPos(string text)
     {
+        // CP850 não vem no .NET Core; registrar aqui cobre todos os hosts (o Legacy não registrava).
+        Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
         using var stream = new MemoryStream();
         stream.WriteByte(0x1B); stream.WriteByte(0x40);
         var body = Encoding.GetEncoding(850).GetBytes(text.Replace("\r\n", "\n").Replace('\r', '\n'));

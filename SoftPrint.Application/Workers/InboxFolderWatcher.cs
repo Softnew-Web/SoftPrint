@@ -13,6 +13,9 @@ public sealed class InboxFolderWatcher(
 {
     // Chave: caminho absoluto do arquivo → bloqueado até quando.
     private readonly Dictionary<string, DateTime> _blockedUntil = new(StringComparer.OrdinalIgnoreCase);
+    // Caminho → data de alteração do arquivo quando foi enfileirado. Cobre relógio adiantado
+    // (compartilhamento de rede) e pedidos já apagados pela retenção enquanto o app está aberto.
+    private readonly Dictionary<string, DateTime> _submittedVersion = new(StringComparer.OrdinalIgnoreCase);
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -39,6 +42,8 @@ public sealed class InboxFolderWatcher(
         // Remove entradas de bloqueio expiradas.
         foreach (var key in _blockedUntil.Where(kv => kv.Value <= now).Select(kv => kv.Key).ToList())
             _blockedUntil.Remove(key);
+        foreach (var key in _submittedVersion.Keys.Where(k => !File.Exists(k)).ToList())
+            _submittedVersion.Remove(key);
 
         var entries = settings.Current.InboxEntries;
         foreach (var entry in entries)
@@ -85,7 +90,7 @@ public sealed class InboxFolderWatcher(
             if (!InboxFileRules.IsFileReady(full))
                 continue;
 
-            if (HasStaleFailure(full))
+            if (!TryGetChangedAtUtc(full, out var changedAt) || WasAlreadyProcessed(full, changedAt))
                 continue;
 
             try
@@ -99,6 +104,7 @@ public sealed class InboxFolderWatcher(
                     sourcePath: full,
                     requestedPrinterName: printerOverride,
                     settingsOverride: entry.CustomSettings);
+                _submittedVersion[full] = changedAt;
                 logger.LogInformation(
                     "Pasta de entrada '{Label}': enfileirado {File} como {JobId}",
                     entry.Label, full, job.Id);
@@ -122,21 +128,39 @@ public sealed class InboxFolderWatcher(
             (j.Status is JobStatus.Pending or JobStatus.Processing)
             && string.Equals(j.SourcePath, fullPath, StringComparison.OrdinalIgnoreCase));
 
-    private bool HasStaleFailure(string fullPath)
+    /// <summary>
+    /// O arquivo já gerou um pedido (impresso, simulado ou com falha) e não mudou desde então.
+    /// Sem isso, quem não marca "Apagar após imprimir" recebe uma impressão nova a cada varredura.
+    /// </summary>
+    private bool WasAlreadyProcessed(string fullPath, DateTime changedAtUtc)
     {
-        var failed = jobs.List()
-            .Where(j => j.Status == JobStatus.Uncertain
+        if (_submittedVersion.TryGetValue(fullPath, out var submitted) && submitted == changedAtUtc)
+            return true;
+
+        var last = jobs.List()
+            .Where(j => j.Status is JobStatus.Sent or JobStatus.Simulated or JobStatus.Uncertain
                         && string.Equals(j.SourcePath, fullPath, StringComparison.OrdinalIgnoreCase))
             .OrderByDescending(j => j.CreatedAt)
             .FirstOrDefault();
-        if (failed is null) return false;
+        return last is not null && changedAtUtc <= last.CreatedAt.UtcDateTime;
+    }
+
+    /// <summary>
+    /// Copiar um arquivo preserva a data de modificação, mas a de criação é a da cópia:
+    /// o mesmo arquivo colocado de novo na pasta conta como novo.
+    /// </summary>
+    private static bool TryGetChangedAtUtc(string path, out DateTime changedAtUtc)
+    {
         try
         {
-            return File.GetLastWriteTimeUtc(fullPath) <= failed.CreatedAt.UtcDateTime;
+            var info = new FileInfo(path);
+            changedAtUtc = info.LastWriteTimeUtc > info.CreationTimeUtc ? info.LastWriteTimeUtc : info.CreationTimeUtc;
+            return true;
         }
         catch
         {
-            return true;
+            changedAtUtc = default;
+            return false;
         }
     }
 }

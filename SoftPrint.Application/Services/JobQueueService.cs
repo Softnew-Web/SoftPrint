@@ -142,6 +142,9 @@ public sealed class JobQueueService(
             original.ContentKind,
             original.SourcePath,
             original.TemplateName,
-            original.Id));
+            original.Id,
+            // Mesma impressora e papel do original (pasta de entrada ou pedido com impressora própria).
+            original.RequestedPrinterName,
+            original.SettingsOverride));
     }
 }

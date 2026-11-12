@@ -83,7 +83,7 @@ public sealed class PrintWorker(
                 && !string.Equals(printer, options.PrinterName, StringComparison.OrdinalIgnoreCase)
                 && !string.IsNullOrWhiteSpace(printer);
 
-            var job = jobs.TakeNextPending(printer, options.Revision);
+            var job = jobs.TakePending(pending.Id, printer, options.Revision);
             if (job is null)
             {
                 await Task.Delay(pollInterval, stoppingToken);
@@ -137,7 +137,7 @@ public sealed class PrintWorker(
 
                     try
                     {
-                        status = await strategy.ExecuteAsync(job, printOptions, timeoutCts.Token)
+                        status = await ExecuteWithTimeoutAsync(strategy, job, printOptions, timeoutCts.Token)
                             .ConfigureAwait(false);
                     }
                     catch (OperationCanceledException) when (!stoppingToken.IsCancellationRequested)
@@ -226,6 +226,25 @@ public sealed class PrintWorker(
             if (!string.IsNullOrWhiteSpace(entryForWebhook?.WebhookUrl))
                 _ = TryFireEntryWebhookAsync(entryForWebhook!.WebhookUrl!, finished, status);
         }
+    }
+
+    /// <summary>
+    /// As estratégias do Windows imprimem de forma síncrona (PrintDocument.Print) e só devolvem
+    /// no fim: o cancelamento sozinho nunca interromperia um spooler travado e a fila inteira
+    /// pararia. Roda fora do loop e para de esperar quando o token cancela.
+    /// </summary>
+    internal static async Task<JobStatus> ExecuteWithTimeoutAsync(
+        IPrintStrategy strategy, PrintJob job, PrintOptions options, CancellationToken token)
+    {
+        var execution = Task.Run(() => strategy.ExecuteAsync(job, options, token), CancellationToken.None);
+        var cancelled = Task.Delay(Timeout.Infinite, token);
+        if (await Task.WhenAny(execution, cancelled).ConfigureAwait(false) != execution)
+        {
+            // O envio abandonado segue sozinho; observar a exceção evita UnobservedTaskException.
+            _ = execution.ContinueWith(t => _ = t.Exception, TaskContinuationOptions.OnlyOnFaulted);
+            throw new OperationCanceledException(token);
+        }
+        return await execution.ConfigureAwait(false);
     }
 
     private bool IsRateLimited(InboxEntry entry)

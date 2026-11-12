@@ -286,6 +286,16 @@ public sealed class PrintWorkerAndUpdateTests
             }
         }
 
+        public PrintJob? TakePending(Guid id, string printerName, long settingsRevision)
+        {
+            lock (_gate)
+            {
+                var job = _jobs.FirstOrDefault(j => j.Id == id && j.Status == JobStatus.Pending);
+                job?.MarkProcessing(printerName, settingsRevision);
+                return job;
+            }
+        }
+
         public void AppendStep(Guid id, string stage, string where, string message, string? detail = null, bool isError = false)
         {
             lock (_gate) FindById(id)?.AddStep(stage, where, message, detail, isError);

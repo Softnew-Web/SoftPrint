@@ -86,6 +86,7 @@ public sealed class InboxService(
             paperLandscape = entry.CustomSettings?.PaperLandscape,
             copies = entry.Copies,
             webhookUrl = entry.WebhookUrl,
+            rateLimitPerMinute = entry.RateLimitPerMinute,
         };
     }
 
