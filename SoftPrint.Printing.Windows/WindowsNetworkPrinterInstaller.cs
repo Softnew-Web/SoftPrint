@@ -14,7 +14,7 @@ public sealed class WindowsNetworkPrinterInstaller : INetworkPrinterInstaller
         CancellationToken cancellationToken = default)
     {
         var ip = (address ?? "").Trim();
-        if (ip.Length == 0 || ip.Contains('"') || ip.Contains('\'') || ip.Contains(';'))
+        if (!IsValidAddress(ip))
             return new NetworkPrinterInstallResult(false, "", "", "", "Endereço IP inválido.");
 
         if (port is < 1 or > 65535)
@@ -46,10 +46,10 @@ public sealed class WindowsNetworkPrinterInstaller : INetworkPrinterInstaller
     private static string BuildScript(string ip, int port, string portName, string printerName) =>
         $$"""
         $ErrorActionPreference = 'Stop'
-        $ip = '{{ip}}'
+        $ip = '{{PsQuote(ip)}}'
         $portNumber = {{port}}
-        $portName = '{{portName.Replace("'", "''")}}'
-        $printerName = '{{printerName.Replace("'", "''")}}'
+        $portName = '{{PsQuote(portName)}}'
+        $printerName = '{{PsQuote(printerName)}}'
 
         if (-not (Get-PrinterPort -Name $portName -ErrorAction SilentlyContinue)) {
           Add-PrinterPort -Name $portName -PrinterHostAddress $ip -PortNumber $portNumber
@@ -110,6 +110,19 @@ public sealed class WindowsNetworkPrinterInstaller : INetworkPrinterInstaller
 #endif
         return (process.ExitCode, await stdoutTask.ConfigureAwait(false), await stderrTask.ConfigureAwait(false));
     }
+
+    /// <summary>Só IPv4/IPv6 ou nome de host — o endereço vai para um script PowerShell.</summary>
+    internal static bool IsValidAddress(string address) =>
+        address.Length is > 0 and <= 253 &&
+        (System.Net.IPAddress.TryParse(address, out _) ||
+         Uri.CheckHostName(address) == UriHostNameType.Dns);
+
+    /// <summary>
+    /// Conteúdo de string entre aspas simples do PowerShell. Ele também fecha a string com as
+    /// aspas tipográficas (‘ ’ ‚ ‛), então todas precisam ser dobradas, não só a '.
+    /// </summary>
+    internal static string PsQuote(string value) =>
+        System.Text.RegularExpressions.Regex.Replace(value ?? "", "['‘’‚‛]", "$0$0");
 
     private static string? ExtractMarker(string text, string prefix)
     {

@@ -1,3 +1,4 @@
+using SoftPrint.Application;
 using SoftPrint.Application.Abstractions;
 using SoftPrint.Domain;
 
@@ -9,15 +10,7 @@ namespace SoftPrint.Infrastructure.Updates;
 /// </summary>
 public sealed class LocalPreviousVersionStore : IPreviousVersionStore
 {
-    public static string InstallDirectory => Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "Programs",
-        "SoftPrint");
-
-    public static string PreviousDirectory => Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "SoftPrint",
-        "previous");
+    public static string PreviousDirectory => Path.Combine(SoftPrintInstallLocation.LocalStateRoot, "previous");
 
     public static string VersionMarkerPath => Path.Combine(PreviousDirectory, "version.txt");
 
@@ -55,20 +48,20 @@ public sealed class LocalPreviousVersionStore : IPreviousVersionStore
 /// </summary>
 public static class UpdateFailureNotice
 {
+    /// <summary>Onde os scripts .cmd anotam falhas (pasta do usuário, não o Temp compartilhado).</summary>
+    public static string ScriptErrorPath =>
+        Path.Combine(SoftPrintInstallLocation.LocalStateRoot, "update-script-error.txt");
+
+    /// <summary>Caminho usado pelos scripts até a 1.0.38 — ainda lido para não perder o aviso.</summary>
     public static string TempErrorPath =>
         Path.Combine(Path.GetTempPath(), "softprint-update-error.txt");
 
-    public static string PersistentErrorPath => Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "SoftPrint",
-        "last-update-error.txt");
+    public static string PersistentErrorPath =>
+        Path.Combine(SoftPrintInstallLocation.LocalStateRoot, "last-update-error.txt");
 
     public static void Record(string message)
     {
         var text = $"[{DateTimeOffset.Now:yyyy-MM-dd HH:mm:ss}] {message.Trim()}{Environment.NewLine}";
-        try { File.AppendAllText(TempErrorPath, text); }
-        catch { /* ignore */ }
-
         try
         {
             var dir = Path.GetDirectoryName(PersistentErrorPath);
@@ -83,7 +76,7 @@ public static class UpdateFailureNotice
     public static string? TryConsume()
     {
         var chunks = new List<string>();
-        foreach (var path in new[] { PersistentErrorPath, TempErrorPath })
+        foreach (var path in new[] { PersistentErrorPath, ScriptErrorPath, TempErrorPath })
         {
             try
             {

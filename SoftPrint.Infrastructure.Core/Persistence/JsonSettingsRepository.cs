@@ -17,15 +17,17 @@ public sealed class JsonSettingsRepository : ISettingsRepository
         get { lock (_gate) return _current; }
     }
 
-    public JsonSettingsRepository(IAppPaths paths, IConfiguration configuration)
+    public JsonSettingsRepository(IAppPaths paths, IConfiguration configuration, IRecentErrorLog? errorLog = null)
     {
         var directory = paths.DataRoot;
         Directory.CreateDirectory(directory);
         _path = Path.Combine(directory, "settings.json");
-        _current = File.Exists(_path)
-            ? ToDomain(JsonSerializer.Deserialize<SettingsRecord>(File.ReadAllText(_path), JsonOptions)
-                       ?? throw new InvalidDataException("Configuração inválida."))
-            : new PrintOptions
+        // Arquivo corrompido não pode impedir o SoftPrint de abrir: guarda a cópia e usa o padrão.
+        var loaded = DurableJsonFile.ReadOrQuarantine(
+            _path,
+            json => JsonSerializer.Deserialize<SettingsRecord>(json, JsonOptions) is { } record ? ToDomain(record) : null,
+            message => errorLog?.Record("configurações", message));
+        _current = loaded ?? new PrintOptions
             {
                 PrinterName = configuration["SoftPrint:PrinterName"] ?? "",
                 Simulation = configuration.GetValue("SoftPrint:Simulation", true),
@@ -84,8 +86,7 @@ public sealed class JsonSettingsRepository : ISettingsRepository
 
     private void Persist(PrintOptions options)
     {
-        File.WriteAllText(_path + ".tmp", JsonSerializer.Serialize(ToRecord(options), JsonOptions));
-        File.Move(_path + ".tmp", _path, true);
+        DurableJsonFile.Write(_path, JsonSerializer.Serialize(ToRecord(options), JsonOptions));
     }
 
     private static PrintOptions ToDomain(SettingsRecord record)

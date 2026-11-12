@@ -186,8 +186,7 @@ public sealed class WebhookRetryQueue(
 
     private void Save()
     {
-        File.WriteAllText(_path + ".tmp", JsonSerializer.Serialize(_items, JsonOptions));
-        File.Move(_path + ".tmp", _path, true);
+        SoftPrint.Infrastructure.Persistence.DurableJsonFile.Write(_path, JsonSerializer.Serialize(_items, JsonOptions));
     }
 }
 

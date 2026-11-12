@@ -194,6 +194,91 @@ public sealed class BugfixRegressionTests : IDisposable
         Assert.Equal(expected, response.StatusCode);
     }
 
+    [Fact]
+    public void JobRepository_CorruptFile_OpensEmptyAndKeepsCopy()
+    {
+        File.WriteAllBytes(Path.Combine(_root, "jobs.json"), new byte[512]); // zeros, como após queda de energia
+        var errors = new CapturedErrors();
+
+        var repo = new JsonJobRepository(new Paths(_root), errors);
+
+        Assert.Empty(repo.Snapshot());
+        Assert.Single(Directory.GetFiles(_root, "jobs.json.corrompido-*"));
+        Assert.Contains(errors.Messages, m => m.Contains("jobs.json", StringComparison.Ordinal));
+        // Continua funcionando e grava um arquivo válido.
+        repo.Add(PrintJob.CreatePending("depois", "ok"));
+        Assert.Single(new JsonJobRepository(new Paths(_root)).Snapshot());
+    }
+
+    [Fact]
+    public void SettingsRepository_CorruptFile_OpensWithDefaults()
+    {
+        File.WriteAllText(Path.Combine(_root, "settings.json"), "{ \"printerName\": ");
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?> { ["SoftPrint:PrinterName"] = "Padrao" })
+            .Build();
+
+        var repo = new JsonSettingsRepository(new Paths(_root), config, new CapturedErrors());
+
+        Assert.Equal("Padrao", repo.Current.PrinterName);
+        Assert.Single(Directory.GetFiles(_root, "settings.json.corrompido-*"));
+    }
+
+    [Fact]
+    public void UpdateScript_UsesRealInstallFolder_AndElevatedCopyDoesNotStartApp()
+    {
+        var install = Path.Combine(_root, "Program Files", "SoftPrint");
+        var payload = Path.Combine(_root, "payload");
+        Directory.CreateDirectory(install);
+        Directory.CreateDirectory(payload);
+        var script = Path.Combine(_root, "apply.cmd");
+
+        // Pasta gravável: copia e reabre o app no mesmo script.
+        var inline = new SoftPrint.Infrastructure.Updates.SoftPrintUpdateApplier.LaunchPlan(install, _root, Elevate: false);
+        SoftPrint.Infrastructure.Updates.SoftPrintUpdateApplier.WriteZipRestartScript(script, payload, inline);
+        var text = File.ReadAllText(script);
+        Assert.Contains($"robocopy \"{payload}\" \"{install}\"", text, StringComparison.Ordinal);
+        Assert.Contains($"start \"\" \"{Path.Combine(install, "SoftPrint.exe")}\"", text, StringComparison.Ordinal);
+        Assert.DoesNotContain(@"Programs\SoftPrint", text, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("%TEMP%", text, StringComparison.Ordinal);
+
+        // Precisa de UAC: o script elevado só copia e avisa; quem reabre é o script sem elevação.
+        var elevated = inline with { Elevate = true };
+        SoftPrint.Infrastructure.Updates.SoftPrintUpdateApplier.WriteZipRestartScript(script, payload, elevated);
+        text = File.ReadAllText(script);
+        Assert.Contains($"robocopy \"{payload}\" \"{install}\"", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("start \"\"", text, StringComparison.Ordinal);
+        Assert.Contains(elevated.DoneMarker, text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void InstallLocation_CanWrite_DetectsWritableFolder()
+    {
+        Assert.True(SoftPrintInstallLocation.CanWrite(_root));
+        Assert.False(SoftPrintInstallLocation.CanWrite(Path.Combine(_root, "nao-existe")));
+        Assert.Empty(Directory.GetFiles(_root, ".softprint-write-test-*"));
+    }
+
+    [Fact]
+    public void ApiKeyAcl_FindsProfileOwner_ForServiceMode()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        // Pasta criada pelo usuário: é ele quem precisa continuar lendo a chave quando o SYSTEM a protege.
+        var owner = FileApiKeyProvider.FindProfileOwner(_root);
+        Assert.Equal(System.Security.Principal.WindowsIdentity.GetCurrent().User, owner);
+
+        _ = new FileApiKeyProvider(new Paths(_root));
+        Assert.True(File.ReadAllText(Path.Combine(_root, "api-key.txt")).Trim().Length >= 32);
+    }
+
+    private sealed class CapturedErrors : IRecentErrorLog
+    {
+        public List<string> Messages { get; } = [];
+        public void Record(string source, string message) => Messages.Add(message);
+        public void Clear() => Messages.Clear();
+        public IReadOnlyList<RecentError> GetRecent(int max = 30) => [];
+    }
+
     private sealed class BlockingStrategy : IPrintStrategy
     {
         public bool CanHandle(PrintJob job, PrintOptions settings) => true;

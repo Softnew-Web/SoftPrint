@@ -11,15 +11,17 @@ public sealed class JsonJobRepository : IJobRepository
     private readonly List<PrintJob> _jobs;
     private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = false };
 
-    public JsonJobRepository(IAppPaths paths)
+    public JsonJobRepository(IAppPaths paths, IRecentErrorLog? errorLog = null)
     {
         var directory = paths.DataRoot;
         Directory.CreateDirectory(directory);
         _path = Path.Combine(directory, "jobs.json");
-        _jobs = File.Exists(_path)
-            ? (JsonSerializer.Deserialize<List<JobRecord>>(File.ReadAllText(_path), JsonOptions)
-               ?? throw new InvalidDataException("Fila inválida.")).Select(ToDomain).ToList()
-            : [];
+        // Fila corrompida (ex.: queda de energia) não pode impedir o SoftPrint de abrir.
+        _jobs = DurableJsonFile.ReadOrQuarantine(
+                    _path,
+                    json => JsonSerializer.Deserialize<List<JobRecord>>(json, JsonOptions)?.Select(ToDomain).ToList(),
+                    message => errorLog?.Record("fila", message))
+                ?? [];
 
         foreach (var job in _jobs)
             job.MarkInterrupted();
@@ -38,6 +40,12 @@ public sealed class JsonJobRepository : IJobRepository
             var job = _jobs.Where(j => j.Status == JobStatus.Pending).OrderByDescending(j => j.Priority).FirstOrDefault();
             return job is null ? null : Clone(job);
         }
+    }
+
+    public IReadOnlyList<PrintJob> PendingInOrder()
+    {
+        lock (_gate)
+            return _jobs.Where(j => j.Status == JobStatus.Pending).OrderByDescending(j => j.Priority).Select(Clone).ToArray();
     }
 
     public PrintJob? FindByReference(string reference)
@@ -227,10 +235,8 @@ public sealed class JsonJobRepository : IJobRepository
 
     private void Save()
     {
-        var temporary = _path + ".tmp";
         var payload = _jobs.Select(ToRecord).ToList();
-        File.WriteAllText(temporary, JsonSerializer.Serialize(payload, JsonOptions));
-        File.Move(temporary, _path, true);
+        DurableJsonFile.Write(_path, JsonSerializer.Serialize(payload, JsonOptions));
     }
 
     private static PrintJob Clone(PrintJob job) => new(

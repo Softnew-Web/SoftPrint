@@ -47,6 +47,7 @@ namespace SoftPrint.Host.Windows.Legacy.Controllers
         private readonly IHostApplicationLifetime _lifetime;
         private readonly IWebHostEnvironment _env;
         private readonly IOptions<SoftPrintFeatureOptions> _features;
+        private readonly IAppPaths _paths;
 
         public AppController(
             JobQueueService jobs,
@@ -72,7 +73,8 @@ namespace SoftPrint.Host.Windows.Legacy.Controllers
             ISupportBundleService supportBundle,
             IHostApplicationLifetime lifetime,
             IWebHostEnvironment env,
-            IOptions<SoftPrintFeatureOptions> features)
+            IOptions<SoftPrintFeatureOptions> features,
+            IAppPaths paths)
         {
             _jobs = jobs;
             _settings = settings;
@@ -98,6 +100,7 @@ namespace SoftPrint.Host.Windows.Legacy.Controllers
             _lifetime = lifetime;
             _env = env;
             _features = features;
+            _paths = paths;
         }
 
         // ── Dashboard ────────────────────────────────────────────────
@@ -503,13 +506,19 @@ namespace SoftPrint.Host.Windows.Legacy.Controllers
         [HttpPost("/api/backup/import")]
         public async Task<IActionResult> ImportBackup()
         {
-            using var doc = await JsonDocument.ParseAsync(Request.Body).ConfigureAwait(false);
+            JsonDocument parsed;
+            try { parsed = await JsonDocument.ParseAsync(Request.Body).ConfigureAwait(false); }
+            catch (JsonException) { return BadRequest(new { error = "Arquivo de backup inválido (não é um JSON)." }); }
+            using var doc = parsed;
             var root = doc.RootElement;
-            if (!root.TryGetProperty("format", out var format) ||
+            if (root.ValueKind != JsonValueKind.Object ||
+                !root.TryGetProperty("format", out var format) ||
+                format.ValueKind != JsonValueKind.String ||
                 format.GetString() != "softprint-backup-v1")
                 return BadRequest(new { error = "Arquivo de backup inválido." });
 
             if (root.TryGetProperty("systemSettings", out var sysEl))
+            try
             {
                 var current = _systemSettings.Current;
                 var secret = current.WebhookSecret;
@@ -535,6 +544,11 @@ namespace SoftPrint.Host.Windows.Legacy.Controllers
                     sysEl.TryGetProperty("telemetryEnabled", out var te) && te.GetBoolean(),
                     sysEl.TryGetProperty("telemetryUrl", out var tu) ? tu.GetString()?.Trim() ?? "" : current.TelemetryUrl,
                     sysEl.TryGetProperty("printerRoutes", out var pr) ? pr.GetString()?.Trim() ?? "" : current.PrinterRoutes));
+            }
+            catch (Exception ex) when (ex is InvalidOperationException || ex is FormatException)
+            {
+                // Campo com tipo errado (ex.: "pollIntervalMs": "abc"): nada foi gravado.
+                return BadRequest(new { error = "Backup inválido: configurações do sistema com valor fora do formato — " + ex.Message });
             }
 
             if (root.TryGetProperty("printSettings", out var printEl))
@@ -892,86 +906,14 @@ namespace SoftPrint.Host.Windows.Legacy.Controllers
             }
             catch { /* body inválido = defaults */ }
 
-            var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-            var uninsPath = System.IO.Path.Combine(localAppData, "Programs", "SoftPrint", "unins000.exe");
-            if (!System.IO.File.Exists(uninsPath))
-                return NotFound(new { error = "Desinstalador não encontrado. Talvez o SoftPrint não tenha sido instalado via Inno Setup." });
-
-            var configRoot = System.IO.Path.Combine(localAppData, "SoftPrint");
-            var dataRoot = System.IO.Path.Combine(configRoot, "data");
-#if NET5_0_OR_GREATER
-            var pid = Environment.ProcessId;
-#else
-            var pid = System.Diagnostics.Process.GetCurrentProcess().Id;
-#endif
-            var scriptPath = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "SoftPrintUninstall.cmd");
-
-            var lines = new List<string>
+            try
             {
-                "@echo off",
-                "setlocal",
-                ":waitpid",
-                $"tasklist /FI \"PID eq {pid}\" 2>NUL | find \"{pid}\" >NUL",
-                "if not errorlevel 1 (",
-                "  timeout /t 1 /nobreak >nul",
-                "  goto waitpid",
-                ")",
-                "taskkill /F /IM SoftPrint.exe >nul 2>nul",
-                "taskkill /F /IM SoftPrint.Legacy.exe >nul 2>nul",
-                "timeout /t 1 /nobreak >nul"
-            };
-
-            foreach (var sub in new[] { "previous", "backups" })
-                lines.Add($"if exist \"{System.IO.Path.Combine(configRoot, sub)}\" rmdir /s /q \"{System.IO.Path.Combine(configRoot, sub)}\"");
-            foreach (var f in new[] { "pending-update.json", "update-history.json", "last-update-error.txt" })
-                lines.Add($"if exist \"{System.IO.Path.Combine(configRoot, f)}\" del /f /q \"{System.IO.Path.Combine(configRoot, f)}\"");
-
-            if (!opts.KeepWebView)
-                lines.Add($"if exist \"{System.IO.Path.Combine(configRoot, "WebView2")}\" rmdir /s /q \"{System.IO.Path.Combine(configRoot, "WebView2")}\"");
-
-            if (!opts.KeepLogs)
-            {
-                lines.Add($"if exist \"{System.IO.Path.Combine(dataRoot, "logs")}\" rmdir /s /q \"{System.IO.Path.Combine(dataRoot, "logs")}\"");
-                lines.Add($"if exist \"{System.IO.Path.Combine(configRoot, "logs")}\" rmdir /s /q \"{System.IO.Path.Combine(configRoot, "logs")}\"");
+                UninstallLauncher.Start(opts, _paths);
             }
-
-            if (!opts.KeepJobs)
-                lines.Add($"if exist \"{System.IO.Path.Combine(dataRoot, "jobs.json")}\" del /f /q \"{System.IO.Path.Combine(dataRoot, "jobs.json")}\"");
-
-            if (!opts.KeepConfig)
+            catch (FileNotFoundException ex)
             {
-                lines.Add($"if exist \"{configRoot}\" rmdir /s /q \"{configRoot}\"");
+                return NotFound(new { error = ex.Message });
             }
-            else if (!opts.KeepJobs && !opts.KeepLogs)
-            {
-                lines.Add($"if exist \"{dataRoot}\" rd \"{dataRoot}\" 2>nul");
-            }
-
-            if (opts.SaveInstaller)
-            {
-                var desktop = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
-                var destExe = System.IO.Path.Combine(desktop, "SoftPrint-Setup.exe");
-                var downloadUrl = "https://github.com/Softnew-Web/SoftPrint/releases/latest/download/SoftPrint-Setup.exe";
-                lines.Add($"echo Baixando instalador SoftPrint para a Area de Trabalho...");
-                lines.Add($"powershell -NoProfile -NonInteractive -Command \"Invoke-WebRequest -Uri '{downloadUrl}' -OutFile '{destExe}' -UseBasicParsing\" >nul 2>nul");
-                lines.Add($"if not exist \"{destExe}\" echo Falha no download do instalador >> \"%TEMP%\\softprint-uninstall-log.txt\"");
-            }
-
-            lines.Add($"\"{uninsPath}\" /VERYSILENT /NORESTART /SUPPRESSMSGBOXES");
-            lines.Add("endlocal");
-
-            System.IO.File.WriteAllLines(scriptPath, lines);
-
-            var psi = new System.Diagnostics.ProcessStartInfo
-            {
-                FileName = "cmd.exe",
-                Arguments = $"/c \"{scriptPath}\"",
-                UseShellExecute = true,
-                CreateNoWindow = true,
-                WindowStyle = System.Diagnostics.ProcessWindowStyle.Hidden,
-                WorkingDirectory = System.IO.Path.GetTempPath()
-            };
-            System.Diagnostics.Process.Start(psi);
 
             _ = Task.Run(async () =>
             {

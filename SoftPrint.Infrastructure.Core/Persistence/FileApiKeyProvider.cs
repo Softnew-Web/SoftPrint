@@ -100,6 +100,40 @@ public sealed class FileApiKeyProvider : IApiKeyProvider
             new SecurityIdentifier(WellKnownSidType.LocalSystemSid, null),
             FileSystemRights.FullControl,
             AccessControlType.Allow));
+        // No serviço quem roda é o SYSTEM, mas a chave fica na pasta do usuário (--config-root):
+        // sem isto o usuário perde a leitura e o SoftPrint dele não abre quando o serviço é desligado.
+        if (FindProfileOwner(file.DirectoryName) is { } owner && owner != identity.User)
+        {
+            security.AddAccessRule(new FileSystemAccessRule(
+                owner,
+                FileSystemRights.FullControl,
+                AccessControlType.Allow));
+        }
         file.SetAccessControl(security);
+    }
+
+    /// <summary>
+    /// Dono (conta de usuário) da pasta de dados ou da primeira pasta acima dela que tenha um.
+    /// Pastas criadas pelo serviço pertencem ao SYSTEM; %LocalAppData% pertence ao usuário.
+    /// </summary>
+    [SupportedOSPlatform("windows")]
+    internal static SecurityIdentifier? FindProfileOwner(string? directory)
+    {
+        for (var dir = directory; !string.IsNullOrEmpty(dir); dir = Path.GetDirectoryName(dir))
+        {
+            try
+            {
+                var info = new DirectoryInfo(dir);
+                if (!info.Exists) continue;
+                if (info.GetAccessControl(AccessControlSections.Owner).GetOwner(typeof(SecurityIdentifier))
+                        is SecurityIdentifier sid && sid.IsAccountSid())
+                    return sid;
+            }
+            catch
+            {
+                /* sem permissão para ler o dono: tenta a pasta de cima */
+            }
+        }
+        return null;
     }
 }

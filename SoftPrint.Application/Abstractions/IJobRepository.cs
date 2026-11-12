@@ -7,6 +7,9 @@ public interface IJobRepository
     IReadOnlyList<PrintJob> Snapshot();
     /// <summary>Primeiro pendente sem clonar a fila inteira.</summary>
     PrintJob? PeekNextPending();
+    /// <summary>Pendentes na ordem em que seriam impressos (prioridade, depois posição na fila).</summary>
+    IReadOnlyList<PrintJob> PendingInOrder() =>
+        Snapshot().Where(j => j.Status == JobStatus.Pending).OrderByDescending(j => j.Priority).ToArray();
     PrintJob? FindByReference(string reference);
     PrintJob? FindById(Guid id);
     PrintJob Add(PrintJob job);

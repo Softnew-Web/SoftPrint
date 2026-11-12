@@ -69,6 +69,36 @@ public sealed class PrintWorkerAndUpdateTests
         Assert.Equal(JobStatus.Uncertain, finished.Status);
     }
 
+    [Fact]
+    public async Task PrintWorker_RateLimitedFolder_DoesNotBlockOtherJobs()
+    {
+        var folder = Path.Combine(Path.GetTempPath(), "softprint-rate-" + Guid.NewGuid().ToString("N"));
+        var jobs = new MemoryJobRepository();
+        var a1 = jobs.Add(PrintJob.CreatePending("a1", "x", sourcePath: Path.Combine(folder, "a1.txt")));
+        var a2 = jobs.Add(PrintJob.CreatePending("a2", "x", sourcePath: Path.Combine(folder, "a2.txt")));
+        var other = jobs.Add(PrintJob.CreatePending("api", "x"));
+        var settings = new MemorySettingsRepository(simulation: true, printer: "P");
+        settings.UpdateInboxEntries(
+            [new InboxEntry { Label = "lenta", Folder = folder, Enabled = true, RateLimitPerMinute = 1 }], 1);
+        var systemSettings = new MemorySystemSettings();
+        var worker = new PrintWorker(
+            jobs, settings, systemSettings,
+            new PrinterRouter(Options.Create(new SoftPrintFeatureOptions()), systemSettings),
+            new FakePrinterCatalog([]),
+            new PrintStrategyResolver([new SimulationPrintStrategy()]),
+            new NoOpWebhook(), new NoOpNotifier(), new NoOpTelemetry(), new NoOpRecentErrorLog(),
+            Options.Create(new SoftPrintFeatureOptions()),
+            NullLogger<PrintWorker>.Instance);
+
+        await worker.StartAsync(CancellationToken.None);
+        await Task.Delay(800);
+        await worker.StopAsync(CancellationToken.None);
+
+        Assert.Equal(JobStatus.Simulated, jobs.FindById(a1.Id)!.Status);
+        Assert.Equal(JobStatus.Pending, jobs.FindById(a2.Id)!.Status); // limite de 1/min da pasta
+        Assert.Equal(JobStatus.Simulated, jobs.FindById(other.Id)!.Status); // não ficou preso atrás do a2
+    }
+
     private static async Task<PrintJob> RunWorkerOnce(
         MemoryJobRepository jobs, Guid jobId, bool simulation, string printer, IReadOnlyList<PrinterDeviceInfo> installed)
     {
