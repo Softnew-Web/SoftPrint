@@ -59,6 +59,11 @@ public record InboxEntryDto(
 
 public record StartupRequest(bool Enabled);
 
+/// <summary>Token do monitoramento Softnew. "********" mantém o atual; vazio apaga.</summary>
+public record FleetTokenRequest(string? Token);
+
+public record SupportSendRequest(string? Note);
+
 public record SystemSettingsRequest(
     int PollIntervalMs,
     int RetentionDays,

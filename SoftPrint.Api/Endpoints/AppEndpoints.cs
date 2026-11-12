@@ -783,6 +783,19 @@ public static class SettingsEndpoints
                 return Results.Problem(ex.Message, statusCode: 500);
             }
         });
+        app.MapPost("/api/support/bundle/send", async (
+            SupportSendRequest? request,
+            ISupportBundleService support,
+            IFleetService fleet) =>
+        {
+            var (ok, body) = await FleetApi.SendSupportBundleAsync(support, fleet, request).ConfigureAwait(false);
+            return ok ? Results.Ok(body) : Results.Json(body, statusCode: 502);
+        });
+        app.MapGet("/api/fleet", (IFleetService fleet) => Results.Ok(fleet.GetStatus()));
+        app.MapPut("/api/fleet", async (FleetTokenRequest request, IFleetService fleet) =>
+            Results.Ok(await FleetApi.SaveTokenAsync(fleet, request).ConfigureAwait(false)));
+        app.MapPost("/api/fleet/test", async (IFleetService fleet) =>
+            Results.Ok(await FleetApi.TestAsync(fleet).ConfigureAwait(false)));
         app.MapGet("/api/diagnose", (
             IPlatformCapabilities capabilities,
             IPrinterCatalog catalog,

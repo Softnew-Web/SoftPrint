@@ -69,6 +69,14 @@ public static class SoftPrintHostExtensions
         {
             client.Timeout = TimeSpan.FromSeconds(8);
         });
+        services.AddHttpClient("softprint-fleet", client =>
+        {
+            client.Timeout = TimeSpan.FromSeconds(15);
+        });
+        services.AddHttpClient("softprint-fleet-upload", client =>
+        {
+            client.Timeout = TimeSpan.FromMinutes(3);
+        });
         services.AddSingleton<SoftPrint.Infrastructure.Operations.InMemoryRecentErrorLog>();
         services.AddSingleton<IRecentErrorLog>(sp => sp.GetRequiredService<SoftPrint.Infrastructure.Operations.InMemoryRecentErrorLog>());
         services.AddSingleton<IAppPaths, UserAppPaths>();
@@ -89,6 +97,7 @@ public static class SoftPrintHostExtensions
         services.AddSingleton<IWebhookNotifier>(sp => sp.GetRequiredService<WebhookNotifier>());
         services.AddSingleton<ITelemetryService, SoftPrint.Infrastructure.Integrations.TelemetryService>();
         services.AddSingleton<ISupportBundleService, SoftPrint.Infrastructure.Operations.SupportBundleService>();
+        services.AddSingleton<IFleetService, FleetService>();
         services.AddSingleton<IPrintStrategy, SimulationPrintStrategy>();
         services.AddSingleton<PrintStrategyResolver>();
         services.AddSingleton<JobQueueService>();
@@ -107,6 +116,7 @@ public static class SoftPrintHostExtensions
         services.AddHostedService<WebhookRetryWorker>();
         services.AddHostedService<SoftPrint.Infrastructure.Operations.QueueHealthHostedService>();
         services.AddHostedService<SoftPrint.Infrastructure.Operations.TelemetryHeartbeatHostedService>();
+        services.AddHostedService<SoftPrint.Infrastructure.Operations.FleetHeartbeatHostedService>();
         return services;
     }
 

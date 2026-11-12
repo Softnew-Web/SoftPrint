@@ -67,8 +67,110 @@ export function bindSystemSettingsTab({ api }) {
       message.textContent = err.message;
       message.className = "text-sm text-bad";
     }
-    await loadDiagnose();
+    await Promise.all([loadDiagnose(), loadFleet()]);
   }
+
+  // Monitoramento Softnew (token da empresa + heartbeat)
+  function renderFleet(status, result) {
+    const el = byId("fleetStatus");
+    if (!el || !status) return;
+    const input = byId("fleetToken");
+    if (input && document.activeElement !== input) {
+      input.value = status.configured && !status.tokenFromEnv ? "********" : "";
+      input.placeholder = status.tokenFromEnv
+        ? `Definido no .env (${status.tokenHint})`
+        : "sp_…  (gerado no painel da Softnew)";
+    }
+    let text;
+    let tone = "text-mist";
+    if (!status.configured) {
+      text = "Desligado: sem token, nada é enviado.";
+    } else if (result && !result.ok) {
+      text = result.message;
+      tone = "text-bad";
+    } else if (status.lastOk === true) {
+      const when = status.lastSuccessAt ? new Date(status.lastSuccessAt).toLocaleTimeString("pt-BR") : "";
+      text = `Conectado${status.empresa ? ` · ${status.empresa}` : ""}${when ? ` · último contato ${when}` : ""}`;
+      tone = "text-sea-glow";
+    } else if (status.lastOk === false) {
+      text = status.lastMessage || "Sem contato com o monitoramento.";
+      tone = "text-bad";
+    } else {
+      text = "Token salvo; aguardando o primeiro contato.";
+    }
+    el.textContent = `${text} · Computador: ${status.hostname}`;
+    el.className = `text-xs ${tone}`;
+  }
+
+  async function loadFleet() {
+    try {
+      renderFleet(await api("/api/fleet"));
+    } catch (err) {
+      const el = byId("fleetStatus");
+      if (el) {
+        el.textContent = err.message;
+        el.className = "text-xs text-bad";
+      }
+    }
+  }
+
+  async function saveFleet(token) {
+    const el = byId("fleetStatus");
+    if (el) {
+      el.textContent = "Conectando…";
+      el.className = "text-xs text-mist";
+    }
+    try {
+      const res = await api("/api/fleet", { method: "PUT", body: JSON.stringify({ token }) });
+      byId("fleetToken")?.blur();
+      renderFleet(res.status, res.result);
+    } catch (err) {
+      if (el) {
+        el.textContent = err.message;
+        el.className = "text-xs text-bad";
+      }
+    }
+  }
+
+  byId("btnFleetSave")?.addEventListener("click", () => saveFleet(byId("fleetToken")?.value.trim() || ""));
+  byId("btnFleetClear")?.addEventListener("click", () => {
+    if (!confirm("Remover o token? Este computador para de aparecer no monitoramento da Softnew.")) return;
+    saveFleet("");
+  });
+  byId("btnFleetTest")?.addEventListener("click", async () => {
+    try {
+      const res = await api("/api/fleet/test", { method: "POST" });
+      renderFleet(res.status, res.result);
+    } catch (err) {
+      const el = byId("fleetStatus");
+      if (el) {
+        el.textContent = err.message;
+        el.className = "text-xs text-bad";
+      }
+    }
+  });
+
+  byId("btnSupportSend")?.addEventListener("click", async () => {
+    const msg = byId("supportBundleMsg") || message;
+    const btn = byId("btnSupportSend");
+    if (btn) btn.disabled = true;
+    try {
+      msg.textContent = "Gerando e enviando pacote…";
+      msg.className = "text-xs text-mist";
+      const res = await api("/api/support/bundle/send", {
+        method: "POST",
+        body: JSON.stringify({ note: byId("supportSendNote")?.value.trim() || null }),
+      });
+      msg.textContent = `${res.message} (${res.fileName})`;
+      msg.className = "text-xs text-sea-glow";
+      if (byId("supportSendNote")) byId("supportSendNote").value = "";
+    } catch (err) {
+      msg.textContent = err.message || "Falha ao enviar pacote.";
+      msg.className = "text-xs text-bad";
+    } finally {
+      if (btn) btn.disabled = false;
+    }
+  });
 
   byId("btnSaveSystem")?.addEventListener("click", async () => {
     try {

@@ -11,6 +11,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using SoftPrint.Api;
 using SoftPrint.Api.Contracts;
+using SoftPrint.Api.Endpoints;
 using SoftPrint.Application;
 using SoftPrint.Application.Abstractions;
 using SoftPrint.Application.Services;
@@ -48,6 +49,7 @@ namespace SoftPrint.Host.Windows.Legacy.Controllers
         private readonly IWebHostEnvironment _env;
         private readonly IOptions<SoftPrintFeatureOptions> _features;
         private readonly IAppPaths _paths;
+        private readonly IFleetService _fleet;
 
         public AppController(
             JobQueueService jobs,
@@ -74,7 +76,8 @@ namespace SoftPrint.Host.Windows.Legacy.Controllers
             IHostApplicationLifetime lifetime,
             IWebHostEnvironment env,
             IOptions<SoftPrintFeatureOptions> features,
-            IAppPaths paths)
+            IAppPaths paths,
+            IFleetService fleet)
         {
             _jobs = jobs;
             _settings = settings;
@@ -101,6 +104,7 @@ namespace SoftPrint.Host.Windows.Legacy.Controllers
             _env = env;
             _features = features;
             _paths = paths;
+            _fleet = fleet;
         }
 
         // ── Dashboard ────────────────────────────────────────────────
@@ -943,6 +947,34 @@ namespace SoftPrint.Host.Windows.Legacy.Controllers
                 return StatusCode(500, new { error = ex.Message });
             }
         }
+
+        [HttpPost("/api/support/bundle/send")]
+        public async Task<IActionResult> SendSupportBundle()
+        {
+            SupportSendRequest request = null;
+            try
+            {
+                if (Request.ContentLength.HasValue && Request.ContentLength.Value > 0)
+                    request = await ReadJsonAsync<SupportSendRequest>().ConfigureAwait(false);
+            }
+            catch { /* body inválido = sem observação */ }
+
+            var (ok, body) = await FleetApi.SendSupportBundleAsync(_supportBundle, _fleet, request).ConfigureAwait(false);
+            return ok ? Ok(body) : StatusCode(502, body);
+        }
+
+        [HttpGet("/api/fleet")]
+        public IActionResult GetFleet() => Ok(_fleet.GetStatus());
+
+        [HttpPut("/api/fleet")]
+        public async Task<IActionResult> SaveFleet()
+        {
+            var request = await ReadJsonAsync<FleetTokenRequest>().ConfigureAwait(false);
+            return Ok(await FleetApi.SaveTokenAsync(_fleet, request).ConfigureAwait(false));
+        }
+
+        [HttpPost("/api/fleet/test")]
+        public async Task<IActionResult> TestFleet() => Ok(await FleetApi.TestAsync(_fleet).ConfigureAwait(false));
 
         [HttpGet("/api/diagnose")]
         public IActionResult Diagnose()
