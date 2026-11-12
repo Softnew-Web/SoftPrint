@@ -562,7 +562,11 @@ Teste de impressão de texto.</textarea>
               <div class="flex flex-wrap gap-2 items-center">
                 <button id="btnDiagnose" type="button" class="rounded-xl bg-ink-line px-4 py-2.5 text-sm">Atualizar diagnóstico</button>
                 <button id="btnSupportBundle" type="button" class="rounded-xl bg-ink-line px-4 py-2.5 text-sm">Gerar pacote de suporte</button>
+                <button id="btnSupportSend" type="button" class="rounded-xl bg-sea/90 hover:bg-sea text-white px-4 py-2.5 text-sm">Enviar ao suporte Softnew</button>
               </div>
+              <label class="block text-xs text-mist">Observação para o suporte (opcional)
+                <input id="supportSendNote" type="text" maxlength="255" placeholder="Ex.: impressora da recepção parou às 10h" class="mt-1 w-full rounded-lg bg-ink border border-ink-line px-3 py-2 text-sm text-paper" />
+              </label>
               <p id="supportBundleMsg" class="text-xs text-mist"></p>
             </div>
             <div class="rounded-xl border border-bad/30 bg-ink p-4">
@@ -596,6 +600,17 @@ Teste de impressão de texto.</textarea>
                 <p class="text-[10px] uppercase tracking-wider text-mist">Webhook</p>
                 <label class="block text-sm">URL<input id="sysWebhookUrl" type="url" class="mt-1 w-full rounded-lg bg-ink border border-ink-line px-3 py-2" /></label>
                 <label class="block text-sm">Segredo<input id="sysWebhookSecret" type="password" autocomplete="new-password" placeholder="Deixe ******** para manter o segredo atual" class="mt-1 w-full rounded-lg bg-ink border border-ink-line px-3 py-2" /></label>
+              </div>
+              <div class="rounded-xl border border-ink-line bg-ink/40 p-3 space-y-3">
+                <p class="text-[10px] uppercase tracking-wider text-mist">Monitoramento Softnew</p>
+                <p class="text-xs text-mist">Com o token da empresa, a Softnew vê se este SoftPrint está online e recebe o pacote de suporte. Envia só versão, SO, nome do computador e tamanho da fila.</p>
+                <label class="block text-sm">Token da empresa<input id="fleetToken" type="password" autocomplete="off" placeholder="sp_…  (gerado no painel da Softnew)" class="mt-1 w-full rounded-lg bg-ink border border-ink-line px-3 py-2 font-mono text-xs" /></label>
+                <p id="fleetStatus" class="text-xs text-mist">Carregando…</p>
+                <div class="flex flex-wrap gap-2">
+                  <button id="btnFleetSave" type="button" class="rounded-lg bg-sea hover:bg-sea-deep text-white px-3 py-2 text-xs font-semibold">Salvar token</button>
+                  <button id="btnFleetTest" type="button" class="rounded-lg bg-ink-line px-3 py-2 text-xs">Testar conexão</button>
+                  <button id="btnFleetClear" type="button" class="rounded-lg border border-bad/40 px-3 py-2 text-xs text-bad hover:bg-bad/10">Remover token</button>
+                </div>
               </div>
               <div class="rounded-xl border border-ink-line bg-ink/40 p-3 space-y-3">
                 <p class="text-[10px] uppercase tracking-wider text-mist">Telemetria</p>

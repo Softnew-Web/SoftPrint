@@ -146,7 +146,9 @@ Assinatura Authenticode (opcional): `CODE_SIGNING_PFX_BASE64` / `CODE_SIGNING_PA
 
 Telemetria opt-in: falhas + heartbeat (`TELEMETRY_*`). Timeout por impressão: `PRINT_JOB_TIMEOUT_SECONDS` (padrão 180). Alerta de fila no painel: `QUEUE_STALL_ALERT_MINUTES` (padrão 5).
 
-Logs: retenção 30 dias; crashes em `%LocalAppData%\SoftPrint\data\dumps\`; pacote de suporte em Sistema → Diagnóstico.
+Monitoramento Softnew: com o token da empresa (gerado no painel, colado em Sistema → Monitoramento Softnew ou em `FLEET_TOKEN`), o SoftPrint manda heartbeat a cada `FLEET_HEARTBEAT_SECONDS` (padrão 40) para o backendempresa, que marca a máquina offline após ~2 min sem contato e avisa no WhatsApp/Telegram. Ao fechar normalmente, avisa "parado" (sem alerta). Envia só versão, SO, nome do computador e tamanho da fila. Token e id da máquina ficam em `fleet.json` na pasta de configuração. Sem token, nada é enviado.
+
+Logs: retenção 30 dias; crashes em `%LocalAppData%\SoftPrint\data\dumps\`; pacote de suporte em Sistema → Diagnóstico (gerar local ou **Enviar ao suporte Softnew**, até 20 MB).
 
 ### Operação em clínica (Windows)
 

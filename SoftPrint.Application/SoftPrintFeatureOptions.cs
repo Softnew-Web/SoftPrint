@@ -57,6 +57,15 @@ public sealed class SoftPrintFeatureOptions
     /// <summary>Intervalo do heartbeat de frota (horas). 0 = desligado.</summary>
     public int TelemetryHeartbeatHours { get; set; } = 6;
 
+    public const string DefaultFleetUrl = "https://backendempresa.softnewinfo.com.br";
+
+    /// <summary>Backend do monitoramento Softnew (heartbeat + pacote de suporte).</summary>
+    public string FleetUrl { get; set; } = DefaultFleetUrl;
+    /// <summary>Token da empresa gerado no painel. Vazio = monitoramento desligado (o da tela tem prioridade).</summary>
+    public string FleetToken { get; set; } = "";
+    /// <summary>Intervalo do heartbeat (segundos). O servidor marca offline após ~2 min sem contato.</summary>
+    public int FleetHeartbeatSeconds { get; set; } = 40;
+
     /// <summary>Timeout por pedido de impressão (segundos). Evita fila travada no spooler.</summary>
     public int PrintJobTimeoutSeconds { get; set; } = 180;
 
