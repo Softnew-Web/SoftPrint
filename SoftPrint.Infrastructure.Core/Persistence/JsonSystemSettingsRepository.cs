@@ -44,12 +44,12 @@ public sealed class JsonSystemSettingsRepository : ISystemSettingsRepository
             {
                 ["SoftPrint"] = JsonSerializer.SerializeToNode(_current, JsonOptions)
             };
-            File.WriteAllText(_path, root.ToJsonString(JsonOptions));
+            DurableJsonFile.Write(_path, root.ToJsonString(JsonOptions));
 #else
             // netcoreapp3.1 — JsonObject/SerializeToNode não disponíveis; construir manualmente
             var inner = JsonSerializer.Serialize(_current, JsonOptions);
             // Formata como {"SoftPrint": <inner>} com indentação simples
-            File.WriteAllText(_path, "{\n  \"SoftPrint\": " + inner + "\n}");
+            DurableJsonFile.Write(_path, "{\n  \"SoftPrint\": " + inner + "\n}");
 #endif
             return _current;
         }

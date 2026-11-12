@@ -52,17 +52,10 @@ public sealed class PrintWorker(
                 continue;
             }
 
-            var pending = jobs.PeekNextPending();
+            // Pedido de pasta que atingiu o limite por minuto fica esperando, mas não segura
+            // os pedidos de outras pastas e da API que vêm atrás dele.
+            var (pending, rateEntry) = NextEligiblePending(options);
             if (pending is null)
-            {
-                await Task.Delay(pollInterval, stoppingToken);
-                continue;
-            }
-
-            // Rate limit check: if the inbox entry for this job is rate-limited, skip without dequeuing
-            var matchingEntryForPeek = options.InboxEntries.FirstOrDefault(e =>
-                InboxFileRules.IsUnderInbox(pending.SourcePath, e.Folder));
-            if (matchingEntryForPeek is not null && IsRateLimited(matchingEntryForPeek))
             {
                 await Task.Delay(pollInterval, stoppingToken);
                 continue;
@@ -89,6 +82,9 @@ public sealed class PrintWorker(
                 await Task.Delay(pollInterval, stoppingToken);
                 continue;
             }
+            // Só conta no limite o que de fato saiu da fila.
+            if (rateEntry is not null)
+                RecordRateUse(rateEntry);
 
             JobStatus status;
             string? error = null;
@@ -247,21 +243,38 @@ public sealed class PrintWorker(
         return await execution.ConfigureAwait(false);
     }
 
+    private (PrintJob? Job, InboxEntry? RateEntry) NextEligiblePending(PrintOptions options)
+    {
+        foreach (var candidate in jobs.PendingInOrder())
+        {
+            var entry = options.InboxEntries.FirstOrDefault(e =>
+                InboxFileRules.IsUnderInbox(candidate.SourcePath, e.Folder));
+            if (entry is null || entry.RateLimitPerMinute <= 0)
+                return (candidate, null);
+            if (!IsRateLimited(entry))
+                return (candidate, entry);
+        }
+        return (null, null);
+    }
+
     private bool IsRateLimited(InboxEntry entry)
     {
         if (entry.RateLimitPerMinute <= 0) return false;
-        var now = DateTimeOffset.UtcNow;
-        var cutoff = now.AddMinutes(-1);
+        var cutoff = DateTimeOffset.UtcNow.AddMinutes(-1);
         var window = _rateWindows.GetOrAdd(entry.Id, _ => new Queue<DateTimeOffset>());
         lock (window)
         {
             while (window.Count > 0 && window.Peek() < cutoff)
                 window.Dequeue();
-            if (window.Count >= entry.RateLimitPerMinute)
-                return true;
-            window.Enqueue(now);
-            return false;
+            return window.Count >= entry.RateLimitPerMinute;
         }
+    }
+
+    private void RecordRateUse(InboxEntry entry)
+    {
+        var window = _rateWindows.GetOrAdd(entry.Id, _ => new Queue<DateTimeOffset>());
+        lock (window)
+            window.Enqueue(DateTimeOffset.UtcNow);
     }
 
     private void NotifyCompletedGrouped(PrintJob job, string printerName)
