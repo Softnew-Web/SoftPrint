@@ -559,20 +559,14 @@ namespace SoftPrint.Host.Windows.Legacy.Controllers
                 }
             }
 
-            if (root.TryGetProperty("inboxEntries", out var inboxEl) && inboxEl.ValueKind == JsonValueKind.Array)
+            if (root.TryGetProperty("inboxEntries", out _) || root.TryGetProperty("printSettings", out _))
             {
                 try
                 {
-                    var entries = inboxEl.EnumerateArray().Select(e => new InboxEntry
-                    {
-                        Id = e.TryGetProperty("id", out var eid) && eid.TryGetGuid(out var g) ? g : Guid.NewGuid(),
-                        Label = e.TryGetProperty("label", out var lbl) ? lbl.GetString() ?? "" : "",
-                        PrinterName = e.TryGetProperty("printerName", out var epr) ? epr.GetString() ?? "" : "",
-                        Folder = e.TryGetProperty("folder", out var ef) ? ef.GetString() ?? "" : "",
-                        Enabled = e.TryGetProperty("enabled", out var ee) && ee.GetBoolean(),
-                        DeleteAfterPrint = e.TryGetProperty("deleteAfterPrint", out var ed) && ed.GetBoolean()
-                    }).ToList();
-                    _settings.UpsertInboxEntries(entries, _settings.Current.Revision);
+                    // A exportação grava as pastas dentro de printSettings.
+                    var entries = ApiMapping.ReadBackupInboxEntries(root);
+                    if (entries is not null)
+                        _settings.UpsertInboxEntries(entries, _settings.Current.Revision);
                 }
                 catch (Exception ex)
                 {

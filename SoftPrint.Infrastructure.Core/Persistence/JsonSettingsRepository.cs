@@ -120,7 +120,10 @@ public sealed class JsonSettingsRepository : ISettingsRepository
                         Folder = e.Folder ?? "",
                         Enabled = e.Enabled,
                         DeleteAfterPrint = e.DeleteAfterPrint,
-                        CustomSettings = customSettings
+                        CustomSettings = customSettings,
+                        Copies = e.Copies is >= 1 and <= 99 ? e.Copies.Value : 1,
+                        WebhookUrl = string.IsNullOrWhiteSpace(e.WebhookUrl) ? null : e.WebhookUrl,
+                        RateLimitPerMinute = e.RateLimitPerMinute is >= 0 and <= 1000 ? e.RateLimitPerMinute.Value : 0
                     };
                 })
                 .ToArray();
@@ -213,7 +216,10 @@ public sealed class JsonSettingsRepository : ISettingsRepository
                     e.CustomSettings?.PaperSize.ToWire(),
                     e.CustomSettings?.PaperWidthMm,
                     e.CustomSettings?.PaperHeightMm,
-                    e.CustomSettings?.PaperLandscape))
+                    e.CustomSettings?.PaperLandscape,
+                    e.Copies,
+                    e.WebhookUrl,
+                    e.RateLimitPerMinute))
                 .ToList());
 
     private sealed record SettingsRecord(
@@ -247,5 +253,8 @@ public sealed class JsonSettingsRepository : ISettingsRepository
         string? PaperSize = null,
         double? PaperWidthMm = null,
         double? PaperHeightMm = null,
-        bool? PaperLandscape = null);
+        bool? PaperLandscape = null,
+        int? Copies = null,
+        string? WebhookUrl = null,
+        int? RateLimitPerMinute = null);
 }

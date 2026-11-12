@@ -1,3 +1,4 @@
+using System.Text.Json;
 using SoftPrint.Api.Contracts;
 using SoftPrint.Domain;
 
@@ -53,4 +54,59 @@ public static class ApiMapping
             job.TemplateName,
             job.ReprintedFromId,
             job.Priority);
+
+    private static readonly JsonSerializerOptions BackupJson = new() { PropertyNameCaseInsensitive = true };
+
+    /// <summary>
+    /// Pastas de entrada de um backup. A exportação grava em printSettings.inboxEntries;
+    /// "inboxEntries" na raiz continua aceito. Null quando o backup não traz a lista.
+    /// </summary>
+    public static IReadOnlyList<InboxEntry>? ReadBackupInboxEntries(JsonElement root)
+    {
+        JsonElement list;
+        if (root.TryGetProperty("inboxEntries", out var top) && top.ValueKind == JsonValueKind.Array)
+            list = top;
+        else if (root.TryGetProperty("printSettings", out var print) && print.ValueKind == JsonValueKind.Object
+                 && print.TryGetProperty("inboxEntries", out var nested) && nested.ValueKind == JsonValueKind.Array)
+            list = nested;
+        else
+            return null;
+
+        return list.EnumerateArray()
+            .Select(e => JsonSerializer.Deserialize<InboxEntryDto>(e.GetRawText(), BackupJson)
+                         ?? throw new JsonException("Pasta de entrada vazia no backup."))
+            .Select(ToDomain)
+            .ToList();
+    }
+
+    public static InboxEntry ToDomain(this InboxEntryDto e)
+    {
+        PrintJobSettings? custom = null;
+        if (e.HasCustomSettings)
+        {
+            var kind = PaperSizeCatalog.FromWire(e.PaperSize);
+            var (pw, ph) = PaperSizeCatalog.GetMillimeters(kind, e.PaperWidthMm, e.PaperHeightMm);
+            custom = new PrintJobSettings(
+                ImageFitModeExtensions.FromWire(e.ImageFit),
+                Math.Clamp(e.ImageScalePercent ?? 100, 10, 200),
+                kind,
+                kind == PaperSizeKind.Custom ? Math.Clamp(e.PaperWidthMm ?? 210, 20, 1200) : pw,
+                kind == PaperSizeKind.Custom ? Math.Clamp(e.PaperHeightMm ?? 297, 20, 1200) : ph,
+                e.PaperLandscape ?? false);
+        }
+
+        return new InboxEntry
+        {
+            Id = e.Id == Guid.Empty ? Guid.NewGuid() : e.Id,
+            Label = (e.Label ?? "").Trim(),
+            PrinterName = (e.PrinterName ?? "").Trim(),
+            Folder = (e.Folder ?? "").Trim(),
+            Enabled = e.Enabled,
+            DeleteAfterPrint = e.DeleteAfterPrint,
+            CustomSettings = custom,
+            Copies = Math.Clamp(e.Copies, 1, 99),
+            WebhookUrl = string.IsNullOrWhiteSpace(e.WebhookUrl) ? null : e.WebhookUrl!.Trim(),
+            RateLimitPerMinute = Math.Clamp(e.RateLimitPerMinute, 0, 1000)
+        };
+    }
 }

@@ -1,5 +1,7 @@
 using SoftPrint.Application;
+using Microsoft.AspNetCore.HostFiltering;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 namespace SoftPrint.Infrastructure.Hosting;
@@ -7,12 +9,24 @@ namespace SoftPrint.Infrastructure.Hosting;
 /// <summary>Garante bind em loopback salvo opt-in explícito (AllowNonLoopbackBinding).</summary>
 public static class LoopbackBindingGuard
 {
+    /// <summary>
+    /// Únicos valores aceitos no cabeçalho Host. Sem essa checagem, uma página qualquer faz
+    /// DNS rebinding (dominio.com → 127.0.0.1), abre /dashboard, recebe o cookie com a chave
+    /// e passa a usar a API como se fosse o painel.
+    /// </summary>
+    public static readonly string[] LoopbackHosts = ["localhost", "127.0.0.1", "[::1]"];
+
+    public static void RestrictHostHeader(IServiceCollection services) =>
+        services.Configure<HostFilteringOptions>(o => o.AllowedHosts = LoopbackHosts.ToList());
+
 #if NET6_0_OR_GREATER
     public static void Enforce(WebApplicationBuilder builder, ILogger? log = null)
     {
         var allow = builder.Configuration.GetValue("SoftPrint:AllowNonLoopbackBinding", false)
                     || builder.Configuration.GetValue("ALLOW_NON_LOOPBACK_BINDING", false);
         if (allow) return;
+
+        RestrictHostHeader(builder.Services);
 
         var urls = builder.Configuration["Urls"]
                    ?? builder.Configuration["ASPNETCORE_URLS"]

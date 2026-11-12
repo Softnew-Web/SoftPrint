@@ -12,6 +12,11 @@ public interface IJobRepository
     PrintJob Add(PrintJob job);
     PrintJob? TakeNextPending(PrintOptions settings);
     PrintJob? TakeNextPending(string printerName, long settingsRevision);
+    /// <summary>
+    /// Retira exatamente este pedido, se ainda estiver pendente. O worker decide impressora e
+    /// papel olhando o pedido; pegar "o próximo" poderia trazer outro (prioridade/reordenação).
+    /// </summary>
+    PrintJob? TakePending(Guid id, string printerName, long settingsRevision);
     void AppendStep(Guid id, string stage, string where, string message, string? detail = null, bool isError = false);
     /// <summary>Vários passos com uma única gravação em disco.</summary>
     void AppendSteps(Guid id, IReadOnlyList<JobStepDraft> steps);

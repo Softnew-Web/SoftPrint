@@ -416,6 +416,7 @@ export function bindConnectTab({ api }) {
           paperHeightMm: entry.paperHeightMm ?? 297,
           paperLandscape: !!entry.paperLandscape,
           copies: entry.copies ?? 1,
+          rateLimitPerMinute: entry.rateLimitPerMinute ?? 0,
           webhookUrl: entry.webhookUrl ?? null,
         };
         try {

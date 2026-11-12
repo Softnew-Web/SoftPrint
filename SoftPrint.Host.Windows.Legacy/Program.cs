@@ -79,6 +79,8 @@ namespace SoftPrint.Host.Windows.Legacy
                     // Registra opções e catálogo de status via IServiceCollection (versão netcoreapp3.1)
                     services.AddSoftPrintConfiguration(ctx.Configuration, AppContext.BaseDirectory);
                     services.AddSoftPrintCore();
+                    // Escuta só em loopback: o Host também precisa ser loopback (DNS rebinding).
+                    LoopbackBindingGuard.RestrictHostHeader(services);
                     services.AddSingleton<IPrinterCatalog, WindowsPrinterCatalog>();
                     services.AddSingleton<IPrinterPageMetrics, WindowsPrinterPageMetrics>();
                     services.AddSingleton<IFolderOperations, LegacyFolderOperations>();
