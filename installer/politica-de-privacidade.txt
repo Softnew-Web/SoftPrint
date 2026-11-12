@@ -3,7 +3,7 @@
                                  SOFTPRINT
                     Softnew Soluções em Tecnologia da Informação
 ================================================================================
-                          Versão 2.0 — 30 de setembro de 2026
+                          Versão 2.1 — 12 de novembro de 2026
 ================================================================================
 
 
@@ -157,7 +157,8 @@ SEÇÃO 3 — DADOS COLETADOS E FINALIDADES DO TRATAMENTO
      3.2.2  Os logs são armazenados exclusivamente no Ambiente Local. A
             Softnew não coleta esses logs automaticamente. Quando o Usuário
             acionar suporte técnico e optar por compartilhar os logs, o
-            envio é manual e voluntário.
+            envio é manual e voluntário, inclusive pelo botão de envio do
+            pacote de suporte descrito na Seção 3.6.
 
      3.2.3  Recomendamos que, antes de enviar logs para suporte, o Usuário
             revise o conteúdo e remova eventuais dados pessoais sensíveis.
@@ -170,7 +171,8 @@ SEÇÃO 3 — DADOS COLETADOS E FINALIDADES DO TRATAMENTO
             atualização, controle de versão).
 
      3.3.2  Nenhum dado de instalação é transmitido à Softnew de forma
-            automática.
+            automática, exceto quando o monitoramento descrito na Seção 3.6
+            estiver ativado.
 
 3.4  Dados de configuração e operação do Software.
 
@@ -183,7 +185,8 @@ SEÇÃO 3 — DADOS COLETADOS E FINALIDADES DO TRATAMENTO
 
      3.4.2  Esses dados são de responsabilidade do Usuário enquanto
             operados no Ambiente Local. A Softnew não tem acesso a eles
-            salvo mediante solicitação expressa de suporte pelo Usuário.
+            salvo mediante solicitação expressa de suporte pelo Usuário ou,
+            com o monitoramento ativado, ao resumo descrito na Seção 3.6.
 
 3.5  Dados de contato para suporte.
 
@@ -198,7 +201,41 @@ SEÇÃO 3 — DADOS COLETADOS E FINALIDADES DO TRATAMENTO
      3.5.3  Base legal: execução de contrato (LGPD, art. 7º, V) e legítimo
             interesse (art. 7º, IX).
 
-3.6  Resumo das bases legais utilizadas.
+3.6  Monitoramento Softnew e pacote de suporte.
+
+     3.6.1  Ativação. O monitoramento fica desligado por padrão e só
+            funciona quando um token da empresa, gerado pela Softnew, é
+            informado no Software (tela Sistema → Monitoramento Softnew) ou
+            no arquivo de configuração. Apagar o token desliga o envio.
+
+     3.6.2  Dados enviados periodicamente (a cada 40 segundos, por padrão)
+            aos servidores da Softnew, por HTTPS: (a) identificador da
+            instalação gerado pelo Software; (b) nome do computador;
+            (c) versão do Software, sistema operacional e plataforma;
+            (d) quantidade de trabalhos na fila e em processamento;
+            (e) a última mensagem de erro de impressão, limitada a 240
+            caracteres, que pode conter o nome do arquivo; (f) endereço IP
+            do dispositivo, inerente ao protocolo TCP/IP. Ao fechar, o
+            Software envia um aviso de encerramento.
+
+     3.6.3  O conteúdo dos documentos impressos nunca é enviado.
+
+     3.6.4  Pacote de suporte. Quando o Usuário clicar para enviar o pacote
+            de suporte à Softnew, é enviado um arquivo compactado com:
+            um resumo do sistema e da versão, logs do Software, registros
+            de eventos e de falhas, estado da sessão, configurações do
+            sistema sem os endereços e segredos de integração, e a
+            observação digitada pelo Usuário. Esse envio é sempre manual.
+
+     3.6.5  Finalidade: acompanhar se o Software está em funcionamento em
+            cada instalação, avisar a equipe de suporte sobre paradas e
+            agilizar o diagnóstico de problemas.
+
+     3.6.6  Base legal (LGPD, art. 7º): execução de contrato (art. 7º, V),
+            no âmbito do suporte técnico, e legítimo interesse do
+            Controlador (art. 7º, IX).
+
+3.7  Resumo das bases legais utilizadas.
 
      +----------------------------------+----------------------------------+
      | Atividade de Tratamento          | Base Legal (LGPD art. 7º)        |
@@ -208,6 +245,9 @@ SEÇÃO 3 — DADOS COLETADOS E FINALIDADES DO TRATAMENTO
      | Dados de instalação (registro)   | Execução de contrato (V)         |
      | Dados operacionais (locais)      | Execução de contrato (V)         |
      | Suporte técnico                  | Execução de contrato (V)         |
+     | Monitoramento Softnew (opcional) | Execução de contrato (V) e       |
+     |                                  | legítimo interesse (IX)          |
+     | Pacote de suporte (manual)       | Execução de contrato (V)         |
      +----------------------------------+----------------------------------+
 
 
@@ -335,6 +375,12 @@ SEÇÃO 6 — PERÍODO DE RETENÇÃO E ELIMINAÇÃO DE DADOS
 6.5  Anonimização. Ao término do período de retenção, os dados pessoais
      são eliminados ou anonimizados, de modo que não possam ser associados
      ao Titular, nos termos do art. 5º, XI, da LGPD.
+
+6.6  Dados do monitoramento. Os dados de cada instalação monitorada
+     (Seção 3.6) são mantidos enquanto ela estiver cadastrada no
+     monitoramento e eliminados quando a Softnew a remover ou a pedido do
+     Usuário. Os pacotes de suporte são apagados automaticamente após
+     30 (trinta) dias.
 
 
 ================================================================================
@@ -558,8 +604,8 @@ SEÇÃO 13 — DISPOSIÇÕES GERAIS
      for considerada inválida, ilegal ou inaplicável, as demais disposições
      permanecerão em pleno vigor e efeito.
 
-13.4 Versão do documento. Esta é a Versão 2.0 desta Política, em vigor a
-     partir de 30 de setembro de 2026, revogando versões anteriores.
+13.4 Versão do documento. Esta é a Versão 2.1 desta Política, em vigor a
+     partir de 12 de novembro de 2026, revogando versões anteriores.
 
 13.5 Relação com os Termos de Uso. Esta Política complementa os Termos
      de Uso e Contrato de Licença de Uso de Software do SoftPrint, devendo
@@ -587,10 +633,12 @@ Versão  Data               Descrição das Alterações
                            inclusão de seções sobre dados sensíveis em saúde;
                            definição do canal DPO; histórico de versões;
                            alinhamento com Termos de Uso v2.0
+2.1     12/11/2026         Inclusão do monitoramento Softnew e do envio do
+                           pacote de suporte (Seções 3.6 e 6.6)
 
 
 ================================================================================
               FIM DA POLÍTICA DE PRIVACIDADE E PROTEÇÃO DE DADOS
-                         SoftPrint — Versão 2.0 — 30/09/2026
+                         SoftPrint — Versão 2.1 — 12/11/2026
                   Copyright (C) 2026 Softnew Soluções em Tecnologia da Informação
 ================================================================================
