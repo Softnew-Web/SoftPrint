@@ -49,6 +49,7 @@ public sealed class FleetCommandRunnerTests : IDisposable
         await _runner.PollAsync();
 
         Assert.False(_settings.Current.Paused);
+        Assert.Equal(2, _fleet.Heartbeats);
         Assert.Equal(new[] { (1L, true, "Fila pausada."), (2L, true, "Fila retomada.") }, _fleet.Results);
     }
 
@@ -132,6 +133,30 @@ public sealed class FleetCommandRunnerTests : IDisposable
         await _runner.ReportPendingUpdateAsync();
 
         Assert.Equal((9L, true, $"Atualizado de 0.0.1 para {SoftPrintVersion.Current}."), _fleet.Results[0]);
+        Assert.Null(_fleet.PendingUpdate);
+    }
+
+    [Fact]
+    public async Task PendingUpdate_WhileInProgress_SendsNothing_AndKeepsPending()
+    {
+        _updates.InProgress = true;
+        _fleet.PendingUpdate = new FleetPendingUpdate(50, SoftPrintVersion.Current);
+
+        await _runner.ReportPendingUpdateAsync();
+
+        Assert.Empty(_fleet.Results);
+        Assert.Equal(50, _fleet.PendingUpdate!.CommandId);
+    }
+
+    [Fact]
+    public async Task PendingUpdate_SameVersion_UsesApplierError_AndClears()
+    {
+        _updates.ErrorText = "Atualização cancelada";
+        _fleet.PendingUpdate = new FleetPendingUpdate(51, SoftPrintVersion.Current);
+
+        await _runner.ReportPendingUpdateAsync();
+
+        Assert.Equal((51L, false, "A atualização não foi concluída. Atualização cancelada"), _fleet.Results[0]);
         Assert.Null(_fleet.PendingUpdate);
     }
 

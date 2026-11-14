@@ -98,6 +98,10 @@ public sealed class FleetCommandRunner(
         var pending = fleet.GetPendingUpdate();
         if (pending is null) return;
 
+        // Ainda baixando/instalando: o resultado só sai depois do reinício (ou da falha).
+        var st = updates.GetStatus();
+        if (st.InProgress) return;
+
         var current = SoftPrintVersion.Current;
         var ok = !string.Equals(
             SoftPrintVersionCompare.Normalize(pending.FromVersion),
@@ -106,7 +110,7 @@ public sealed class FleetCommandRunner(
         var message = ok
             ? $"Atualizado de {pending.FromVersion} para {current}."
             : "A atualização não foi concluída. " +
-              (UpdateFailureNotice.Peek() ?? $"O SoftPrint continua na versão {current}.");
+              (st.Error ?? UpdateFailureNotice.Peek() ?? $"O SoftPrint continua na versão {current}.");
 
         if (await SendResultAsync(pending.CommandId, ok, message, cancellationToken).ConfigureAwait(false))
         {
@@ -146,9 +150,11 @@ public sealed class FleetCommandRunner(
                     return null; // resultado depois do reinício
                 case "pause":
                     SetPaused(true);
+                    await PushStatusAsync(cancellationToken).ConfigureAwait(false);
                     return new Outcome(true, "Fila pausada.");
                 case "resume":
                     SetPaused(false);
+                    await PushStatusAsync(cancellationToken).ConfigureAwait(false);
                     return new Outcome(true, "Fila retomada.");
                 case "reprint_failed":
                     return ReprintFailed();
@@ -178,6 +184,16 @@ public sealed class FleetCommandRunner(
         {
             log.LogWarning(ex, "Comando {Type} ({Id}) falhou", command.Type, command.Id);
             return new Outcome(false, ex.Message);
+        }
+    }
+
+    /// <summary>Manda o status já com a pausa nova, para o painel mostrar na hora (falha é ignorada).</summary>
+    private async Task PushStatusAsync(CancellationToken cancellationToken)
+    {
+        try { await fleet.SendHeartbeatAsync("heartbeat", cancellationToken).ConfigureAwait(false); }
+        catch (Exception ex) when (!cancellationToken.IsCancellationRequested)
+        {
+            log.LogDebug(ex, "Heartbeat após pausa/retomada falhou");
         }
     }
 
