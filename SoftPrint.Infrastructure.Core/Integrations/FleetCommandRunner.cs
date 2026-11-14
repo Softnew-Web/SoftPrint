@@ -116,8 +116,19 @@ public sealed class FleetCommandRunner(
             switch (command.Type)
             {
                 case "update":
-                    if (fleet.GetPendingUpdate() is not null || updates.GetStatus().InProgress)
+                    var status = updates.GetStatus();
+                    if (status.InProgress)
                         return new Outcome(false, "Já existe uma atualização em andamento.");
+                    var stale = fleet.GetPendingUpdate();
+                    if (stale is not null)
+                    {
+                        // A tentativa anterior acabou sem reiniciar: avisa o painel e segue com o comando novo.
+                        var why = (status.Error ?? UpdateFailureNotice.Peek() ?? "").Trim();
+                        await SendResultAsync(stale.CommandId, false, ("A atualização não foi concluída. " + why).Trim(),
+                            cancellationToken).ConfigureAwait(false);
+                        try { fleet.ClearPendingUpdate(); }
+                        catch (Exception staleEx) { log.LogWarning(staleEx, "Não foi possível limpar o pedido de atualização antigo"); }
+                    }
                     try { fleet.RememberPendingUpdate(command.Id); }
                     catch (Exception ex) { return new Outcome(false, "Não foi possível guardar o pedido de atualização: " + ex.Message); }
                     if (!updates.TryStart(out var error))

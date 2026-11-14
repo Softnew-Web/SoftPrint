@@ -214,6 +214,7 @@ public sealed class FleetCommandRunnerTests : IDisposable
     [Fact]
     public async Task Update_WithExistingPending_Refuses_AndKeepsPending()
     {
+        _updates.InProgress = true;
         _fleet.PendingUpdate = new FleetPendingUpdate(30, "0.0.1");
         _fleet.Queue(new FleetCommand(25, "update", null));
 
@@ -222,6 +223,21 @@ public sealed class FleetCommandRunnerTests : IDisposable
         Assert.False(_updates.TryStartCalled);
         Assert.Equal((25L, false, "Já existe uma atualização em andamento."), _fleet.Results[0]);
         Assert.Equal(30, _fleet.PendingUpdate!.CommandId);
+    }
+
+    [Fact]
+    public async Task Update_WithStalePending_ReportsOldFailure_AndStartsNew()
+    {
+        _updates.ErrorText = "Nenhuma atualização disponível.";
+        _fleet.PendingUpdate = new FleetPendingUpdate(40, "0.0.1");
+        _fleet.Queue(new FleetCommand(41, "update", null));
+
+        await _runner.PollAsync();
+
+        Assert.Equal((40L, false, "A atualização não foi concluída. Nenhuma atualização disponível."), _fleet.Results[0]);
+        Assert.True(_updates.TryStartCalled);
+        Assert.Equal(41, _fleet.PendingUpdate!.CommandId);
+        Assert.Single(_fleet.Results);
     }
 
     [Fact]
@@ -301,6 +317,8 @@ public sealed class FleetCommandRunnerTests : IDisposable
         public bool Started { get; private set; }
         public bool TryStartCalled { get; private set; }
         public string? Refuse { get; set; }
+        public bool InProgress { get; set; }
+        public string? ErrorText { get; set; }
         public UpdateApplyStatus Status => GetStatus();
 
         public bool TryStart(out string? error)
@@ -312,7 +330,7 @@ public sealed class FleetCommandRunnerTests : IDisposable
         }
 
         public bool TryStartRollback(string? targetVersion, out string? error) => throw new NotSupportedException();
-        public UpdateApplyStatus GetStatus() => new("idle", 0, "", false, false, false);
+        public UpdateApplyStatus GetStatus() => new("idle", 0, "", InProgress, ErrorText is not null, false, ErrorText);
     }
 
     internal sealed class FakeFleet : IFleetService
