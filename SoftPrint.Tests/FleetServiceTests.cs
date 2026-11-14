@@ -356,6 +356,23 @@ public sealed class FleetServiceTests : IDisposable
         Assert.False(current.IsCancellationRequested);
     }
 
+    [Theory]
+    // agora=100s; último envio; mudança em; intervalo; esperado
+    [InlineData(100, 59, null, 40, true)]   // intervalo venceu
+    [InlineData(100, 70, null, 40, false)]  // dentro do intervalo, sem mudança
+    [InlineData(100, 90, 97, 40, true)]     // mudou há 3 s e o último envio foi há 10 s
+    [InlineData(100, 90, 99, 40, false)]    // mudou há 1 s: espera juntar mudanças (2 s)
+    [InlineData(100, 97, 95, 40, false)]    // último envio há 3 s: respeita 5 s
+    [InlineData(100, 85, null, 15, true)]    // sem WebSocket: 15 s
+    public void HeartbeatSchedule(int now, int lastSent, int? changedAt, int interval, bool expected)
+    {
+        var t0 = DateTimeOffset.UnixEpoch;
+        Assert.Equal(expected, SoftPrint.Infrastructure.Operations.FleetHeartbeatHostedService.ShouldSend(
+            t0.AddSeconds(now), t0.AddSeconds(lastSent),
+            changedAt is null ? null : t0.AddSeconds(changedAt.Value),
+            TimeSpan.FromSeconds(interval)));
+    }
+
     private FleetService Create(HttpMessageHandler handler, SoftPrintFeatureOptions? options = null, ISettingsRepository? settings = null)
     {
         var paths = new TestPaths(_root);
