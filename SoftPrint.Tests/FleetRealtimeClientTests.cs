@@ -81,6 +81,202 @@ public sealed class FleetRealtimeClientTests
         Assert.False(fleet.Connected);
     }
 
+    // ---- Reconexão, espera e renovação ----
+
+    private static async Task WaitUntil(Func<bool> condition, CancellationToken ct)
+    {
+        while (!condition()) await Task.Delay(10, ct);
+    }
+
+    private static async Task HoldOpen(WebSocket ws, CancellationToken ct)
+    {
+        try
+        {
+            var buf = new byte[1024];
+            while (ws.State == WebSocketState.Open)
+            {
+                var r = await ws.ReceiveAsync(buf, ct);
+                if (r.MessageType == WebSocketMessageType.Close) break;
+            }
+        }
+        catch { /* cliente saiu */ }
+    }
+
+    /// <summary>Servidor que aceita, lê o subscribe e entrega o socket ao comportamento do teste.</summary>
+    private static TestServer NewServer(Func<WebSocket, CancellationToken, Task> behavior) =>
+        new(new WebHostBuilder().Configure(app =>
+        {
+            app.UseWebSockets();
+            app.Run(async ctx =>
+            {
+                using var ws = await ctx.WebSockets.AcceptWebSocketAsync();
+                var buf = new byte[1024];
+                await ws.ReceiveAsync(buf, ctx.RequestAborted);
+                await behavior(ws, ctx.RequestAborted);
+            });
+        }));
+
+    private sealed class Rig
+    {
+        public readonly RealtimeFleet Fleet = new();
+        public readonly CountingPoller Poller = new();
+        public readonly List<TimeSpan> Delays = new();
+        public readonly List<bool> ConnectedAtDelay = new();
+        public int Connects;
+        public FleetRealtimeClient Client = null!;
+
+        public static Rig Create(TestServer server, TimeSpan? renewBefore = null, TimeSpan? minRenew = null)
+        {
+            var rig = new Rig();
+            rig.Client = new FleetRealtimeClient(rig.Fleet, rig.Poller, NullLogger<FleetRealtimeClient>.Instance)
+            {
+                StartDelay = TimeSpan.Zero,
+                RenewBefore = renewBefore ?? TimeSpan.FromMinutes(30),
+                MinRenew = minRenew ?? TimeSpan.FromMinutes(1),
+                Delay = async (d, ct) =>
+                {
+                    lock (rig.Delays)
+                    {
+                        rig.Delays.Add(d);
+                        rig.ConnectedAtDelay.Add(rig.Fleet.Connected);
+                    }
+                    await Task.Delay(5, ct);
+                },
+                Connect = async (uri, token, ct) =>
+                {
+                    Interlocked.Increment(ref rig.Connects);
+                    var wsc = server.CreateWebSocketClient();
+                    return await wsc.ConnectAsync(uri, ct);
+                }
+            };
+            return rig;
+        }
+
+        public int DelayCount { get { lock (Delays) return Delays.Count; } }
+        public TimeSpan[] DelaySnapshot() { lock (Delays) return Delays.ToArray(); }
+        public bool[] ConnectedSnapshot() { lock (Delays) return ConnectedAtDelay.ToArray(); }
+    }
+
+    [Fact]
+    public async Task ServerClose_WaitsBeforeReconnecting()
+    {
+        using var server = NewServer(async (ws, ct) =>
+            await ws.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, "", ct));
+        var rig = Rig.Create(server);
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        await rig.Client.StartAsync(cts.Token);
+        try
+        {
+            await WaitUntil(() => Volatile.Read(ref rig.Connects) >= 3, cts.Token);
+        }
+        finally
+        {
+            await rig.Client.StopAsync(CancellationToken.None);
+        }
+
+        var delays = rig.DelaySnapshot();
+        Assert.True(delays.Length >= 2, "esperava espera entre as conexões");
+        Assert.True(delays.Length >= Volatile.Read(ref rig.Connects) - 1, "toda reconexão precisa passar por espera");
+        Assert.All(delays, d => Assert.True(d > TimeSpan.Zero));
+        Assert.InRange(delays[0], TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(3));     // BackoffFor(0) +-50%
+        Assert.InRange(delays[1], TimeSpan.FromSeconds(2.5), TimeSpan.FromSeconds(7.5)); // BackoffFor(1) +-50%
+    }
+
+    [Fact]
+    public async Task SystemError_DropsConnection_AndCountsAsOpenFailure()
+    {
+        using var server = NewServer(async (ws, ct) =>
+        {
+            var msg = Encoding.UTF8.GetBytes("""{"type":"system.error","message":"sala negada"}""");
+            await ws.SendAsync(msg, WebSocketMessageType.Text, true, ct);
+            await HoldOpen(ws, ct);
+        });
+        var rig = Rig.Create(server);
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        await rig.Client.StartAsync(cts.Token);
+        try
+        {
+            await WaitUntil(() => rig.DelayCount >= 3, cts.Token);
+        }
+        finally
+        {
+            await rig.Client.StopAsync(CancellationToken.None);
+        }
+
+        var delays = rig.DelaySnapshot();
+        Assert.InRange(delays[0], TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(3));
+        Assert.Equal(TimeSpan.FromMinutes(5), delays[2]);   // 3 falhas de abertura seguidas
+        Assert.All(rig.ConnectedSnapshot(), c => Assert.False(c));
+        Assert.False(rig.Fleet.Connected);
+    }
+
+    [Fact]
+    public async Task NullTicket_ThreeTimes_WaitsFiveMinutes()
+    {
+        using var server = NewServer((_, _) => Task.CompletedTask);
+        var rig = Rig.Create(server);
+        rig.Fleet.NextTicket = () => null;
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        await rig.Client.StartAsync(cts.Token);
+        try
+        {
+            await WaitUntil(() => rig.DelayCount >= 3, cts.Token);
+        }
+        finally
+        {
+            await rig.Client.StopAsync(CancellationToken.None);
+        }
+
+        var delays = rig.DelaySnapshot();
+        Assert.True(delays[0] < TimeSpan.FromSeconds(10));
+        Assert.Equal(TimeSpan.FromMinutes(5), delays[2]);
+        Assert.Equal(0, rig.Connects);
+    }
+
+    [Fact]
+    public async Task TokenChanged_ReconnectsWithoutWaiting_AndAsksNewTicket()
+    {
+        using var server = NewServer(HoldOpen);
+        var rig = Rig.Create(server);
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        await rig.Client.StartAsync(cts.Token);
+        try
+        {
+            await WaitUntil(() => rig.Fleet.Connected, cts.Token);
+            Assert.Equal(1, rig.Fleet.TicketCalls);
+            rig.Fleet.FireTokenChanged();
+            await WaitUntil(() => rig.Fleet.TicketCalls >= 2 && Volatile.Read(ref rig.Connects) >= 2, cts.Token);
+        }
+        finally
+        {
+            await rig.Client.StopAsync(CancellationToken.None);
+        }
+
+        Assert.Equal(0, rig.DelayCount);
+    }
+
+    [Fact]
+    public async Task NearExpiry_ReconnectsToRenew()
+    {
+        using var server = NewServer(HoldOpen);
+        var rig = Rig.Create(server, renewBefore: TimeSpan.Zero, minRenew: TimeSpan.FromMilliseconds(50));
+        rig.Fleet.NextTicket = () => new FleetRealtimeTicket(
+            new Uri("ws://localhost/v1/ws"), "jwt-teste", "softprint:m:3", DateTimeOffset.UtcNow.AddMilliseconds(300));
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        await rig.Client.StartAsync(cts.Token);
+        try
+        {
+            await WaitUntil(() => Volatile.Read(ref rig.Connects) >= 2, cts.Token);
+        }
+        finally
+        {
+            await rig.Client.StopAsync(CancellationToken.None);
+        }
+
+        Assert.Equal(0, rig.DelayCount);
+        Assert.True(rig.Fleet.TicketCalls >= 2);
+    }
+
     private sealed class CountingPoller : IFleetCommandPoller
     {
         private int _count;
@@ -98,13 +294,30 @@ public sealed class FleetRealtimeClientTests
 
     private sealed class RealtimeFleet : IFleetService
     {
-        public bool Connected { get; private set; }
+        private CancellationTokenSource _tokenCts = new();
+        private int _ticketCalls;
+
+        public volatile bool Connected;
+        public int TicketCalls => Volatile.Read(ref _ticketCalls);
+        public Func<FleetRealtimeTicket?> NextTicket { get; set; } = () => new FleetRealtimeTicket(
+            new Uri("ws://localhost/v1/ws"), "jwt-teste", "softprint:m:3", DateTimeOffset.UtcNow.AddHours(12));
+
+        /// <summary>Simula a troca de token: cancela o token atual e passa a entregar um novo.</summary>
+        public void FireTokenChanged()
+        {
+            var old = _tokenCts;
+            _tokenCts = new CancellationTokenSource();
+            old.Cancel();
+        }
+
         public FleetStatus GetStatus() => new(true, false, "", "m1", "pc", "https://b.test", 40, null, DateTimeOffset.Now, true, null, null);
-        public Task<FleetRealtimeTicket?> GetRealtimeTicketAsync(CancellationToken cancellationToken = default) =>
-            Task.FromResult<FleetRealtimeTicket?>(new FleetRealtimeTicket(
-                new Uri("ws://localhost/v1/ws"), "jwt-teste", "softprint:m:3", DateTimeOffset.UtcNow.AddHours(12)));
+        public Task<FleetRealtimeTicket?> GetRealtimeTicketAsync(CancellationToken cancellationToken = default)
+        {
+            Interlocked.Increment(ref _ticketCalls);
+            return Task.FromResult(NextTicket());
+        }
         public void SetRealtimeConnected(bool connected) => Connected = connected;
-        public CancellationToken TokenChanged => CancellationToken.None;
+        public CancellationToken TokenChanged => _tokenCts.Token;
 
         public void SetToken(string? token) { }
         public Task ChangeTokenAsync(string? token, CancellationToken cancellationToken = default) => Task.CompletedTask;
