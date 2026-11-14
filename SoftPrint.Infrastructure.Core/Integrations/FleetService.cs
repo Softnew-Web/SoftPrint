@@ -103,15 +103,43 @@ public sealed class FleetService : IFleetService
         }
     }
 
+    public async Task ChangeTokenAsync(string? token, CancellationToken cancellationToken = default)
+    {
+        var newToken = token?.Trim() ?? "";
+        var oldEffective = EffectiveToken;
+        var newEffective = newToken.Length > 0 ? newToken : EnvToken;
+
+        if (oldEffective.Length > 0 && !string.Equals(oldEffective, newEffective, StringComparison.Ordinal))
+        {
+            // Falha aqui não impede a troca: no pior caso o painel mostra a queda do cadastro antigo.
+            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            timeout.CancelAfter(TimeSpan.FromSeconds(5));
+            try
+            {
+                await SendHeartbeatCoreAsync("stopping", oldEffective, timeout.Token).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+            {
+                _logger.LogDebug("Aviso de encerramento com o token antigo passou do tempo");
+            }
+        }
+
+        SetToken(newToken);
+    }
+
     public static int HeartbeatSeconds(SoftPrintFeatureOptions options) =>
         Math.Clamp(options.FleetHeartbeatSeconds, 15, 600);
 
-    public async Task<FleetSendResult> SendHeartbeatAsync(string kind = "heartbeat", CancellationToken cancellationToken = default)
+    public Task<FleetSendResult> SendHeartbeatAsync(string kind = "heartbeat", CancellationToken cancellationToken = default)
     {
         var token = EffectiveToken;
         if (token.Length == 0)
-            return new FleetSendResult(false, "Token do monitoramento não configurado.");
+            return Task.FromResult(new FleetSendResult(false, "Token do monitoramento não configurado."));
+        return SendHeartbeatCoreAsync(kind, token, cancellationToken);
+    }
 
+    private async Task<FleetSendResult> SendHeartbeatCoreAsync(string kind, string token, CancellationToken cancellationToken)
+    {
         var (pending, processing, lastError) = QueueSnapshot();
         var payload = new
         {

@@ -15,7 +15,7 @@ public static class FleetApi
     {
         var token = request?.Token?.Trim() ?? "";
         if (token != KeepToken)
-            fleet.SetToken(token);
+            await fleet.ChangeTokenAsync(token).ConfigureAwait(false);
 
         FleetSendResult? result = null;
         if (fleet.GetStatus().Configured)
