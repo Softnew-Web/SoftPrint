@@ -101,17 +101,27 @@ public sealed class FleetService : IFleetService
 
     public void SetToken(string? token)
     {
+        CancellationTokenSource? previous = null;
         lock (_gate)
         {
+            var before = EffectiveToken;
             _file = _file with { Token = token?.Trim() ?? "" };
             Save();
             _lastOk = null;
             _lastMessage = null;
             _empresa = null;
-            var previous = _tokenChanged;
-            _tokenChanged = new CancellationTokenSource();
-            previous.Cancel();
-            previous.Dispose();
+            if (!string.Equals(before, EffectiveToken, StringComparison.Ordinal))
+            {
+                previous = _tokenChanged;
+                _tokenChanged = new CancellationTokenSource();
+            }
+        }
+
+        if (previous is not null)
+        {
+            try { previous.Cancel(); }
+            catch (Exception ex) { _logger.LogDebug(ex, "Falha ao avisar a troca de token"); }
+            finally { previous.Dispose(); }
         }
     }
 
@@ -134,8 +144,10 @@ public sealed class FleetService : IFleetService
     {
         lock (_gate)
         {
+            var old = _file;
             _file = _file with { PendingUpdateCommandId = commandId, PendingUpdateFromVersion = SoftPrintVersion.Current };
-            Save();
+            try { Save(); }
+            catch { _file = old; throw; }
         }
     }
 
@@ -151,8 +163,10 @@ public sealed class FleetService : IFleetService
     {
         lock (_gate)
         {
+            var old = _file;
             _file = _file with { PendingUpdateCommandId = null, PendingUpdateFromVersion = null };
-            Save();
+            try { Save(); }
+            catch { _file = old; throw; }
         }
     }
 
@@ -160,30 +174,42 @@ public sealed class FleetService : IFleetService
     {
         var token = EffectiveToken;
         if (token.Length == 0) return [];
-        using var client = _httpClientFactory.CreateClient("softprint-fleet");
-        using var request = new HttpRequestMessage(HttpMethod.Get,
-            BaseUrl() + "/api/softprint/agent/commands?machineId=" + Uri.EscapeDataString(MachineId()));
-        AddHeaders(request, token);
-        using var response = await client.SendAsync(request, cancellationToken).ConfigureAwait(false);
-        if (!response.IsSuccessStatusCode) return [];
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
-        var list = new List<FleetCommand>();
         try
         {
+            using var client = _httpClientFactory.CreateClient("softprint-fleet");
+            using var request = new HttpRequestMessage(HttpMethod.Get,
+                BaseUrl() + "/api/softprint/agent/commands?machineId=" + Uri.EscapeDataString(MachineId()));
+            AddHeaders(request, token);
+            using var response = await client.SendAsync(request, cancellationToken).ConfigureAwait(false);
+            if (!response.IsSuccessStatusCode)
+            {
+                _logger.LogDebug("Busca de comandos respondeu {Status}", (int)response.StatusCode);
+                return [];
+            }
+            var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+            var list = new List<FleetCommand>();
             using var doc = JsonDocument.Parse(body);
-            if (doc.RootElement.TryGetProperty("data", out var data) && data.ValueKind == JsonValueKind.Array)
+            if (doc.RootElement.ValueKind == JsonValueKind.Object &&
+                doc.RootElement.TryGetProperty("data", out var data) && data.ValueKind == JsonValueKind.Array)
             {
                 foreach (var item in data.EnumerateArray())
                 {
-                    if (!item.TryGetProperty("id", out var id) || !id.TryGetInt64(out var idValue)) continue;
-                    var type = item.TryGetProperty("type", out var t) ? t.GetString() ?? "" : "";
-                    var by = item.TryGetProperty("requested_by", out var r) ? r.GetString() : null;
-                    list.Add(new FleetCommand(idValue, type, string.IsNullOrWhiteSpace(by) ? null : by));
+                    if (item.ValueKind != JsonValueKind.Object) continue;
+                    if (!item.TryGetProperty("id", out var id) || id.ValueKind != JsonValueKind.Number ||
+                        !id.TryGetInt64(out var idValue)) continue;
+                    if (!item.TryGetProperty("type", out var t) || t.ValueKind != JsonValueKind.String) continue;
+                    var by = item.TryGetProperty("requested_by", out var r) && r.ValueKind == JsonValueKind.String
+                        ? r.GetString() : null;
+                    list.Add(new FleetCommand(idValue, t.GetString() ?? "", string.IsNullOrWhiteSpace(by) ? null : by));
                 }
             }
+            return list;
         }
-        catch (JsonException) { /* resposta inválida = sem comandos */ }
-        return list;
+        catch (Exception ex) when (!cancellationToken.IsCancellationRequested)
+        {
+            _logger.LogDebug(ex, "Falha ao buscar comandos");
+            return [];
+        }
     }
 
     public async Task<bool> SendCommandResultAsync(long commandId, bool ok, string message, CancellationToken cancellationToken = default)
@@ -230,7 +256,13 @@ public sealed class FleetService : IFleetService
             var expires = data.GetProperty("expires_at").GetDateTimeOffset();
             if (string.IsNullOrWhiteSpace(url) || string.IsNullOrWhiteSpace(jwt) || string.IsNullOrWhiteSpace(room))
                 return null;
-            return new FleetRealtimeTicket(new Uri(url!), jwt!, room!, expires);
+            if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) ||
+                (uri.Scheme != "ws" && uri.Scheme != "wss"))
+            {
+                _logger.LogDebug("ws_url inválida no ticket do tempo real");
+                return null;
+            }
+            return new FleetRealtimeTicket(uri, jwt!, room!, expires);
         }
         catch (Exception ex) when (!cancellationToken.IsCancellationRequested)
         {
@@ -369,7 +401,7 @@ public sealed class FleetService : IFleetService
                 {
                     if (data.TryGetProperty("empresa", out var emp) && emp.ValueKind == JsonValueKind.String)
                         empresa = emp.GetString();
-                    if (data.TryGetProperty("pending_commands", out var pc) && pc.TryGetInt32(out var n))
+                    if (data.TryGetProperty("pending_commands", out var pc) && pc.ValueKind == JsonValueKind.Number && pc.TryGetInt32(out var n))
                         pendingCommands = n;
                 }
             }

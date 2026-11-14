@@ -283,7 +283,80 @@ public sealed class FleetServiceTests : IDisposable
         Assert.False(fleet.TokenChanged.IsCancellationRequested);
     }
 
-    private FleetService Create(HttpMessageHandler handler, SoftPrintFeatureOptions? options = null)
+    [Fact]
+    public async Task Heartbeat_NullPendingCommands_IsOkWithZero()
+    {
+        var fleet = Create(new RecordingHandler(HttpStatusCode.OK,
+            """{"status":"success","data":{"ok":true,"pending_commands":null}}"""));
+        fleet.SetToken("sp_1_x000000000000");
+
+        var result = await fleet.SendHeartbeatAsync();
+
+        Assert.True(result.Ok);
+        Assert.Equal(0, result.PendingCommands);
+    }
+
+    [Fact]
+    public async Task Heartbeat_SendsPausedTrue_WhenSettingsArePaused()
+    {
+        var handler = new RecordingHandler(HttpStatusCode.OK, "{}");
+        var fleet = Create(handler, settings: new PausedSettings());
+        fleet.SetToken("sp_1_x000000000000");
+
+        await fleet.SendHeartbeatAsync();
+
+        using var body = JsonDocument.Parse(handler.Requests[0].Body);
+        Assert.True(body.RootElement.GetProperty("paused").GetBoolean());
+    }
+
+    [Fact]
+    public async Task GetCommands_SkipsMalformedItems_KeepsValidOnes()
+    {
+        var handler = new RecordingHandler(HttpStatusCode.OK, "{}");
+        handler.ByPath["/api/softprint/agent/commands"] = (HttpStatusCode.OK,
+            """{"data":[{"id":1,"type":"pause"},{"id":"x","type":"pause"},"lixo",{"id":3,"type":5},{"id":2,"type":"resume"}]}""");
+        var fleet = Create(handler);
+        fleet.SetToken("sp_1_x000000000000");
+
+        var cmds = await fleet.GetCommandsAsync();
+
+        Assert.Equal(new[] { 1L, 2L }, cmds.Select(c => c.Id));
+    }
+
+    [Fact]
+    public async Task GetCommands_NetworkFailure_ReturnsEmpty()
+    {
+        var fleet = Create(new ThrowingHandler());
+        fleet.SetToken("sp_1_x000000000000");
+
+        Assert.Empty(await fleet.GetCommandsAsync());
+    }
+
+    [Fact]
+    public async Task RealtimeTicket_RejectsNonWebSocketUrl()
+    {
+        var handler = new RecordingHandler(HttpStatusCode.OK, "{}");
+        handler.ByPath["/api/softprint/agent/realtime-token"] = (HttpStatusCode.OK,
+            """{"data":{"ws_url":"http://x/v1/ws","token":"jwt","room":"r","expires_at":"2026-11-15T10:00:00+00:00"}}""");
+        var fleet = Create(handler);
+        fleet.SetToken("sp_1_x000000000000");
+
+        Assert.Null(await fleet.GetRealtimeTicketAsync());
+    }
+
+    [Fact]
+    public void TokenChanged_NotCancelled_WhenSameTokenSavedAgain()
+    {
+        var fleet = Create(new RecordingHandler(HttpStatusCode.OK, "{}"));
+        fleet.SetToken("sp_1_x000000000000");
+        var current = fleet.TokenChanged;
+
+        fleet.SetToken(" sp_1_x000000000000 ");
+
+        Assert.False(current.IsCancellationRequested);
+    }
+
+    private FleetService Create(HttpMessageHandler handler, SoftPrintFeatureOptions? options = null, ISettingsRepository? settings = null)
     {
         var paths = new TestPaths(_root);
         var queue = new JobQueueService(
@@ -296,7 +369,20 @@ public sealed class FleetServiceTests : IDisposable
             Options.Create(options ?? new SoftPrintFeatureOptions()),
             new PlatformCapabilities("windows", "winspool", true, true, "registry", false),
             queue,
-            NullLogger<FleetService>.Instance);
+            NullLogger<FleetService>.Instance,
+            settings);
+    }
+
+    private sealed class PausedSettings : ISettingsRepository
+    {
+        public PrintOptions Current { get; } = new() { Paused = true };
+
+        public PrintOptions Update(string printerName, bool simulation, bool paused, ImageFitMode imageFit,
+            int imageScalePercent, PaperSizeKind paperSize, double paperWidthMm, double paperHeightMm,
+            bool paperLandscape, long expectedRevision) => throw new NotSupportedException();
+
+        public PrintOptions UpdateInboxEntries(IReadOnlyList<InboxEntry> entries, long expectedRevision) =>
+            throw new NotSupportedException();
     }
 
     private sealed record TestPaths(string Root) : IAppPaths

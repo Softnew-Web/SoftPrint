@@ -45,7 +45,10 @@ public interface IFleetService
     /// </summary>
     Task ChangeTokenAsync(string? token, CancellationToken cancellationToken = default);
 
-    /// <summary>Cancelado sempre que o token muda (o WebSocket reconecta com o novo).</summary>
+    /// <summary>
+    /// Cancelado sempre que o token muda (o WebSocket reconecta com o novo).
+    /// Leia antes de pedir o ticket do tempo real: um token trocado entre as duas leituras ficaria sem aviso.
+    /// </summary>
     CancellationToken TokenChanged { get; }
 
     /// <param name="kind">"heartbeat" ou "stopping" (SoftPrint fechando normalmente).</param>
