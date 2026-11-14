@@ -60,7 +60,7 @@ public sealed class FleetRealtimeClientTests
             StartDelay = TimeSpan.Zero,
             Connect = async (uri, token, ct) =>
             {
-                var wsc = server.CreateWebSocketClient();
+                var wsc = server!.CreateWebSocketClient();
                 wsc.ConfigureRequest = req => req.Headers.Authorization = "Bearer " + token;
                 return await wsc.ConnectAsync(uri, ct);
             }
@@ -125,7 +125,8 @@ public sealed class FleetRealtimeClientTests
         public int Connects;
         public FleetRealtimeClient Client = null!;
 
-        public static Rig Create(TestServer server, TimeSpan? renewBefore = null, TimeSpan? minRenew = null)
+        public static Rig Create(TestServer? server, TimeSpan? renewBefore = null, TimeSpan? minRenew = null,
+            TimeSpan? renewFallback = null, Func<WebSocket>? fakeSocket = null)
         {
             var rig = new Rig();
             rig.Client = new FleetRealtimeClient(rig.Fleet, rig.Poller, NullLogger<FleetRealtimeClient>.Instance)
@@ -133,6 +134,7 @@ public sealed class FleetRealtimeClientTests
                 StartDelay = TimeSpan.Zero,
                 RenewBefore = renewBefore ?? TimeSpan.FromMinutes(30),
                 MinRenew = minRenew ?? TimeSpan.FromMinutes(1),
+                RenewFallback = renewFallback ?? TimeSpan.FromMinutes(30),
                 Delay = async (d, ct) =>
                 {
                     lock (rig.Delays)
@@ -145,7 +147,8 @@ public sealed class FleetRealtimeClientTests
                 Connect = async (uri, token, ct) =>
                 {
                     Interlocked.Increment(ref rig.Connects);
-                    var wsc = server.CreateWebSocketClient();
+                    if (fakeSocket is not null) return fakeSocket();
+                    var wsc = server!.CreateWebSocketClient();
                     return await wsc.ConnectAsync(uri, ct);
                 }
             };
@@ -277,13 +280,111 @@ public sealed class FleetRealtimeClientTests
         Assert.True(rig.Fleet.TicketCalls >= 2);
     }
 
+    [Fact]
+    public async Task NearExpiry_BelowMinRenew_UsesFallbackInterval()
+    {
+        using var server = NewServer(HoldOpen);
+        var rig = Rig.Create(server, renewBefore: TimeSpan.Zero, renewFallback: TimeSpan.FromMilliseconds(100));
+        rig.Fleet.NextTicket = () => new FleetRealtimeTicket(
+            new Uri("ws://localhost/v1/ws"), "jwt-teste", "softprint:m:3", DateTimeOffset.UtcNow.AddSeconds(-1));
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        await rig.Client.StartAsync(cts.Token);
+        try
+        {
+            await WaitUntil(() => Volatile.Read(ref rig.Connects) >= 2, cts.Token);
+        }
+        finally
+        {
+            await rig.Client.StopAsync(CancellationToken.None);
+        }
+
+        Assert.Equal(0, rig.DelayCount);
+    }
+
+    [Fact]
+    public async Task CancellationWithoutRequest_IsTreatedAsDrop_AndWaits()
+    {
+        var rig = Rig.Create(null, fakeSocket: () => new ThrowingSocket());
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        await rig.Client.StartAsync(cts.Token);
+        try
+        {
+            await WaitUntil(() => rig.DelayCount >= 1, cts.Token);
+        }
+        finally
+        {
+            await rig.Client.StopAsync(CancellationToken.None);
+        }
+
+        var delays = rig.DelaySnapshot();
+        Assert.InRange(delays[0], TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(3));
+        Assert.False(rig.Fleet.Connected);
+    }
+
+    [Fact]
+    public async Task ManySignals_DuringSlowPoll_CoalesceIntoOneMorePoll()
+    {
+        var gate = new TaskCompletionSource();
+        var signalsSent = new TaskCompletionSource();
+        using var server = NewServer(async (ws, ct) =>
+        {
+            var msg = Encoding.UTF8.GetBytes("""{"v":1,"type":"softprint.command","payload":{"id":1}}""");
+            await Task.Delay(100, ct); // deixa a primeira busca (ao conectar) começar e travar
+            for (var i = 0; i < 5; i++) await ws.SendAsync(msg, WebSocketMessageType.Text, true, ct);
+            signalsSent.SetResult();
+            await HoldOpen(ws, ct);
+        });
+        var rig = Rig.Create(server);
+        rig.Poller.FirstPollGate = gate.Task;
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        await rig.Client.StartAsync(cts.Token);
+        try
+        {
+            await rig.Poller.WaitForAsync(1, cts.Token);
+            await signalsSent.Task.WaitAsync(cts.Token);
+            await Task.Delay(300, cts.Token);          // o cliente consome os 5 avisos
+            Assert.Equal(1, rig.Poller.Count);          // busca lenta ainda em andamento
+            gate.SetResult();
+            await rig.Poller.WaitForAsync(2, cts.Token);
+            await Task.Delay(300, cts.Token);
+        }
+        finally
+        {
+            await rig.Client.StopAsync(CancellationToken.None);
+        }
+
+        Assert.Equal(2, rig.Poller.Count);
+    }
+
+    /// <summary>Socket "aberto" cujo receive lança OperationCanceledException sem nenhum cancelamento pedido.</summary>
+    private sealed class ThrowingSocket : WebSocket
+    {
+        public override WebSocketCloseStatus? CloseStatus => null;
+        public override string? CloseStatusDescription => null;
+        public override string? SubProtocol => null;
+        public override WebSocketState State => WebSocketState.Open;
+        public override void Abort() { }
+        public override Task CloseAsync(WebSocketCloseStatus closeStatus, string? statusDescription, CancellationToken cancellationToken) => Task.CompletedTask;
+        public override Task CloseOutputAsync(WebSocketCloseStatus closeStatus, string? statusDescription, CancellationToken cancellationToken) => Task.CompletedTask;
+        public override void Dispose() { }
+        public override Task<WebSocketReceiveResult> ReceiveAsync(ArraySegment<byte> buffer, CancellationToken cancellationToken) =>
+            throw new OperationCanceledException("abortado");
+        public override Task SendAsync(ArraySegment<byte> buffer, WebSocketMessageType messageType, bool endOfMessage, CancellationToken cancellationToken) => Task.CompletedTask;
+    }
+
     private sealed class CountingPoller : IFleetCommandPoller
     {
         private int _count;
-        public Task<int> PollAsync(CancellationToken cancellationToken = default)
+        public int Count => Volatile.Read(ref _count);
+
+        /// <summary>Quando definido, a primeira busca fica pendurada até ele completar (poller lento).</summary>
+        public Task? FirstPollGate { get; set; }
+
+        public async Task<int> PollAsync(CancellationToken cancellationToken = default)
         {
-            Interlocked.Increment(ref _count);
-            return Task.FromResult(0);
+            var n = Interlocked.Increment(ref _count);
+            if (n == 1 && FirstPollGate is { } gate) await gate.WaitAsync(cancellationToken);
+            return 0;
         }
 
         public async Task WaitForAsync(int count, CancellationToken ct)

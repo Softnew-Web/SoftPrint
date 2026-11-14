@@ -23,7 +23,8 @@ public sealed class FleetRealtimeClient(
     private static readonly TimeSpan StableConnection = TimeSpan.FromSeconds(60);
     private static readonly TimeSpan MaxRenew = TimeSpan.FromHours(12);
 
-    private int _pollQueued;
+    private int _pollDirty;
+    private int _pollRunning;
 
     internal TimeSpan StartDelay { get; init; } = TimeSpan.FromSeconds(10);
 
@@ -32,6 +33,9 @@ public sealed class FleetRealtimeClient(
 
     /// <summary>Menor intervalo até a renovação (evita renovar em loop com ticket quase expirado).</summary>
     internal TimeSpan MinRenew { get; init; } = TimeSpan.FromMinutes(1);
+
+    /// <summary>Intervalo de renovação quando o ticket já está perto de expirar (abaixo de <see cref="MinRenew"/>).</summary>
+    internal TimeSpan RenewFallback { get; init; } = TimeSpan.FromMinutes(30);
 
     /// <summary>Espera entre tentativas (trocável nos testes).</summary>
     internal Func<TimeSpan, CancellationToken, Task> Delay { get; init; } = (d, ct) => Task.Delay(d, ct);
@@ -183,7 +187,7 @@ public sealed class FleetRealtimeClient(
     {
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken, tokenChanged);
         var renewIn = ticket.ExpiresAt - DateTimeOffset.UtcNow - RenewBefore;
-        if (renewIn < MinRenew) renewIn = MinRenew;
+        if (renewIn < MinRenew) renewIn = RenewFallback; // hub só valida o JWT no handshake
         if (renewIn > MaxRenew) renewIn = MaxRenew;
         linked.CancelAfter(renewIn);
         var ct = linked.Token;
@@ -247,7 +251,7 @@ public sealed class FleetRealtimeClient(
                 message.SetLength(0);
             }
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
             reason = stoppingToken.IsCancellationRequested ? EndReason.Stopped
                 : tokenChanged.IsCancellationRequested ? EndReason.TokenChanged
@@ -284,14 +288,30 @@ public sealed class FleetRealtimeClient(
     /// <summary>Vários avisos seguidos viram uma busca só (mais uma se chegar outro durante a busca).</summary>
     private void RequestPoll(CancellationToken ct)
     {
-        if (Interlocked.Exchange(ref _pollQueued, 1) == 0) _ = PollSafeAsync(ct);
+        Interlocked.Exchange(ref _pollDirty, 1);
+        if (Interlocked.CompareExchange(ref _pollRunning, 1, 0) == 0) _ = PumpAsync(ct);
+    }
+
+    private async Task PumpAsync(CancellationToken ct)
+    {
+        try
+        {
+            while (Interlocked.Exchange(ref _pollDirty, 0) == 1)
+                await PollSafeAsync(ct).ConfigureAwait(false);
+        }
+        finally
+        {
+            Volatile.Write(ref _pollRunning, 0);
+            // Aviso que chegou entre o último teste do laço e o fim: não pode ficar sem busca.
+            if (Volatile.Read(ref _pollDirty) == 1 && Interlocked.CompareExchange(ref _pollRunning, 1, 0) == 0)
+                _ = PumpAsync(ct);
+        }
     }
 
     private async Task PollSafeAsync(CancellationToken ct)
     {
-        Interlocked.Exchange(ref _pollQueued, 0); // antes da busca: aviso durante ela gera mais uma
         try { await poller.PollAsync(ct).ConfigureAwait(false); }
-        catch (Exception ex) when (!ct.IsCancellationRequested) { log.LogDebug(ex, "Busca de comandos falhou"); }
+        catch (Exception ex) { log.LogDebug(ex, "Busca de comandos falhou"); }
     }
 
     private async Task<bool> DelayAsync(TimeSpan delay, CancellationToken ct)
