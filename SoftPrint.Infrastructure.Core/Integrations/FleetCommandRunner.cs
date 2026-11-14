@@ -28,6 +28,7 @@ public sealed class FleetCommandRunner(
     private const int RememberIds = 200;
     private const int MaxReprint = 50;
     private const int MaxMessage = 500;
+    private const string RestartMessage = "O SoftPrint vai reiniciar para atualizar; envie o comando de novo depois.";
 
     private readonly SemaphoreSlim _gate = new(1, 1);
     private readonly Queue<long> _doneOrder = new();
@@ -42,14 +43,21 @@ public sealed class FleetCommandRunner(
         {
             var commands = await fleet.GetCommandsAsync(cancellationToken).ConfigureAwait(false);
             var ran = 0;
+            var restarting = false;
             foreach (var command in commands)
             {
                 if (!Remember(command.Id)) continue;
+                if (restarting)
+                {
+                    await SendResultAsync(command.Id, false, RestartMessage, cancellationToken).ConfigureAwait(false);
+                    continue;
+                }
                 fleet.NoteCommand(command.Type);
                 var outcome = await ExecuteAsync(command, cancellationToken).ConfigureAwait(false);
                 if (outcome is not null)
-                    await fleet.SendCommandResultAsync(command.Id, outcome.Ok, Clip(outcome.Message), cancellationToken)
-                        .ConfigureAwait(false);
+                    await SendResultAsync(command.Id, outcome.Ok, outcome.Message, cancellationToken).ConfigureAwait(false);
+                else if (command.Type == "update")
+                    restarting = true;
                 ran++;
             }
             return ran;
@@ -68,6 +76,19 @@ public sealed class FleetCommandRunner(
     /// <summary>Depois do reinício: diz ao painel se a atualização pedida por ele funcionou.</summary>
     public async Task ReportPendingUpdateAsync(CancellationToken cancellationToken = default)
     {
+        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            await ReportPendingUpdateCoreAsync(cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    private async Task ReportPendingUpdateCoreAsync(CancellationToken cancellationToken)
+    {
         var pending = fleet.GetPendingUpdate();
         if (pending is null) return;
 
@@ -81,7 +102,7 @@ public sealed class FleetCommandRunner(
             : "A atualização não foi concluída. " +
               (UpdateFailureNotice.Peek() ?? $"O SoftPrint continua na versão {current}.");
 
-        if (await fleet.SendCommandResultAsync(pending.CommandId, ok, Clip(message), cancellationToken).ConfigureAwait(false))
+        if (await SendResultAsync(pending.CommandId, ok, message, cancellationToken).ConfigureAwait(false))
         {
             try { fleet.ClearPendingUpdate(); }
             catch (Exception ex) { log.LogWarning(ex, "Não foi possível limpar o pedido de atualização pendente"); }
@@ -95,11 +116,14 @@ public sealed class FleetCommandRunner(
             switch (command.Type)
             {
                 case "update":
+                    if (fleet.GetPendingUpdate() is not null || updates.GetStatus().InProgress)
+                        return new Outcome(false, "Já existe uma atualização em andamento.");
                     try { fleet.RememberPendingUpdate(command.Id); }
                     catch (Exception ex) { return new Outcome(false, "Não foi possível guardar o pedido de atualização: " + ex.Message); }
                     if (!updates.TryStart(out var error))
                     {
-                        fleet.ClearPendingUpdate();
+                        try { fleet.ClearPendingUpdate(); }
+                        catch (Exception clearEx) { log.LogWarning(clearEx, "Não foi possível desfazer o pedido de atualização pendente"); }
                         return new Outcome(false, error ?? "Não foi possível iniciar a atualização.");
                     }
                     return null; // resultado depois do reinício
@@ -116,9 +140,16 @@ public sealed class FleetCommandRunner(
                     return new Outcome(true, $"Impressão de teste na fila ({job.Reference}).");
                 case "support_package":
                     var path = support.CreateBundle();
-                    var note = "Pedido pelo painel" + (command.RequestedBy is null ? "" : " por " + command.RequestedBy);
-                    var sent = await fleet.UploadSupportPackageAsync(path, note, cancellationToken).ConfigureAwait(false);
-                    return new Outcome(sent.Ok, sent.Message);
+                    try
+                    {
+                        var note = "Pedido pelo painel" + (command.RequestedBy is null ? "" : " por " + command.RequestedBy);
+                        var sent = await fleet.UploadSupportPackageAsync(path, note, cancellationToken).ConfigureAwait(false);
+                        return new Outcome(sent.Ok, sent.Message);
+                    }
+                    finally
+                    {
+                        try { File.Delete(path); } catch { /* ignore */ }
+                    }
                 case "refresh":
                     var hb = await fleet.SendHeartbeatAsync("heartbeat", cancellationToken).ConfigureAwait(false);
                     return new Outcome(hb.Ok, hb.Ok ? "Status enviado." : hb.Message);
@@ -155,8 +186,11 @@ public sealed class FleetCommandRunner(
     private Outcome ReprintFailed()
     {
         var since = DateTimeOffset.UtcNow.AddHours(-24);
-        var failed = jobs.List()
-            .Where(j => j.Status == JobStatus.Uncertain && (j.FinishedAt ?? j.CreatedAt) >= since)
+        var all = jobs.List();
+        var reprinted = all.Where(j => j.ReprintedFromId is Guid).Select(j => j.ReprintedFromId!.Value).ToHashSet();
+        var failed = all
+            .Where(j => j.Status == JobStatus.Uncertain && !reprinted.Contains(j.Id)
+                        && (j.FinishedAt ?? j.CreatedAt) >= since)
             .OrderBy(j => j.FinishedAt ?? j.CreatedAt)
             .Take(MaxReprint)
             .ToList();
@@ -174,6 +208,17 @@ public sealed class FleetCommandRunner(
             }
         }
         return new Outcome(true, $"{ok} trabalho(s) reenviado(s).");
+    }
+
+    /// <summary>Envia o resultado; se o servidor não receber, tenta mais uma vez depois de 2 s.</summary>
+    private async Task<bool> SendResultAsync(long id, bool ok, string message, CancellationToken cancellationToken)
+    {
+        var clipped = Clip(message);
+        if (await fleet.SendCommandResultAsync(id, ok, clipped, cancellationToken).ConfigureAwait(false)) return true;
+        await Task.Delay(2000, cancellationToken).ConfigureAwait(false);
+        if (await fleet.SendCommandResultAsync(id, ok, clipped, cancellationToken).ConfigureAwait(false)) return true;
+        log.LogWarning("Resultado do comando {Id} não chegou ao servidor", id);
+        return false;
     }
 
     private bool Remember(long id)

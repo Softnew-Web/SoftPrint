@@ -20,6 +20,7 @@ public sealed class FleetCommandRunnerTests : IDisposable
     private readonly JsonJobRepository _jobsRepo;
     private readonly JobQueueService _jobs;
     private readonly FleetCommandRunner _runner;
+    private readonly FakeSupport _support;
 
     public FleetCommandRunnerTests()
     {
@@ -31,7 +32,7 @@ public sealed class FleetCommandRunnerTests : IDisposable
         _jobsRepo = new JsonJobRepository(paths);
         _jobs = new JobQueueService(_jobsRepo, new PrintJobFactory(),
             new TemplateRenderer(Options.Create(new SoftPrintFeatureOptions())));
-        _runner = new FleetCommandRunner(_fleet, _updates, _settings, _jobs, new FakeSupport(_root),
+        _runner = new FleetCommandRunner(_fleet, _updates, _settings, _jobs, _support = new FakeSupport(_root),
             NullLogger<FleetCommandRunner>.Instance);
     }
 
@@ -156,6 +157,119 @@ public sealed class FleetCommandRunnerTests : IDisposable
         Assert.True(_fleet.Results[0].Ok);
     }
 
+    [Fact]
+    public async Task ReprintFailed_Twice_DoesNotReprintAgain()
+    {
+        var failed = _jobs.Submit("ref-falhou", "texto");
+        _jobsRepo.TakePending(failed.Id, "imp", 1);
+        _jobsRepo.Finish(failed.Id, JobStatus.Uncertain, "papel acabou");
+
+        _fleet.Queue(new FleetCommand(20, "reprint_failed", null));
+        await _runner.PollAsync();
+        _fleet.Queue(new FleetCommand(21, "reprint_failed", null));
+        await _runner.PollAsync();
+
+        Assert.Equal(2, _jobs.List().Count);
+        Assert.Equal((21L, true, "0 trabalho(s) reenviado(s)."), _fleet.Results[1]);
+    }
+
+    [Fact]
+    public async Task ReprintFailed_IgnoresOlderThan24Hours()
+    {
+        _jobsRepo.Add(new PrintJob(Guid.NewGuid(), "velho", "texto", JobStatus.Uncertain,
+            DateTimeOffset.UtcNow.AddDays(-3), DateTimeOffset.UtcNow.AddDays(-2)));
+        _fleet.Queue(new FleetCommand(22, "reprint_failed", null));
+
+        await _runner.PollAsync();
+
+        Assert.Equal((22L, true, "0 trabalho(s) reenviado(s)."), _fleet.Results[0]);
+        Assert.Single(_jobs.List());
+    }
+
+    [Fact]
+    public async Task Update_WhenRememberThrows_FailsWithoutStarting()
+    {
+        _fleet.ThrowOnRemember = true;
+        _fleet.Queue(new FleetCommand(23, "update", null));
+
+        await _runner.PollAsync();
+
+        Assert.False(_updates.Started);
+        Assert.False(_updates.TryStartCalled);
+        Assert.False(_fleet.Results[0].Ok);
+        Assert.StartsWith("Não foi possível guardar", _fleet.Results[0].Message);
+    }
+
+    [Fact]
+    public async Task PendingUpdate_WhenClearThrows_DoesNotPropagate()
+    {
+        _fleet.PendingUpdate = new FleetPendingUpdate(24, "0.0.1");
+        _fleet.ThrowOnClear = true;
+
+        await _runner.ReportPendingUpdateAsync();
+
+        Assert.Single(_fleet.Results);
+    }
+
+    [Fact]
+    public async Task Update_WithExistingPending_Refuses_AndKeepsPending()
+    {
+        _fleet.PendingUpdate = new FleetPendingUpdate(30, "0.0.1");
+        _fleet.Queue(new FleetCommand(25, "update", null));
+
+        await _runner.PollAsync();
+
+        Assert.False(_updates.TryStartCalled);
+        Assert.Equal((25L, false, "Já existe uma atualização em andamento."), _fleet.Results[0]);
+        Assert.Equal(30, _fleet.PendingUpdate!.CommandId);
+    }
+
+    [Fact]
+    public async Task Update_StopsBatch_RemainingGetRestartFailure()
+    {
+        _fleet.Queue(new FleetCommand(26, "update", null), new FleetCommand(27, "refresh", null));
+
+        await _runner.PollAsync();
+
+        Assert.Equal(0, _fleet.Heartbeats);
+        Assert.Equal(new[] { (27L, false, "O SoftPrint vai reiniciar para atualizar; envie o comando de novo depois.") },
+            _fleet.Results);
+    }
+
+    [Fact]
+    public async Task ThrowingCommand_ReportsClippedMessage()
+    {
+        _support.ThrowMessage = new string('x', 600);
+        _fleet.Queue(new FleetCommand(28, "support_package", null));
+
+        await _runner.PollAsync();
+
+        Assert.False(_fleet.Results[0].Ok);
+        Assert.Equal(500, _fleet.Results[0].Message.Length);
+    }
+
+    [Fact]
+    public async Task SupportPackage_DeletesZipAfterUpload()
+    {
+        _fleet.Queue(new FleetCommand(31, "support_package", null));
+
+        await _runner.PollAsync();
+
+        Assert.False(File.Exists(Path.Combine(_root, "pacote.zip")));
+    }
+
+    [Fact]
+    public async Task ResultThatFailsOnce_IsRetried()
+    {
+        _fleet.FailResultSends = 1;
+        _fleet.Queue(new FleetCommand(29, "pause", null));
+
+        await _runner.PollAsync();
+
+        Assert.Equal(2, _fleet.ResultCalls);
+        Assert.Single(_fleet.Results);
+    }
+
     private sealed record TestPaths(string Root) : IAppPaths
     {
         public string DataRoot => Path.Combine(Root, "data");
@@ -171,8 +285,11 @@ public sealed class FleetCommandRunnerTests : IDisposable
 
     private sealed class FakeSupport(string root) : ISupportBundleService
     {
+        public string? ThrowMessage { get; set; }
+
         public string CreateBundle()
         {
+            if (ThrowMessage is not null) throw new InvalidOperationException(ThrowMessage);
             var path = Path.Combine(root, "pacote.zip");
             File.WriteAllBytes(path, [0x50, 0x4B, 0x03, 0x04]);
             return path;
@@ -182,11 +299,13 @@ public sealed class FleetCommandRunnerTests : IDisposable
     private sealed class FakeUpdates : IUpdateApplier
     {
         public bool Started { get; private set; }
+        public bool TryStartCalled { get; private set; }
         public string? Refuse { get; set; }
         public UpdateApplyStatus Status => GetStatus();
 
         public bool TryStart(out string? error)
         {
+            TryStartCalled = true;
             error = Refuse;
             Started = Refuse is null;
             return Started;
@@ -203,6 +322,10 @@ public sealed class FleetCommandRunnerTests : IDisposable
         public FleetPendingUpdate? PendingUpdate { get; set; }
         public int Heartbeats { get; private set; }
         public string? UploadedNote { get; private set; }
+        public bool ThrowOnRemember { get; set; }
+        public bool ThrowOnClear { get; set; }
+        public int FailResultSends { get; set; }
+        public int ResultCalls { get; private set; }
 
         public void Queue(params FleetCommand[] commands)
         {
@@ -218,6 +341,12 @@ public sealed class FleetCommandRunnerTests : IDisposable
 
         public Task<bool> SendCommandResultAsync(long commandId, bool ok, string message, CancellationToken cancellationToken = default)
         {
+            ResultCalls++;
+            if (FailResultSends > 0)
+            {
+                FailResultSends--;
+                return Task.FromResult(false);
+            }
             Results.Add((commandId, ok, message));
             return Task.FromResult(true);
         }
@@ -234,9 +363,17 @@ public sealed class FleetCommandRunnerTests : IDisposable
             return Task.FromResult(new FleetSendResult(true, "Pacote enviado ao suporte Softnew."));
         }
 
-        public void RememberPendingUpdate(long commandId) => PendingUpdate = new FleetPendingUpdate(commandId, SoftPrintVersion.Current);
+        public void RememberPendingUpdate(long commandId)
+        {
+            if (ThrowOnRemember) throw new IOException("disco cheio");
+            PendingUpdate = new FleetPendingUpdate(commandId, SoftPrintVersion.Current);
+        }
         public FleetPendingUpdate? GetPendingUpdate() => PendingUpdate;
-        public void ClearPendingUpdate() => PendingUpdate = null;
+        public void ClearPendingUpdate()
+        {
+            if (ThrowOnClear) throw new IOException("disco cheio");
+            PendingUpdate = null;
+        }
 
         public FleetStatus GetStatus() => new(true, false, "", "m1", "pc", "https://b.test", 40, null, null, true, null, null);
         public void SetToken(string? token) { }
