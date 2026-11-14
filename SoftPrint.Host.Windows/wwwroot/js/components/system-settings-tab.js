@@ -90,7 +90,9 @@ export function bindSystemSettingsTab({ api }) {
       tone = "text-bad";
     } else if (status.lastOk === true) {
       const when = status.lastSuccessAt ? new Date(status.lastSuccessAt).toLocaleTimeString("pt-BR") : "";
-      text = `Conectado${status.empresa ? ` · ${status.empresa}` : ""}${when ? ` · último contato ${when}` : ""}`;
+      const realtime = status.realtimeConnected ? "tempo real ligado" : "comandos a cada 15 s";
+      const last = status.lastCommand ? ` · último comando ${status.lastCommand}` : "";
+      text = `Conectado${status.empresa ? ` · ${status.empresa}` : ""}${when ? ` · último contato ${when}` : ""} · ${realtime}${last}`;
       tone = "text-sea-glow";
     } else if (status.lastOk === false) {
       text = status.lastMessage || "Sem contato com o monitoramento.";

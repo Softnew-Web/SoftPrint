@@ -34118,7 +34118,9 @@ fn fs_main(in : VertexOutput) -> @location(0) vec4<f32> {
         tone = "text-bad";
       } else if (status.lastOk === true) {
         const when = status.lastSuccessAt ? new Date(status.lastSuccessAt).toLocaleTimeString("pt-BR") : "";
-        text = `Conectado${status.empresa ? ` \xB7 ${status.empresa}` : ""}${when ? ` \xB7 \xFAltimo contato ${when}` : ""}`;
+        const realtime = status.realtimeConnected ? "tempo real ligado" : "comandos a cada 15 s";
+        const last = status.lastCommand ? ` \xB7 \xFAltimo comando ${status.lastCommand}` : "";
+        text = `Conectado${status.empresa ? ` \xB7 ${status.empresa}` : ""}${when ? ` \xB7 \xFAltimo contato ${when}` : ""} \xB7 ${realtime}${last}`;
         tone = "text-sea-glow";
       } else if (status.lastOk === false) {
         text = status.lastMessage || "Sem contato com o monitoramento.";
