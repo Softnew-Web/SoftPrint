@@ -25,6 +25,10 @@ public sealed class FleetRealtimeClient(
 
     private int _pollDirty;
     private int _pollRunning;
+    private int _signals;
+
+    /// <summary>Avisos de comando recebidos (para os testes esperarem por condição).</summary>
+    internal int CommandSignals => Volatile.Read(ref _signals);
 
     internal TimeSpan StartDelay { get; init; } = TimeSpan.FromSeconds(10);
 
@@ -97,6 +101,14 @@ public sealed class FleetRealtimeClient(
 #endif
         // ±50%, no mínimo 1 s.
         return TimeSpan.FromSeconds(Math.Max(1, seconds * (0.5 + r)));
+    }
+
+    /// <summary>Quando renovar a conexão: antes de expirar; abaixo de <paramref name="minRenew"/> usa o fallback; teto de 12 h.</summary>
+    internal static TimeSpan RenewDelay(DateTimeOffset expiresAt, DateTimeOffset now, TimeSpan renewBefore, TimeSpan minRenew, TimeSpan fallback)
+    {
+        var renewIn = expiresAt - now - renewBefore;
+        if (renewIn < minRenew) renewIn = fallback; // hub só valida o JWT no handshake
+        return renewIn > MaxRenew ? MaxRenew : renewIn;
     }
 
     private static TimeSpan OpenWait(int openFailures) =>
@@ -186,17 +198,25 @@ public sealed class FleetRealtimeClient(
     private async Task<Outcome> RunConnectionAsync(FleetRealtimeTicket ticket, CancellationToken tokenChanged, CancellationToken stoppingToken)
     {
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken, tokenChanged);
-        var renewIn = ticket.ExpiresAt - DateTimeOffset.UtcNow - RenewBefore;
-        if (renewIn < MinRenew) renewIn = RenewFallback; // hub só valida o JWT no handshake
-        if (renewIn > MaxRenew) renewIn = MaxRenew;
-        linked.CancelAfter(renewIn);
+        linked.CancelAfter(RenewDelay(ticket.ExpiresAt, DateTimeOffset.UtcNow, RenewBefore, MinRenew, RenewFallback));
         var ct = linked.Token;
 
-        // Falhas até aqui (conectar, assinar) propagam: contam como falha de abertura.
-        using var ws = await Connect(ticket.WsUrl, ticket.Token, ct).ConfigureAwait(false);
+        // Renovação/troca de token durante a abertura não é falha: reconecta na hora.
+        bool Interrupted() => ct.IsCancellationRequested && !stoppingToken.IsCancellationRequested;
+        Outcome InterruptedOutcome() => new(tokenChanged.IsCancellationRequested ? EndReason.TokenChanged : EndReason.Renew, null, TimeSpan.Zero);
+
+        // Outras falhas até aqui (conectar, assinar) propagam: contam como falha de abertura.
+        WebSocket ws;
+        try { ws = await Connect(ticket.WsUrl, ticket.Token, ct).ConfigureAwait(false); }
+        catch (OperationCanceledException) when (Interrupted()) { return InterruptedOutcome(); }
+        using var wsLease = ws;
         var subscribe = JsonSerializer.Serialize(new { action = "subscribe", rooms = new[] { ticket.Room } });
-        await ws.SendAsync(new ArraySegment<byte>(Encoding.UTF8.GetBytes(subscribe)), WebSocketMessageType.Text, true, ct)
-            .ConfigureAwait(false);
+        try
+        {
+            await ws.SendAsync(new ArraySegment<byte>(Encoding.UTF8.GetBytes(subscribe)), WebSocketMessageType.Text, true, ct)
+                .ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (Interrupted()) { return InterruptedOutcome(); }
 
         var clock = Stopwatch.StartNew();
         EndReason? reason = null;
@@ -244,7 +264,11 @@ public sealed class FleetRealtimeClient(
                         break;
                     }
 
-                    if (IsCommandSignal(json)) RequestPoll(stoppingToken);
+                    if (IsCommandSignal(json))
+                    {
+                        Interlocked.Increment(ref _signals);
+                        RequestPoll(stoppingToken);
+                    }
                 }
 
                 skip = false;

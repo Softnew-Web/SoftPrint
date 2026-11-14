@@ -280,25 +280,17 @@ public sealed class FleetRealtimeClientTests
         Assert.True(rig.Fleet.TicketCalls >= 2);
     }
 
-    [Fact]
-    public async Task NearExpiry_BelowMinRenew_UsesFallbackInterval()
+    [Theory]
+    [InlineData(120, 30, 1, 30, 90)]            // normal: 2 h - 30 min de antecedência = 90 min
+    [InlineData(10, 30, 1, 30, 30)]             // abaixo do mínimo: usa o fallback de 30 min
+    [InlineData(-5, 30, 1, 30, 30)]             // ticket já expirado: fallback
+    [InlineData(2000, 30, 1, 30, 720)]          // teto de 12 h
+    public void RenewDelay_ClampsDeterministically(int expiresInMin, int beforeMin, int minMin, int fallbackMin, int expectedMin)
     {
-        using var server = NewServer(HoldOpen);
-        var rig = Rig.Create(server, renewBefore: TimeSpan.Zero, renewFallback: TimeSpan.FromMilliseconds(100));
-        rig.Fleet.NextTicket = () => new FleetRealtimeTicket(
-            new Uri("ws://localhost/v1/ws"), "jwt-teste", "softprint:m:3", DateTimeOffset.UtcNow.AddSeconds(-1));
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-        await rig.Client.StartAsync(cts.Token);
-        try
-        {
-            await WaitUntil(() => Volatile.Read(ref rig.Connects) >= 2, cts.Token);
-        }
-        finally
-        {
-            await rig.Client.StopAsync(CancellationToken.None);
-        }
-
-        Assert.Equal(0, rig.DelayCount);
+        var now = new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
+        var delay = FleetRealtimeClient.RenewDelay(now.AddMinutes(expiresInMin), now,
+            TimeSpan.FromMinutes(beforeMin), TimeSpan.FromMinutes(minMin), TimeSpan.FromMinutes(fallbackMin));
+        Assert.Equal(TimeSpan.FromMinutes(expectedMin), delay);
     }
 
     [Fact]
@@ -325,13 +317,10 @@ public sealed class FleetRealtimeClientTests
     public async Task ManySignals_DuringSlowPoll_CoalesceIntoOneMorePoll()
     {
         var gate = new TaskCompletionSource();
-        var signalsSent = new TaskCompletionSource();
         using var server = NewServer(async (ws, ct) =>
         {
             var msg = Encoding.UTF8.GetBytes("""{"v":1,"type":"softprint.command","payload":{"id":1}}""");
-            await Task.Delay(100, ct); // deixa a primeira busca (ao conectar) começar e travar
             for (var i = 0; i < 5; i++) await ws.SendAsync(msg, WebSocketMessageType.Text, true, ct);
-            signalsSent.SetResult();
             await HoldOpen(ws, ct);
         });
         var rig = Rig.Create(server);
@@ -341,12 +330,12 @@ public sealed class FleetRealtimeClientTests
         try
         {
             await rig.Poller.WaitForAsync(1, cts.Token);
-            await signalsSent.Task.WaitAsync(cts.Token);
-            await Task.Delay(300, cts.Token);          // o cliente consome os 5 avisos
+            await WaitUntil(() => rig.Client.CommandSignals >= 5, cts.Token);   // os 5 avisos já foram consumidos
             Assert.Equal(1, rig.Poller.Count);          // busca lenta ainda em andamento
             gate.SetResult();
             await rig.Poller.WaitForAsync(2, cts.Token);
-            await Task.Delay(300, cts.Token);
+            await WaitUntil(() => rig.Poller.Completed >= 2, cts.Token);
+            await Task.Delay(100, cts.Token);          // só para dar chance de aparecer uma busca a mais (bug); nunca causa falha sozinho
         }
         finally
         {
@@ -376,6 +365,8 @@ public sealed class FleetRealtimeClientTests
     {
         private int _count;
         public int Count => Volatile.Read(ref _count);
+        private int _completed;
+        public int Completed => Volatile.Read(ref _completed);
 
         /// <summary>Quando definido, a primeira busca fica pendurada até ele completar (poller lento).</summary>
         public Task? FirstPollGate { get; set; }
@@ -384,6 +375,7 @@ public sealed class FleetRealtimeClientTests
         {
             var n = Interlocked.Increment(ref _count);
             if (n == 1 && FirstPollGate is { } gate) await gate.WaitAsync(cancellationToken);
+            Interlocked.Increment(ref _completed);
             return 0;
         }
 
