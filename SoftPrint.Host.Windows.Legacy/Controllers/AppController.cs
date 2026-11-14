@@ -237,23 +237,7 @@ namespace SoftPrint.Host.Windows.Legacy.Controllers
         {
             try
             {
-                var paper = _settings.Current;
-                var paperLabel = PrintSurfaceMapper.Describe(paper);
-                var text =
-                    "TESTE GUIADO SOFTPRINT\n" +
-                    "----------------------\n" +
-                    $"Papel: {paperLabel}\n" +
-                    $"Impressora: {paper.PrinterName}\n" +
-                    $"Modo: {(paper.Simulation ? "simulação" : "real")}\n" +
-                    $"Quando: {DateTimeOffset.Now:HH:mm:ss}\n" +
-                    "\n" +
-                    "Se o papel estiver em Padrão (200×70),\n" +
-                    "esta etiqueta deve caber na área imprimível.";
-                var result = _jobs.Submit(
-                    reference: "guia-" + DateTimeOffset.Now.ToString("HHmmss"),
-                    text: text,
-                    jobType: "default",
-                    templateName: null);
+                var result = GuidedTestPrint.Submit(_jobs, _settings);
                 return Accepted($"/api/jobs/{result.Id}", result.ToDto());
             }
             catch (Exception ex)
