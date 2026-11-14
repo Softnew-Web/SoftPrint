@@ -129,6 +129,7 @@ public static class SoftPrintHostExtensions
         services.AddSingleton<IFleetService, FleetService>();
         services.AddSingleton<FleetCommandRunner>();
         services.AddSingleton<IFleetCommandPoller>(sp => sp.GetRequiredService<FleetCommandRunner>());
+        services.AddSingleton<IPendingUpdateReporter>(sp => sp.GetRequiredService<FleetCommandRunner>());
         services.AddSingleton<IPrintStrategy, SimulationPrintStrategy>();
         services.AddSingleton<PrintStrategyResolver>();
         services.AddSingleton<JobQueueService>();

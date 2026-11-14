@@ -13,6 +13,12 @@ public interface IFleetCommandPoller
     Task<int> PollAsync(CancellationToken cancellationToken = default);
 }
 
+/// <summary>Quem informa ao painel o resultado da atualização depois do reinício.</summary>
+public interface IPendingUpdateReporter
+{
+    Task ReportPendingUpdateAsync(CancellationToken cancellationToken = default);
+}
+
 /// <summary>
 /// Executa os comandos do painel: um por vez, cada id uma vez só. Lista fechada de tipos.
 /// O resultado do "update" sai depois do reinício (<see cref="ReportPendingUpdateAsync"/>).
@@ -23,7 +29,7 @@ public sealed class FleetCommandRunner(
     SettingsService settings,
     JobQueueService jobs,
     ISupportBundleService support,
-    ILogger<FleetCommandRunner> log) : IFleetCommandPoller
+    ILogger<FleetCommandRunner> log) : IFleetCommandPoller, IPendingUpdateReporter
 {
     private const int RememberIds = 200;
     private const int MaxReprint = 50;

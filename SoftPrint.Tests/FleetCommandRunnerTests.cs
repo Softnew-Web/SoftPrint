@@ -339,6 +339,7 @@ public sealed class FleetCommandRunnerTests : IDisposable
         public List<(long Id, bool Ok, string Message)> Results { get; } = [];
         public FleetPendingUpdate? PendingUpdate { get; set; }
         public int Heartbeats { get; private set; }
+        public int PendingCommandsInHeartbeat { get; set; }
         public string? UploadedNote { get; private set; }
         public bool ThrowOnRemember { get; set; }
         public bool ThrowOnClear { get; set; }
@@ -372,7 +373,7 @@ public sealed class FleetCommandRunnerTests : IDisposable
         public Task<FleetSendResult> SendHeartbeatAsync(string kind = "heartbeat", CancellationToken cancellationToken = default)
         {
             Heartbeats++;
-            return Task.FromResult(new FleetSendResult(true, "ok"));
+            return Task.FromResult(new FleetSendResult(true, "ok", null, PendingCommandsInHeartbeat));
         }
 
         public Task<FleetSendResult> UploadSupportPackageAsync(string zipPath, string? note, CancellationToken cancellationToken = default)

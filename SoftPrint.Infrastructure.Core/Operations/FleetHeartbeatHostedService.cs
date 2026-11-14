@@ -17,18 +17,24 @@ namespace SoftPrint.Infrastructure.Operations;
 /// </summary>
 public sealed class FleetHeartbeatHostedService(
     IFleetService fleet,
-    FleetCommandRunner runner,
+    IFleetCommandPoller poller,
+    IPendingUpdateReporter updateReporter,
     JobQueueService jobs,
     ISettingsRepository settings,
     IOptions<SoftPrintFeatureOptions> options,
     ILogger<FleetHeartbeatHostedService> log) : BackgroundService
 {
     public static readonly TimeSpan FallbackInterval = TimeSpan.FromSeconds(15);
-    private static readonly TimeSpan Tick = TimeSpan.FromSeconds(2);
     private static readonly TimeSpan Settle = TimeSpan.FromSeconds(2);
     private static readonly TimeSpan MinGap = TimeSpan.FromSeconds(5);
 
+    // Ajustáveis só pelos testes.
+    internal TimeSpan Tick { get; init; } = TimeSpan.FromSeconds(2);
+    internal TimeSpan StartDelay { get; init; } = TimeSpan.FromSeconds(5);
+    internal TimeSpan? IntervalOverride { get; init; }
+
     private volatile bool _announced;
+    private int _commandWorkRunning;
 
     public static bool ShouldSend(DateTimeOffset now, DateTimeOffset? lastSent, DateTimeOffset? changedAt, TimeSpan interval)
     {
@@ -40,13 +46,12 @@ public sealed class FleetHeartbeatHostedService(
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        try { await Task.Delay(TimeSpan.FromSeconds(5), stoppingToken).ConfigureAwait(false); }
+        try { await Task.Delay(StartDelay, stoppingToken).ConfigureAwait(false); }
         catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { return; }
 
         DateTimeOffset? lastSent = null;
         DateTimeOffset? changedAt = null;
         string? lastFingerprint = null;
-        var reportedUpdate = false;
 
         while (!stoppingToken.IsCancellationRequested)
         {
@@ -60,7 +65,7 @@ public sealed class FleetHeartbeatHostedService(
                 lastFingerprint = fingerprint;
 
                 var configured = TimeSpan.FromSeconds(FleetService.HeartbeatSeconds(options.Value));
-                var interval = status.RealtimeConnected ? configured : (configured < FallbackInterval ? configured : FallbackInterval);
+                var interval = IntervalOverride ?? (status.RealtimeConnected ? configured : FallbackInterval);
 
                 if (ShouldSend(now, lastSent, changedAt, interval))
                 {
@@ -72,13 +77,9 @@ public sealed class FleetHeartbeatHostedService(
                         if (result.Ok)
                         {
                             _announced = true;
-                            if (!reportedUpdate)
-                            {
-                                reportedUpdate = true;
-                                await runner.ReportPendingUpdateAsync(stoppingToken).ConfigureAwait(false);
-                            }
-                            if (result.PendingCommands > 0)
-                                await runner.PollAsync(stoppingToken).ConfigureAwait(false);
+                            var needReport = HasPendingUpdate();
+                            var needPoll = result.PendingCommands > 0;
+                            if (needReport || needPoll) StartCommandWork(needReport, needPoll, stoppingToken);
                         }
                     }
                     catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { return; }
@@ -92,6 +93,38 @@ public sealed class FleetHeartbeatHostedService(
             try { await Task.Delay(Tick, stoppingToken).ConfigureAwait(false); }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { return; }
         }
+    }
+
+    private bool HasPendingUpdate()
+    {
+        try { return fleet.GetPendingUpdate() is not null; }
+        catch { return false; }
+    }
+
+    /// <summary>
+    /// Comando pode demorar (pacote de suporte sobe por minutos): roda em segundo plano para o heartbeat
+    /// não parar. Já rodando? Ignora; o próximo heartbeat vê "pending_commands" de novo.
+    /// </summary>
+    private void StartCommandWork(bool needReport, bool needPoll, CancellationToken ct)
+    {
+        if (Interlocked.CompareExchange(ref _commandWorkRunning, 1, 0) != 0) return;
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                if (needReport) await updateReporter.ReportPendingUpdateAsync(ct).ConfigureAwait(false);
+                if (needPoll) await poller.PollAsync(ct).ConfigureAwait(false);
+            }
+            catch (Exception ex) when (!ct.IsCancellationRequested)
+            {
+                log.LogDebug(ex, "Comandos do monitoramento falharam");
+            }
+            catch (OperationCanceledException) { /* encerrando */ }
+            finally
+            {
+                Volatile.Write(ref _commandWorkRunning, 0);
+            }
+        });
     }
 
     /// <summary>O que o painel mostra da fila: mudou, manda heartbeat.</summary>
