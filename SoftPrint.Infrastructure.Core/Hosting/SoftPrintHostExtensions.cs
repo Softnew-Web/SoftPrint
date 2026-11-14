@@ -54,29 +54,58 @@ public static class SoftPrintHostExtensions
         return services;
     }
 
+    /// <summary>
+    /// Windows 7/8 (SoftPrint Legacy, .NET Core 3.1): o SChannel só usa TLS 1.0 se o app não pedir
+    /// outra versão, e o ServicePointManager não vale para o HttpClient do .NET Core. Sem pedir
+    /// TLS 1.2 aqui, GitHub (atualizações) e o monitoramento recusam a conexão.
+    /// </summary>
+    internal static IHttpClientBuilder WithLegacyTls(this IHttpClientBuilder builder)
+    {
+#if NETCOREAPP3_1
+        if (NeedsExplicitTls12())
+        {
+            builder.ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
+            {
+                SslProtocols = System.Security.Authentication.SslProtocols.Tls12
+                    | System.Security.Authentication.SslProtocols.Tls11
+                    | System.Security.Authentication.SslProtocols.Tls
+            });
+        }
+#endif
+        return builder;
+    }
+
+    /// <summary>Windows anterior ao 8.1 (6.3), onde o TLS 1.2 vem desligado por padrão para clientes.</summary>
+    internal static bool NeedsExplicitTls12() => NeedsExplicitTls12(
+        System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(System.Runtime.InteropServices.OSPlatform.Windows),
+        Environment.OSVersion.Version);
+
+    internal static bool NeedsExplicitTls12(bool isWindows, Version osVersion) =>
+        isWindows && osVersion < new Version(6, 3);
+
     public static IServiceCollection AddSoftPrintCore(this IServiceCollection services)
     {
-        services.AddHttpClient("softprintthook");
+        services.AddHttpClient("softprintthook").WithLegacyTls();
         services.AddHttpClient("softprint-update", client =>
         {
             client.Timeout = TimeSpan.FromSeconds(12);
-        });
+        }).WithLegacyTls();
         services.AddHttpClient("softprint-update-download", client =>
         {
             client.Timeout = TimeSpan.FromMinutes(30);
-        });
+        }).WithLegacyTls();
         services.AddHttpClient("softprint-telemetry", client =>
         {
             client.Timeout = TimeSpan.FromSeconds(8);
-        });
+        }).WithLegacyTls();
         services.AddHttpClient("softprint-fleet", client =>
         {
             client.Timeout = TimeSpan.FromSeconds(15);
-        });
+        }).WithLegacyTls();
         services.AddHttpClient("softprint-fleet-upload", client =>
         {
             client.Timeout = TimeSpan.FromMinutes(3);
-        });
+        }).WithLegacyTls();
         services.AddSingleton<SoftPrint.Infrastructure.Operations.InMemoryRecentErrorLog>();
         services.AddSingleton<IRecentErrorLog>(sp => sp.GetRequiredService<SoftPrint.Infrastructure.Operations.InMemoryRecentErrorLog>());
         services.AddSingleton<IAppPaths, UserAppPaths>();

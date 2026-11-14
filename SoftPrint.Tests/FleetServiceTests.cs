@@ -131,6 +131,61 @@ public sealed class FleetServiceTests : IDisposable
         Assert.Single(handler.Requests);
     }
 
+    [Fact]
+    public async Task ChangeToken_AnnouncesStoppingWithOldToken_ThenSwitches()
+    {
+        var handler = new RecordingHandler(HttpStatusCode.OK, "{}");
+        var fleet = Create(handler);
+        fleet.SetToken("sp_1_antigo0000000");
+
+        await fleet.ChangeTokenAsync("sp_2_novo000000000");
+
+        var req = Assert.Single(handler.Requests);
+        Assert.Equal("sp_1_antigo0000000", req.Token);
+        using var body = JsonDocument.Parse(req.Body);
+        Assert.Equal("stopping", body.RootElement.GetProperty("kind").GetString());
+
+        await fleet.SendHeartbeatAsync();
+        Assert.Equal("sp_2_novo000000000", handler.Requests[^1].Token);
+    }
+
+    [Fact]
+    public async Task ChangeToken_ClearingToken_AnnouncesStopping_AndSameTokenSendsNothing()
+    {
+        var handler = new RecordingHandler(HttpStatusCode.OK, "{}");
+        var fleet = Create(handler);
+        fleet.SetToken("sp_1_mesmo00000000");
+
+        await fleet.ChangeTokenAsync(" sp_1_mesmo00000000 ");
+        Assert.Empty(handler.Requests);
+
+        await fleet.ChangeTokenAsync("");
+        var req = Assert.Single(handler.Requests);
+        Assert.Equal("sp_1_mesmo00000000", req.Token);
+        Assert.False(fleet.GetStatus().Configured);
+    }
+
+    [Fact]
+    public async Task ChangeToken_StillSwitches_WhenServerIsUnreachable()
+    {
+        var fleet = Create(new ThrowingHandler());
+        fleet.SetToken("sp_1_antigo0000000");
+
+        await fleet.ChangeTokenAsync("sp_2_novo000000000");
+
+        Assert.Equal("sp_2_n…0000", fleet.GetStatus().TokenHint);
+    }
+
+    [Theory]
+    [InlineData(true, "6.1.7601", true)]   // Windows 7 SP1
+    [InlineData(true, "6.2.9200", true)]   // Windows 8
+    [InlineData(true, "6.3.9600", false)]  // Windows 8.1
+    [InlineData(true, "10.0.19045", false)]
+    [InlineData(false, "5.15.0", false)]   // Linux
+    public void LegacyTls_OnlyForWindowsBefore81(bool isWindows, string version, bool expected) =>
+        Assert.Equal(expected,
+            SoftPrint.Infrastructure.Hosting.SoftPrintHostExtensions.NeedsExplicitTls12(isWindows, Version.Parse(version)));
+
     private FleetService Create(HttpMessageHandler handler, SoftPrintFeatureOptions? options = null)
     {
         var paths = new TestPaths(_root);

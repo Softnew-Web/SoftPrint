@@ -28,6 +28,12 @@ public interface IFleetService
     /// <summary>Grava o token (vazio apaga o token salvo; o do .env continua valendo).</summary>
     void SetToken(string? token);
 
+    /// <summary>
+    /// Troca o token como <see cref="SetToken"/>, mas antes avisa "stopping" com o token antigo:
+    /// sem isso o cadastro antigo da máquina para de receber sinal e o painel acusa queda.
+    /// </summary>
+    Task ChangeTokenAsync(string? token, CancellationToken cancellationToken = default);
+
     /// <param name="kind">"heartbeat" ou "stopping" (SoftPrint fechando normalmente).</param>
     Task<FleetSendResult> SendHeartbeatAsync(string kind = "heartbeat", CancellationToken cancellationToken = default);
 
