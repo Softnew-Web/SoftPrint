@@ -91,4 +91,21 @@ public static class UpdateFailureNotice
         if (chunks.Count == 0) return null;
         return string.Join(Environment.NewLine + Environment.NewLine, chunks.Distinct());
     }
+
+    /// <summary>Lê os avisos pendentes sem apagar (a tela ainda vai mostrá-los ao usuário).</summary>
+    public static string? Peek()
+    {
+        var chunks = new List<string>();
+        foreach (var path in new[] { PersistentErrorPath, ScriptErrorPath, TempErrorPath })
+        {
+            try
+            {
+                if (!File.Exists(path)) continue;
+                var body = File.ReadAllText(path).Trim();
+                if (body.Length > 0) chunks.Add(body);
+            }
+            catch { /* ignore */ }
+        }
+        return chunks.Count == 0 ? null : string.Join(" ", chunks.Distinct());
+    }
 }

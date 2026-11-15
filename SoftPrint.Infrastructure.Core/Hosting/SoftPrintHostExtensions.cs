@@ -127,6 +127,9 @@ public static class SoftPrintHostExtensions
         services.AddSingleton<ITelemetryService, SoftPrint.Infrastructure.Integrations.TelemetryService>();
         services.AddSingleton<ISupportBundleService, SoftPrint.Infrastructure.Operations.SupportBundleService>();
         services.AddSingleton<IFleetService, FleetService>();
+        services.AddSingleton<FleetCommandRunner>();
+        services.AddSingleton<IFleetCommandPoller>(sp => sp.GetRequiredService<FleetCommandRunner>());
+        services.AddSingleton<IPendingUpdateReporter>(sp => sp.GetRequiredService<FleetCommandRunner>());
         services.AddSingleton<IPrintStrategy, SimulationPrintStrategy>();
         services.AddSingleton<PrintStrategyResolver>();
         services.AddSingleton<JobQueueService>();
@@ -146,6 +149,7 @@ public static class SoftPrintHostExtensions
         services.AddHostedService<SoftPrint.Infrastructure.Operations.QueueHealthHostedService>();
         services.AddHostedService<SoftPrint.Infrastructure.Operations.TelemetryHeartbeatHostedService>();
         services.AddHostedService<SoftPrint.Infrastructure.Operations.FleetHeartbeatHostedService>();
+        services.AddHostedService<FleetRealtimeClient>();
         return services;
     }
 

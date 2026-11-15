@@ -5,6 +5,7 @@ using Microsoft.Extensions.Options;
 using SoftPrint.Application;
 using SoftPrint.Application.Abstractions;
 using SoftPrint.Application.Services;
+using SoftPrint.Domain;
 using SoftPrint.Infrastructure.Integrations;
 using SoftPrint.Infrastructure.Persistence;
 using Xunit;
@@ -186,7 +187,193 @@ public sealed class FleetServiceTests : IDisposable
         Assert.Equal(expected,
             SoftPrint.Infrastructure.Hosting.SoftPrintHostExtensions.NeedsExplicitTls12(isWindows, Version.Parse(version)));
 
-    private FleetService Create(HttpMessageHandler handler, SoftPrintFeatureOptions? options = null)
+    [Fact]
+    public async Task Heartbeat_ReadsPendingCommands_AndSendsPaused()
+    {
+        var handler = new RecordingHandler(HttpStatusCode.OK,
+            """{"status":"success","data":{"ok":true,"pending_commands":2}}""");
+        var fleet = Create(handler);
+        fleet.SetToken("sp_1_x000000000000");
+
+        var result = await fleet.SendHeartbeatAsync();
+
+        Assert.Equal(2, result.PendingCommands);
+        using var body = JsonDocument.Parse(handler.Requests[0].Body);
+        Assert.False(body.RootElement.GetProperty("paused").GetBoolean());
+    }
+
+    [Fact]
+    public async Task GetCommands_ParsesList_WithMachineId()
+    {
+        var handler = new RecordingHandler(HttpStatusCode.OK, "{}");
+        handler.ByPath["/api/softprint/agent/commands"] = (HttpStatusCode.OK,
+            """{"status":"success","data":[{"id":7,"type":"pause","requested_by":"ana"},{"id":8,"type":"refresh","requested_by":""}]}""");
+        var fleet = Create(handler);
+        fleet.SetToken("sp_1_x000000000000");
+
+        var cmds = await fleet.GetCommandsAsync();
+
+        Assert.Equal(new[] { 7L, 8L }, cmds.Select(c => c.Id));
+        Assert.Equal("pause", cmds[0].Type);
+        Assert.Equal("ana", cmds[0].RequestedBy);
+        Assert.Contains("machineId=" + fleet.GetStatus().MachineId, handler.Requests[0].Url);
+    }
+
+    [Fact]
+    public async Task SendCommandResult_PostsOkAndMessage()
+    {
+        var handler = new RecordingHandler(HttpStatusCode.OK, """{"status":"success","data":{}}""");
+        var fleet = Create(handler);
+        fleet.SetToken("sp_1_x000000000000");
+
+        Assert.True(await fleet.SendCommandResultAsync(7, true, "Fila pausada"));
+
+        var req = Assert.Single(handler.Requests);
+        Assert.EndsWith("/api/softprint/agent/commands/7/result", req.Url);
+        using var body = JsonDocument.Parse(req.Body);
+        Assert.True(body.RootElement.GetProperty("ok").GetBoolean());
+        Assert.Equal("Fila pausada", body.RootElement.GetProperty("message").GetString());
+        Assert.Equal(fleet.GetStatus().MachineId, body.RootElement.GetProperty("machineId").GetString());
+    }
+
+    [Fact]
+    public async Task RealtimeTicket_ParsesUrlTokenAndExpiry_OrNullWhenUnavailable()
+    {
+        var handler = new RecordingHandler(HttpStatusCode.OK, "{}");
+        handler.ByPath["/api/softprint/agent/realtime-token"] = (HttpStatusCode.OK,
+            """{"status":"success","data":{"ws_url":"wss://hub.test/v1/ws","token":"jwt","room":"softprint:m:3","expires_at":"2026-11-15T10:00:00+00:00"}}""");
+        var fleet = Create(handler);
+        fleet.SetToken("sp_1_x000000000000");
+
+        var ticket = await fleet.GetRealtimeTicketAsync();
+
+        Assert.NotNull(ticket);
+        Assert.Equal(new Uri("wss://hub.test/v1/ws"), ticket!.WsUrl);
+        Assert.Equal("softprint:m:3", ticket.Room);
+        Assert.Equal(new DateTimeOffset(2026, 11, 15, 10, 0, 0, TimeSpan.Zero), ticket.ExpiresAt);
+
+        handler.ByPath["/api/softprint/agent/realtime-token"] = (HttpStatusCode.ServiceUnavailable, """{"message":"off"}""");
+        Assert.Null(await fleet.GetRealtimeTicketAsync());
+    }
+
+    [Fact]
+    public void PendingUpdate_SurvivesRestart_UntilCleared()
+    {
+        var fleet = Create(new RecordingHandler(HttpStatusCode.OK, "{}"));
+        fleet.RememberPendingUpdate(42);
+
+        var again = Create(new RecordingHandler(HttpStatusCode.OK, "{}"));
+        var pending = again.GetPendingUpdate();
+        Assert.Equal(42, pending!.CommandId);
+        Assert.Equal(SoftPrintVersion.Current, pending.FromVersion);
+
+        again.ClearPendingUpdate();
+        Assert.Null(Create(new RecordingHandler(HttpStatusCode.OK, "{}")).GetPendingUpdate());
+    }
+
+    [Fact]
+    public void TokenChanged_IsCancelled_WhenTokenIsSet()
+    {
+        var fleet = Create(new RecordingHandler(HttpStatusCode.OK, "{}"));
+        var before = fleet.TokenChanged;
+
+        fleet.SetToken("sp_1_x000000000000");
+
+        Assert.True(before.IsCancellationRequested);
+        Assert.False(fleet.TokenChanged.IsCancellationRequested);
+    }
+
+    [Fact]
+    public async Task Heartbeat_NullPendingCommands_IsOkWithZero()
+    {
+        var fleet = Create(new RecordingHandler(HttpStatusCode.OK,
+            """{"status":"success","data":{"ok":true,"pending_commands":null}}"""));
+        fleet.SetToken("sp_1_x000000000000");
+
+        var result = await fleet.SendHeartbeatAsync();
+
+        Assert.True(result.Ok);
+        Assert.Equal(0, result.PendingCommands);
+    }
+
+    [Fact]
+    public async Task Heartbeat_SendsPausedTrue_WhenSettingsArePaused()
+    {
+        var handler = new RecordingHandler(HttpStatusCode.OK, "{}");
+        var fleet = Create(handler, settings: new PausedSettings());
+        fleet.SetToken("sp_1_x000000000000");
+
+        await fleet.SendHeartbeatAsync();
+
+        using var body = JsonDocument.Parse(handler.Requests[0].Body);
+        Assert.True(body.RootElement.GetProperty("paused").GetBoolean());
+    }
+
+    [Fact]
+    public async Task GetCommands_SkipsMalformedItems_KeepsValidOnes()
+    {
+        var handler = new RecordingHandler(HttpStatusCode.OK, "{}");
+        handler.ByPath["/api/softprint/agent/commands"] = (HttpStatusCode.OK,
+            """{"data":[{"id":1,"type":"pause"},{"id":"x","type":"pause"},"lixo",{"id":3,"type":5},{"id":2,"type":"resume"}]}""");
+        var fleet = Create(handler);
+        fleet.SetToken("sp_1_x000000000000");
+
+        var cmds = await fleet.GetCommandsAsync();
+
+        Assert.Equal(new[] { 1L, 2L }, cmds.Select(c => c.Id));
+    }
+
+    [Fact]
+    public async Task GetCommands_NetworkFailure_ReturnsEmpty()
+    {
+        var fleet = Create(new ThrowingHandler());
+        fleet.SetToken("sp_1_x000000000000");
+
+        Assert.Empty(await fleet.GetCommandsAsync());
+    }
+
+    [Fact]
+    public async Task RealtimeTicket_RejectsNonWebSocketUrl()
+    {
+        var handler = new RecordingHandler(HttpStatusCode.OK, "{}");
+        handler.ByPath["/api/softprint/agent/realtime-token"] = (HttpStatusCode.OK,
+            """{"data":{"ws_url":"http://x/v1/ws","token":"jwt","room":"r","expires_at":"2026-11-15T10:00:00+00:00"}}""");
+        var fleet = Create(handler);
+        fleet.SetToken("sp_1_x000000000000");
+
+        Assert.Null(await fleet.GetRealtimeTicketAsync());
+    }
+
+    [Fact]
+    public void TokenChanged_NotCancelled_WhenSameTokenSavedAgain()
+    {
+        var fleet = Create(new RecordingHandler(HttpStatusCode.OK, "{}"));
+        fleet.SetToken("sp_1_x000000000000");
+        var current = fleet.TokenChanged;
+
+        fleet.SetToken(" sp_1_x000000000000 ");
+
+        Assert.False(current.IsCancellationRequested);
+    }
+
+    [Theory]
+    // agora=100s; último envio; mudança em; intervalo; esperado
+    [InlineData(100, 59, null, 40, true)]   // intervalo venceu
+    [InlineData(100, 70, null, 40, false)]  // dentro do intervalo, sem mudança
+    [InlineData(100, 90, 97, 40, true)]     // mudou há 3 s e o último envio foi há 10 s
+    [InlineData(100, 90, 99, 40, false)]    // mudou há 1 s: espera juntar mudanças (2 s)
+    [InlineData(100, 97, 95, 40, false)]    // último envio há 3 s: respeita 5 s
+    [InlineData(100, 85, null, 15, true)]    // sem WebSocket: 15 s
+    public void HeartbeatSchedule(int now, int lastSent, int? changedAt, int interval, bool expected)
+    {
+        var t0 = DateTimeOffset.UnixEpoch;
+        Assert.Equal(expected, SoftPrint.Infrastructure.Operations.FleetHeartbeatHostedService.ShouldSend(
+            t0.AddSeconds(now), t0.AddSeconds(lastSent),
+            changedAt is null ? null : t0.AddSeconds(changedAt.Value),
+            TimeSpan.FromSeconds(interval)));
+    }
+
+    private FleetService Create(HttpMessageHandler handler, SoftPrintFeatureOptions? options = null, ISettingsRepository? settings = null)
     {
         var paths = new TestPaths(_root);
         var queue = new JobQueueService(
@@ -199,7 +386,20 @@ public sealed class FleetServiceTests : IDisposable
             Options.Create(options ?? new SoftPrintFeatureOptions()),
             new PlatformCapabilities("windows", "winspool", true, true, "registry", false),
             queue,
-            NullLogger<FleetService>.Instance);
+            NullLogger<FleetService>.Instance,
+            settings);
+    }
+
+    private sealed class PausedSettings : ISettingsRepository
+    {
+        public PrintOptions Current { get; } = new() { Paused = true };
+
+        public PrintOptions Update(string printerName, bool simulation, bool paused, ImageFitMode imageFit,
+            int imageScalePercent, PaperSizeKind paperSize, double paperWidthMm, double paperHeightMm,
+            bool paperLandscape, long expectedRevision) => throw new NotSupportedException();
+
+        public PrintOptions UpdateInboxEntries(IReadOnlyList<InboxEntry> entries, long expectedRevision) =>
+            throw new NotSupportedException();
     }
 
     private sealed record TestPaths(string Root) : IAppPaths
@@ -218,6 +418,7 @@ public sealed class FleetServiceTests : IDisposable
     private sealed class RecordingHandler(HttpStatusCode status, string body) : HttpMessageHandler
     {
         public List<Captured> Requests { get; } = [];
+        public Dictionary<string, (HttpStatusCode Status, string Body)> ByPath { get; } = new();
 
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
@@ -227,7 +428,8 @@ public sealed class FleetServiceTests : IDisposable
                 request.Headers.TryGetValues("X-SoftPrint-Token", out var t) ? t.FirstOrDefault() : null,
                 request.Content?.Headers.ContentType?.ToString() ?? "",
                 content));
-            return new HttpResponseMessage(status) { Content = new StringContent(body) };
+            var (s, b) = ByPath.TryGetValue(request.RequestUri!.AbsolutePath, out var r) ? r : (status, body);
+            return new HttpResponseMessage(s) { Content = new StringContent(b) };
         }
     }
 

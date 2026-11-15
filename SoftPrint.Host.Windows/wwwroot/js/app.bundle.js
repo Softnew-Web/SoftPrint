@@ -34101,6 +34101,21 @@ fn fs_main(in : VertexOutput) -> @location(0) vec4<f32> {
       }
       await Promise.all([loadDiagnose(), loadFleet()]);
     }
+    const COMMAND_LABELS = {
+      update: "atualizar",
+      pause: "pausar",
+      resume: "retomar",
+      reprint_failed: "reimprimir com erro",
+      test_print: "impress\xE3o de teste",
+      support_package: "pacote de suporte",
+      refresh: "status"
+    };
+    function describeCommand(raw) {
+      const cut = raw.indexOf(" ");
+      if (cut < 0) return COMMAND_LABELS[raw] || raw;
+      const kind = raw.slice(cut + 1);
+      return `${raw.slice(0, cut)} ${COMMAND_LABELS[kind] || kind}`;
+    }
     function renderFleet(status, result) {
       const el = byId("fleetStatus");
       if (!el || !status) return;
@@ -34118,7 +34133,9 @@ fn fs_main(in : VertexOutput) -> @location(0) vec4<f32> {
         tone = "text-bad";
       } else if (status.lastOk === true) {
         const when = status.lastSuccessAt ? new Date(status.lastSuccessAt).toLocaleTimeString("pt-BR") : "";
-        text = `Conectado${status.empresa ? ` \xB7 ${status.empresa}` : ""}${when ? ` \xB7 \xFAltimo contato ${when}` : ""}`;
+        const realtime = status.realtimeConnected ? "tempo real ligado" : "comandos a cada 15 s";
+        const last = status.lastCommand ? ` \xB7 \xFAltimo comando ${describeCommand(status.lastCommand)}` : "";
+        text = `Conectado${status.empresa ? ` \xB7 ${status.empresa}` : ""}${when ? ` \xB7 \xFAltimo contato ${when}` : ""} \xB7 ${realtime}${last}`;
         tone = "text-sea-glow";
       } else if (status.lastOk === false) {
         text = status.lastMessage || "Sem contato com o monitoramento.";

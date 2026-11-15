@@ -590,23 +590,7 @@ public static class SettingsEndpoints
         {
             try
             {
-                var paper = settings.Current;
-                var paperLabel = PrintSurfaceMapper.Describe(paper);
-                var text =
-                    "TESTE GUIADO SOFTPRINT\n" +
-                    "----------------------\n" +
-                    $"Papel: {paperLabel}\n" +
-                    $"Impressora: {paper.PrinterName}\n" +
-                    $"Modo: {(paper.Simulation ? "simulação" : "real")}\n" +
-                    $"Quando: {DateTimeOffset.Now:HH:mm:ss}\n" +
-                    "\n" +
-                    "Se o papel estiver em Padrão (200×70),\n" +
-                    "esta etiqueta deve caber na área imprimível.";
-                var result = jobs.Submit(
-                    reference: "guia-" + DateTimeOffset.Now.ToString("HHmmss"),
-                    text: text,
-                    jobType: "default",
-                    templateName: null);
+                var result = GuidedTestPrint.Submit(jobs, settings);
                 return Results.Accepted($"/api/jobs/{result.Id}", result.ToDto());
             }
             catch (Exception ex)

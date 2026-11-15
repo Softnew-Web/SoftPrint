@@ -71,6 +71,24 @@ export function bindSystemSettingsTab({ api }) {
   }
 
   // Monitoramento Softnew (token da empresa + heartbeat)
+  const COMMAND_LABELS = {
+    update: "atualizar",
+    pause: "pausar",
+    resume: "retomar",
+    reprint_failed: "reimprimir com erro",
+    test_print: "impressão de teste",
+    support_package: "pacote de suporte",
+    refresh: "status",
+  };
+
+  // "HH:mm:ss tipo" vira "HH:mm:ss rótulo"; tipo desconhecido fica como veio.
+  function describeCommand(raw) {
+    const cut = raw.indexOf(" ");
+    if (cut < 0) return COMMAND_LABELS[raw] || raw;
+    const kind = raw.slice(cut + 1);
+    return `${raw.slice(0, cut)} ${COMMAND_LABELS[kind] || kind}`;
+  }
+
   function renderFleet(status, result) {
     const el = byId("fleetStatus");
     if (!el || !status) return;
@@ -90,7 +108,9 @@ export function bindSystemSettingsTab({ api }) {
       tone = "text-bad";
     } else if (status.lastOk === true) {
       const when = status.lastSuccessAt ? new Date(status.lastSuccessAt).toLocaleTimeString("pt-BR") : "";
-      text = `Conectado${status.empresa ? ` · ${status.empresa}` : ""}${when ? ` · último contato ${when}` : ""}`;
+      const realtime = status.realtimeConnected ? "tempo real ligado" : "comandos a cada 15 s";
+      const last = status.lastCommand ? ` · último comando ${describeCommand(status.lastCommand)}` : "";
+      text = `Conectado${status.empresa ? ` · ${status.empresa}` : ""}${when ? ` · último contato ${when}` : ""} · ${realtime}${last}`;
       tone = "text-sea-glow";
     } else if (status.lastOk === false) {
       text = status.lastMessage || "Sem contato com o monitoramento.";

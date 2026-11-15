@@ -41,6 +41,10 @@ public sealed class FleetService : IFleetService
     private bool? _lastOk;
     private string? _lastMessage;
     private string? _empresa;
+    private readonly ISettingsRepository? _settings;
+    private CancellationTokenSource _tokenChanged = new();
+    private bool _realtimeConnected;
+    private string? _lastCommand;
 
     public FleetService(
         IHttpClientFactory httpClientFactory,
@@ -48,8 +52,10 @@ public sealed class FleetService : IFleetService
         IOptions<SoftPrintFeatureOptions> options,
         IPlatformCapabilities capabilities,
         JobQueueService jobs,
-        ILogger<FleetService> logger)
+        ILogger<FleetService> logger,
+        ISettingsRepository? settings = null)
     {
+        _settings = settings;
         _httpClientFactory = httpClientFactory;
         _capabilities = capabilities;
         _jobs = jobs;
@@ -87,19 +93,181 @@ public sealed class FleetService : IFleetService
                 LastSuccessAt: _lastSuccessAt,
                 LastOk: _lastOk,
                 LastMessage: _lastMessage,
-                Empresa: _empresa);
+                Empresa: _empresa,
+                RealtimeConnected: _realtimeConnected,
+                LastCommand: _lastCommand);
         }
     }
 
     public void SetToken(string? token)
     {
+        CancellationTokenSource? previous = null;
         lock (_gate)
         {
+            var before = EffectiveToken;
             _file = _file with { Token = token?.Trim() ?? "" };
             Save();
             _lastOk = null;
             _lastMessage = null;
             _empresa = null;
+            if (!string.Equals(before, EffectiveToken, StringComparison.Ordinal))
+            {
+                previous = _tokenChanged;
+                _tokenChanged = new CancellationTokenSource();
+            }
+        }
+
+        if (previous is not null)
+        {
+            try { previous.Cancel(); }
+            catch (Exception ex) { _logger.LogDebug(ex, "Falha ao avisar a troca de token"); }
+            finally { previous.Dispose(); }
+        }
+    }
+
+    public CancellationToken TokenChanged
+    {
+        get { lock (_gate) return _tokenChanged.Token; }
+    }
+
+    public void SetRealtimeConnected(bool connected)
+    {
+        lock (_gate) _realtimeConnected = connected;
+    }
+
+    public void NoteCommand(string description)
+    {
+        lock (_gate) _lastCommand = $"{DateTimeOffset.Now:HH:mm:ss} {description}";
+    }
+
+    public void RememberPendingUpdate(long commandId)
+    {
+        lock (_gate)
+        {
+            var old = _file;
+            _file = _file with { PendingUpdateCommandId = commandId, PendingUpdateFromVersion = SoftPrintVersion.Current };
+            try { Save(); }
+            catch { _file = old; throw; }
+        }
+    }
+
+    public FleetPendingUpdate? GetPendingUpdate()
+    {
+        lock (_gate)
+            return _file.PendingUpdateCommandId is long id
+                ? new FleetPendingUpdate(id, _file.PendingUpdateFromVersion ?? "")
+                : null;
+    }
+
+    public void ClearPendingUpdate()
+    {
+        lock (_gate)
+        {
+            var old = _file;
+            _file = _file with { PendingUpdateCommandId = null, PendingUpdateFromVersion = null };
+            try { Save(); }
+            catch { _file = old; throw; }
+        }
+    }
+
+    public async Task<IReadOnlyList<FleetCommand>> GetCommandsAsync(CancellationToken cancellationToken = default)
+    {
+        var token = EffectiveToken;
+        if (token.Length == 0) return [];
+        try
+        {
+            using var client = _httpClientFactory.CreateClient("softprint-fleet");
+            using var request = new HttpRequestMessage(HttpMethod.Get,
+                BaseUrl() + "/api/softprint/agent/commands?machineId=" + Uri.EscapeDataString(MachineId()));
+            AddHeaders(request, token);
+            using var response = await client.SendAsync(request, cancellationToken).ConfigureAwait(false);
+            if (!response.IsSuccessStatusCode)
+            {
+                _logger.LogDebug("Busca de comandos respondeu {Status}", (int)response.StatusCode);
+                return [];
+            }
+            var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+            var list = new List<FleetCommand>();
+            using var doc = JsonDocument.Parse(body);
+            if (doc.RootElement.ValueKind == JsonValueKind.Object &&
+                doc.RootElement.TryGetProperty("data", out var data) && data.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var item in data.EnumerateArray())
+                {
+                    if (item.ValueKind != JsonValueKind.Object) continue;
+                    if (!item.TryGetProperty("id", out var id) || id.ValueKind != JsonValueKind.Number ||
+                        !id.TryGetInt64(out var idValue)) continue;
+                    if (!item.TryGetProperty("type", out var t) || t.ValueKind != JsonValueKind.String) continue;
+                    var by = item.TryGetProperty("requested_by", out var r) && r.ValueKind == JsonValueKind.String
+                        ? r.GetString() : null;
+                    list.Add(new FleetCommand(idValue, t.GetString() ?? "", string.IsNullOrWhiteSpace(by) ? null : by));
+                }
+            }
+            return list;
+        }
+        catch (Exception ex) when (!cancellationToken.IsCancellationRequested)
+        {
+            _logger.LogDebug(ex, "Falha ao buscar comandos");
+            return [];
+        }
+    }
+
+    public async Task<bool> SendCommandResultAsync(long commandId, bool ok, string message, CancellationToken cancellationToken = default)
+    {
+        var token = EffectiveToken;
+        if (token.Length == 0) return false;
+        try
+        {
+            using var client = _httpClientFactory.CreateClient("softprint-fleet");
+            using var request = new HttpRequestMessage(HttpMethod.Post,
+                BaseUrl() + $"/api/softprint/agent/commands/{commandId}/result")
+            {
+                Content = JsonContent.Create(new { machineId = MachineId(), ok, message }, options: JsonOptions)
+            };
+            AddHeaders(request, token);
+            using var response = await client.SendAsync(request, cancellationToken).ConfigureAwait(false);
+            return response.IsSuccessStatusCode;
+        }
+        catch (Exception ex) when (!cancellationToken.IsCancellationRequested)
+        {
+            _logger.LogDebug(ex, "Falha ao enviar resultado do comando {Id}", commandId);
+            return false;
+        }
+    }
+
+    public async Task<FleetRealtimeTicket?> GetRealtimeTicketAsync(CancellationToken cancellationToken = default)
+    {
+        var token = EffectiveToken;
+        if (token.Length == 0) return null;
+        try
+        {
+            using var client = _httpClientFactory.CreateClient("softprint-fleet");
+            using var request = new HttpRequestMessage(HttpMethod.Get,
+                BaseUrl() + "/api/softprint/agent/realtime-token?machineId=" + Uri.EscapeDataString(MachineId()));
+            AddHeaders(request, token);
+            using var response = await client.SendAsync(request, cancellationToken).ConfigureAwait(false);
+            if (!response.IsSuccessStatusCode) return null;
+            var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+            using var doc = JsonDocument.Parse(body);
+            var data = doc.RootElement.GetProperty("data");
+            var url = data.GetProperty("ws_url").GetString();
+            var jwt = data.GetProperty("token").GetString();
+            var room = data.GetProperty("room").GetString();
+            var expires = data.GetProperty("expires_at").GetDateTimeOffset();
+            if (string.IsNullOrWhiteSpace(url) || string.IsNullOrWhiteSpace(jwt) || string.IsNullOrWhiteSpace(room))
+                return null;
+            if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) ||
+                (uri.Scheme != "ws" && uri.Scheme != "wss"))
+            {
+                _logger.LogDebug("ws_url inválida no ticket do tempo real");
+                return null;
+            }
+            return new FleetRealtimeTicket(uri, jwt!, room!, expires);
+        }
+        catch (Exception ex) when (!cancellationToken.IsCancellationRequested)
+        {
+            _logger.LogDebug(ex, "Token do tempo real indisponível");
+            return null;
         }
     }
 
@@ -152,6 +320,7 @@ public sealed class FleetService : IFleetService
             printingBackend = _capabilities.PrintingBackend,
             pending,
             processing,
+            paused = _settings?.Current.Paused ?? false,
             lastError
         };
 
@@ -224,14 +393,17 @@ public sealed class FleetService : IFleetService
         if ((int)status is >= 200 and < 300)
         {
             string? empresa = null;
+            var pendingCommands = 0;
             try
             {
                 using var doc = JsonDocument.Parse(body);
-                if (doc.RootElement.TryGetProperty("data", out var data) &&
-                    data.ValueKind == JsonValueKind.Object &&
-                    data.TryGetProperty("empresa", out var emp) &&
-                    emp.ValueKind == JsonValueKind.String)
-                    empresa = emp.GetString();
+                if (doc.RootElement.TryGetProperty("data", out var data) && data.ValueKind == JsonValueKind.Object)
+                {
+                    if (data.TryGetProperty("empresa", out var emp) && emp.ValueKind == JsonValueKind.String)
+                        empresa = emp.GetString();
+                    if (data.TryGetProperty("pending_commands", out var pc) && pc.ValueKind == JsonValueKind.Number && pc.TryGetInt32(out var n))
+                        pendingCommands = n;
+                }
             }
             catch (JsonException) { /* resposta sem JSON: segue como sucesso */ }
 
@@ -242,7 +414,7 @@ public sealed class FleetService : IFleetService
                 _lastMessage = okMessage;
                 _empresa = empresa ?? _empresa;
             }
-            return new FleetSendResult(true, empresa is null ? okMessage : $"{okMessage} Empresa: {empresa}.", (int)status);
+            return new FleetSendResult(true, empresa is null ? okMessage : $"{okMessage} Empresa: {empresa}.", (int)status, pendingCommands);
         }
 
         var message = status == HttpStatusCode.Unauthorized
@@ -353,5 +525,7 @@ public sealed class FleetService : IFleetService
     {
         public string? Token { get; init; }
         public string? MachineId { get; init; }
+        public long? PendingUpdateCommandId { get; init; }
+        public string? PendingUpdateFromVersion { get; init; }
     }
 }
