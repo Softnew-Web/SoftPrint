@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using SoftPrint.Application;
 using SoftPrint.Application.Abstractions;
 using SoftPrint.Application.Services;
 using SoftPrint.Infrastructure.Configuration;
@@ -45,6 +46,9 @@ namespace SoftPrint.Host.Windows.Legacy
                 Console.Error.WriteLine("SoftPrint Legacy requer Windows 7 SP1 ou mais recente.");
                 return;
             }
+
+            // Mesma opção do SoftPrint.exe: tudo (config, dados e estado local) debaixo da raiz informada.
+            SoftPrintStateLocation.ApplyConfigRootArgument(args);
 
             var host = Microsoft.Extensions.Hosting.Host.CreateDefaultBuilder(args)
                 // O padrão é a pasta atual (System32 no autostart, a pasta do atalho etc.).

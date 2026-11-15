@@ -136,11 +136,13 @@ public sealed class Dashboard : Form
     {
         try
         {
-            var local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-            var userData = Path.Combine(local, "SoftPrint", "WebView2");
-            var legacy = Path.Combine(local, "AutoPrint", "WebView2");
+            var userData = SoftPrint.Application.SoftPrintStateLocation.WebView2Folder;
+            var legacy = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "AutoPrint", "WebView2");
             Directory.CreateDirectory(userData);
-            if (!Directory.EnumerateFileSystemEntries(userData).Any() && Directory.Exists(legacy))
+            // Com --config-root o perfil do AutoPrint é do usuário real: não é copiado.
+            if (!SoftPrint.Application.SoftPrintStateLocation.IsIsolated &&
+                !Directory.EnumerateFileSystemEntries(userData).Any() && Directory.Exists(legacy))
             {
                 try { CopyDirectory(legacy, userData); }
                 catch { /* profile antigo permanece como fallback */ }

@@ -59,6 +59,15 @@ public static class UpdateFailureNotice
     public static string PersistentErrorPath =>
         Path.Combine(SoftPrintInstallLocation.LocalStateRoot, "last-update-error.txt");
 
+    /// <summary>
+    /// Onde procurar avisos. O %TEMP% antigo fica de fora com raiz explícita: ele é do perfil
+    /// real e nenhum script desta instância grava lá.
+    /// </summary>
+    internal static IReadOnlyList<string> PendingNoticePaths =>
+        SoftPrintStateLocation.IsIsolated
+            ? new[] { PersistentErrorPath, ScriptErrorPath }
+            : new[] { PersistentErrorPath, ScriptErrorPath, TempErrorPath };
+
     public static void Record(string message)
     {
         var text = $"[{DateTimeOffset.Now:yyyy-MM-dd HH:mm:ss}] {message.Trim()}{Environment.NewLine}";
@@ -76,7 +85,7 @@ public static class UpdateFailureNotice
     public static string? TryConsume()
     {
         var chunks = new List<string>();
-        foreach (var path in new[] { PersistentErrorPath, ScriptErrorPath, TempErrorPath })
+        foreach (var path in PendingNoticePaths)
         {
             try
             {

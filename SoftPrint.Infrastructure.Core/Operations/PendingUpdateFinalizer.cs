@@ -1,4 +1,5 @@
 using System.Text.Json;
+using SoftPrint.Application;
 using SoftPrint.Application.Abstractions;
 using SoftPrint.Domain;
 using SoftPrint.Infrastructure.Updates;
@@ -15,9 +16,12 @@ public static class PendingUpdateFinalizer
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase
     };
 
+    /// <summary>
+    /// No estado local: o processo que dispara o update e o reaberto pelo script calculam o mesmo
+    /// lugar (a raiz do --config-root chega ao reaberto pelo ambiente herdado).
+    /// </summary>
     public static string MarkerPath => Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "SoftPrint",
+        SoftPrintInstallLocation.LocalStateRoot,
         "pending-update.json");
 
     public static void MarkPending(string version, bool rollback)

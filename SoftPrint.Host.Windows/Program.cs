@@ -31,6 +31,9 @@ if (Has(args, "--uninstall-service"))
 WindowsServiceControl.ApplyConfigRootArgument(args);
 
 var asService = WindowsServiceHelpers.IsWindowsService() || Has(args, "--service");
+// O --config-root do serviço só aponta a configuração do usuário: o trabalho do update fica no SYSTEM.
+if (asService)
+    SoftPrint.Application.SoftPrintStateLocation.MarkAsWindowsService();
 var headlessRequested = Has(args, "--headless")
     || string.Equals(Environment.GetEnvironmentVariable("HEADLESS"), "true", StringComparison.OrdinalIgnoreCase)
     || string.Equals(Environment.GetEnvironmentVariable("HEADLESS"), "1", StringComparison.OrdinalIgnoreCase);

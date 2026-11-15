@@ -180,7 +180,10 @@ public sealed class PlatformTests
         {
             Environment.SetEnvironmentVariable("SOFTPRINT_DATA_ROOT", target);
             Environment.SetEnvironmentVariable("SOFTPRINT_CONFIG_ROOT", config);
-            _ = new UserAppPaths(new TestHostEnvironment(legacy));
+            // Com raiz explícita o construtor não migra (ver StateIsolationTests); a cópia em si
+            // é a mesma que roda sem raiz explícita.
+            var paths = new UserAppPaths(new TestHostEnvironment(Path.Combine(root, "empty")));
+            paths.MigrateInstallFolder(legacy);
             Assert.True(File.Exists(Path.Combine(target, "jobs.json")));
         }
         finally
@@ -219,7 +222,7 @@ public sealed class PlatformTests
         public string ConfigRoot => Root;
     }
 
-    private sealed class TestHostEnvironment(string contentRoot) : IHostEnvironment
+    internal sealed class TestHostEnvironment(string contentRoot) : IHostEnvironment
     {
         public string EnvironmentName { get; set; } = Environments.Development;
         public string ApplicationName { get; set; } = "SoftPrint.Tests";
