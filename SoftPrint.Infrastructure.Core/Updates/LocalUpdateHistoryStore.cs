@@ -1,4 +1,5 @@
 using System.Text.Json;
+using SoftPrint.Application;
 using SoftPrint.Application.Abstractions;
 
 namespace SoftPrint.Infrastructure.Updates;
@@ -15,9 +16,8 @@ public sealed class LocalUpdateHistoryStore : IUpdateHistoryStore
             null, null, null, null, null, null, null, null, null);
     }
 
-    private static string FilePath => Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "SoftPrint",
+    internal static string FilePath => Path.Combine(
+        SoftPrintInstallLocation.LocalStateRoot,
         "update-history.json");
 
     public UpdateHistorySnapshot Get()

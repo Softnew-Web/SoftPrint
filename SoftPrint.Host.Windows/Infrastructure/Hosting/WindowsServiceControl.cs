@@ -19,24 +19,8 @@ public static class WindowsServiceControl
     private const string Description =
         "Fila de impressão do SoftPrint. Continua ativa depois do logoff do Windows.";
 
-    public static void ApplyConfigRootArgument(string[] args)
-    {
-        for (var i = 0; i < args.Length; i++)
-        {
-            var arg = args[i];
-            string? value = null;
-            if (arg.StartsWith("--config-root=", StringComparison.OrdinalIgnoreCase))
-                value = arg["--config-root=".Length..];
-            else if (string.Equals(arg, "--config-root", StringComparison.OrdinalIgnoreCase) && i + 1 < args.Length)
-                value = args[++i];
-
-            if (string.IsNullOrWhiteSpace(value))
-                continue;
-
-            Environment.SetEnvironmentVariable("SOFTPRINT_CONFIG_ROOT", value);
-            return;
-        }
-    }
+    public static void ApplyConfigRootArgument(string[] args) =>
+        SoftPrint.Application.SoftPrintStateLocation.ApplyConfigRootArgument(args);
 
     public static bool IsCurrentExecutableInstalledAsService()
     {

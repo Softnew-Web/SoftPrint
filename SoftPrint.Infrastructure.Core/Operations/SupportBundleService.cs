@@ -1,6 +1,7 @@
 using System.IO.Compression;
 using System.Text;
 using System.Text.Json;
+using SoftPrint.Application;
 using SoftPrint.Application.Abstractions;
 using SoftPrint.Application.Services;
 using SoftPrint.Domain;
@@ -27,7 +28,7 @@ public sealed class SupportBundleService(
         Directory.CreateDirectory(outDir);
         var zipPath = Path.Combine(outDir, $"softprint-support-{stamp}.zip");
 
-        var stage = Path.Combine(Path.GetTempPath(), "softprint-support-" + Guid.NewGuid().ToString("N"));
+        var stage = Path.Combine(SoftPrintStateLocation.TempRoot, "softprint-support-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(stage);
         try
         {

@@ -386,9 +386,11 @@ public sealed class SoftPrintUpdateApplier : IUpdateApplier
             new(installDir, workDir, false);
     }
 
+    internal static string WorkRoot => Path.Combine(SoftPrintInstallLocation.LocalStateRoot, "update-work");
+
     private static string PrepareWorkDirectory()
     {
-        var root = Path.Combine(SoftPrintInstallLocation.LocalStateRoot, "update-work");
+        var root = WorkRoot;
         try
         {
             if (Directory.Exists(root))

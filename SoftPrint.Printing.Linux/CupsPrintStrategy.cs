@@ -1,4 +1,5 @@
 using System.Text;
+using SoftPrint.Application;
 using SoftPrint.Application.Abstractions;
 using SoftPrint.Domain;
 
@@ -26,7 +27,9 @@ public sealed class CupsPrintStrategy(IExternalCommandRunner? runner = null) : I
         var raw = job.ContentKind == JobContentKind.EscPos;
         if (job.ContentKind == JobContentKind.Text || raw)
         {
-            temporary = Path.Combine(Path.GetTempPath(), $"softprint-{job.Id:N}.{(raw ? "bin" : "txt")}");
+            var tempRoot = SoftPrintStateLocation.TempRoot;
+            Directory.CreateDirectory(tempRoot);
+            temporary = Path.Combine(tempRoot, $"softprint-{job.Id:N}.{(raw ? "bin" : "txt")}");
             if (raw)
             {
                 await File.WriteAllBytesAsync(temporary, EscPosPayload.FromText(job.Text), cancellationToken);

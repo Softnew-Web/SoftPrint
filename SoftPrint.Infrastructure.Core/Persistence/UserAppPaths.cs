@@ -1,3 +1,4 @@
+using SoftPrint.Application;
 using SoftPrint.Application.Abstractions;
 #if !NET5_0_OR_GREATER
 using SoftPrint.Infrastructure.Compat;
@@ -16,13 +17,16 @@ public sealed class UserAppPaths : IAppPaths
         DataRoot = ResolveDataRoot();
         Directory.CreateDirectory(ConfigRoot);
         Directory.CreateDirectory(DataRoot);
-        Migrate(environment.ContentRootPath);
+        // Raiz passada explicitamente (--config-root, testes, suporte): não puxa nada de fora dela.
+        // O serviço do Windows também usa --config-root, mas aponta para a pasta normal do usuário.
+        if (!SoftPrintStateLocation.IsIsolated)
+            MigrateLegacyData(environment.ContentRootPath);
     }
 
     public static string ResolveConfigRoot()
     {
-        if (Environment.GetEnvironmentVariable("SOFTPRINT_CONFIG_ROOT") is { Length: > 0 } configOverride)
-            return Path.GetFullPath(configOverride);
+        if (SoftPrintStateLocation.ExplicitConfigRoot is { } configOverride)
+            return configOverride;
 #if NET5_0_OR_GREATER
         if (OperatingSystem.IsWindows())
 #else
@@ -39,8 +43,8 @@ public sealed class UserAppPaths : IAppPaths
 
     public static string ResolveDataRoot()
     {
-        if (Environment.GetEnvironmentVariable("SOFTPRINT_DATA_ROOT") is { Length: > 0 } overrideRoot)
-            return Path.GetFullPath(overrideRoot);
+        if (SoftPrintStateLocation.ExplicitDataRoot is { } overrideRoot)
+            return overrideRoot;
 #if NET5_0_OR_GREATER
         if (OperatingSystem.IsWindows())
 #else
@@ -54,10 +58,10 @@ public sealed class UserAppPaths : IAppPaths
             : Path.Combine(home, ".local", "share", "softprint");
     }
 
-    private void Migrate(string contentRoot)
+    /// <summary>Traz dados de instalações antigas (pasta do app, AutoPrint) para as raízes atuais.</summary>
+    private void MigrateLegacyData(string contentRoot)
     {
-        CopyTree(Path.Combine(contentRoot, "data"), DataRoot);
-        CopyTree(Path.Combine(contentRoot, "logs"), Path.Combine(DataRoot, "logs"));
+        MigrateInstallFolder(contentRoot);
 
 #if NET5_0_OR_GREATER
         if (OperatingSystem.IsWindows())
@@ -79,6 +83,13 @@ public sealed class UserAppPaths : IAppPaths
             CopyTree(Path.Combine(home, ".config", "autoprint"), ConfigRoot);
             CopyTree(Path.Combine(home, ".local", "share", "autoprint"), DataRoot);
         }
+    }
+
+    /// <summary>data/ e logs/ que versões portáteis gravavam ao lado do executável.</summary>
+    internal void MigrateInstallFolder(string contentRoot)
+    {
+        CopyTree(Path.Combine(contentRoot, "data"), DataRoot);
+        CopyTree(Path.Combine(contentRoot, "logs"), Path.Combine(DataRoot, "logs"));
     }
 
     private static readonly string[] KnownFiles =

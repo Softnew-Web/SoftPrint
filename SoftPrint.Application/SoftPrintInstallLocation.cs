@@ -53,10 +53,9 @@ public static class SoftPrintInstallLocation
     }
 
     /// <summary>
-    /// %LocalAppData%\SoftPrint do processo. Só o próprio usuário (ou, no serviço, só o SYSTEM)
+    /// %LocalAppData%\SoftPrint do processo, ou a raiz informada com --config-root (ver
+    /// <see cref="SoftPrintStateLocation"/>). Só o próprio usuário (ou, no serviço, só o SYSTEM)
     /// grava aqui — ao contrário de C:\Windows\Temp, que qualquer usuário pode preencher.
     /// </summary>
-    public static string LocalStateRoot => Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "SoftPrint");
+    public static string LocalStateRoot => SoftPrintStateLocation.LocalStateRoot;
 }
